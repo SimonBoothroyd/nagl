@@ -1,0 +1,32 @@
+name: test
+channels:
+  - dglteam
+  - pytorch
+  - openeye
+  - conda-forge
+  - omnia
+  - defaults
+
+dependencies:
+    # Base depends
+  - python
+  - pip
+
+    # Core dependencies
+  - pytorch
+  - pytorch-lightning
+  - dgl
+  - dgllife
+
+    # Molecule loading and processing.
+  - openforcefield
+  - openff-recharge
+  - openeye-toolkits
+
+   # Plotting
+  - matplotlib
+
+    # Testing
+  - pytest
+  - pytest-cov
+  - codecov
