@@ -1,7 +1,7 @@
 # NAGL
 
-[![tests](https://github.com/simonboothroyd/nagl/workflows/tests/badge.svg?branch=main)](#)
-[![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/simonboothroyd/nagl.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/simonboothroyd/nagl/context:python)
+[![tests](https://github.com/SimonBoothroyd/nagl/workflows/CI/badge.svg?branch=main)](https://github.com/SimonBoothroyd/nagl/actions?query=workflow%3ACI)
+[![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/SimonBoothroyd/nagl.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/SimonBoothroyd/nagl/context:python)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A playground for applying graph convolutional networks to molecules, with a focus on learning continuous "atom-type"
