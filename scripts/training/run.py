@@ -11,20 +11,21 @@ from openforcefield.topology import Molecule
 from nagl.dataset.dataset import MoleculeGraphDataLoader, MoleculeGraphDataset
 from nagl.dataset.features import (
     AtomConnectivity,
+    AtomFeature,
     AtomFormalCharge,
     AtomicElement,
     AtomIsInRing,
-    BondIsInRing, AtomFeature, BondFeature,
+    BondFeature,
+    BondIsInRing,
 )
-from nagl.models.models import MolSAGE, ConvolutionConfig, ReadoutConfig
+from nagl.models.models import ConvolutionConfig, MolSAGE, ReadoutConfig
 from nagl.nn import SequentialLayers
 from nagl.nn.pooling import PoolAtomFeatures, PoolBondFeatures
 from nagl.nn.process import ComputePartialCharges
 
 
 def label_function(molecule: Molecule) -> Dict[str, torch.Tensor]:
-    """Generates a set of labels for a given molecule.
-    """
+    """Generates a set of labels for a given molecule."""
     from simtk import unit
 
     return {
@@ -33,11 +34,10 @@ def label_function(molecule: Molecule) -> Dict[str, torch.Tensor]:
                 atom.partial_charge.value_in_unit(unit.elementary_charge)
                 for atom in molecule.atoms
             ],
-            dtype=torch.float
+            dtype=torch.float,
         ),
         "am1_wbo": torch.tensor(
-            [bond.fractional_bond_order for bond in molecule.bonds],
-            dtype=torch.float
+            [bond.fractional_bond_order for bond in molecule.bonds], dtype=torch.float
         ),
     }
 
@@ -60,8 +60,7 @@ def load_data_sets(
         molecule
         for molecule in training_molecules
         if all(
-            atom.formal_charge == 0 * unit.elementary_charge
-            for atom in molecule.atoms
+            atom.formal_charge == 0 * unit.elementary_charge for atom in molecule.atoms
         )
         and all(
             abs(atom.partial_charge) < 1.0 * unit.elementary_charge
@@ -74,9 +73,9 @@ def load_data_sets(
         if all(
             atom.formal_charge == 0 * unit.elementary_charge for atom in molecule.atoms
         )
-       and all(
-            abs(atom.partial_charge) < 1.0 * unit.elementary_charge for atom in
-            molecule.atoms
+        and all(
+            abs(atom.partial_charge) < 1.0 * unit.elementary_charge
+            for atom in molecule.atoms
         )
     ]
 
@@ -87,9 +86,7 @@ def load_data_sets(
         test_molecules, atom_features, bond_features, label_function
     )
 
-    training_set = MoleculeGraphDataLoader(
-        training_data, batch_size=256, shuffle=True
-    )
+    training_set = MoleculeGraphDataLoader(training_data, batch_size=256, shuffle=True)
     test_set = MoleculeGraphDataLoader(
         test_data, batch_size=len(test_data), shuffle=False
     )
@@ -104,11 +101,9 @@ def main():
         AtomicElement(["C", "O", "H", "N", "S", "F", "Br", "Cl"]),
         AtomConnectivity(),
         AtomFormalCharge([0]),
-        # AtomIsAromatic(),
         AtomIsInRing(),
     ]
     bond_features = [
-        # BondIsAromatic(),
         BondIsInRing(),
     ]
 
@@ -128,7 +123,7 @@ def main():
                 hidden_feats=[128, 128, 128, 2],
                 postprocess_layer=ComputePartialCharges(),
             ),
-            "am1_wbo":  ReadoutConfig(
+            "am1_wbo": ReadoutConfig(
                 pooling_layer=PoolBondFeatures(
                     layers=SequentialLayers(
                         in_feats=128 * 2,
@@ -137,7 +132,7 @@ def main():
                 ),
                 hidden_feats=[256, 256, 256, 1],
             ),
-        }
+        },
     )
 
     print(model)
@@ -174,7 +169,8 @@ def main():
                 f"epoch={epoch} "
                 f"batch={batch} "
                 f"loss={loss.item():.6f} "
-                # f"q_tot={y_pred['am1_charges'].sum().detach().item():.4f} "
+                f"q_tot={y_pred['am1_charges'].sum().detach().item():.4f} "
+                f"q_exp={graph.ndata['formal_charge'].sum().item():.4f}"
             )
 
     # Compute the test accuracy
@@ -204,7 +200,7 @@ def main():
         pyplot.scatter(
             test_labels[label].flatten().numpy(),
             test_pred[label].flatten().numpy(),
-            label="test"
+            label="test",
         )
         pyplot.scatter(
             labels[label].flatten().numpy(),

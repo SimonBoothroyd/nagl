@@ -59,7 +59,7 @@ def main():
             processed_molecules = list(
                 tqdm(
                     pool.imap(process_molecule, smiles_patterns),
-                    total=len(smiles_patterns)
+                    total=len(smiles_patterns),
                 )
             )
 
@@ -84,5 +84,5 @@ def main():
             pickle.dump(molecules, file)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

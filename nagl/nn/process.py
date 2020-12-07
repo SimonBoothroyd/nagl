@@ -62,11 +62,13 @@ class ComputePartialCharges(PostprocessLayer):
 
         for mol_graph in dgl.unbatch(graph):
 
+            total_charge = mol_graph.ndata["formal_charge"].sum()
+
             charges.append(
                 self.atomic_parameters_to_charges(
                     x[counter : counter + len(mol_graph), 0],
                     x[counter : counter + len(mol_graph), 1],
-                    0.0,
+                    total_charge,
                 )
             )
             counter += len(mol_graph)

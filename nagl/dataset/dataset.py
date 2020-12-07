@@ -28,6 +28,7 @@ def molecule_to_graph(
     """Maps an OpenFF molecule object into a ``dgl`` graph complete with atom (node)
     and bond (edge) features.
     """
+    from simtk import unit
 
     # Create the bond tensors.
     indices_a = []
@@ -52,6 +53,12 @@ def molecule_to_graph(
 
     # Assign the atom (node) features.
     molecule_graph.ndata["feat"] = AtomFeaturizer.featurize(molecule, atom_features)
+    molecule_graph.ndata["formal_charge"] = torch.tensor(
+        [
+            atom.formal_charge.value_in_unit(unit.elementary_charge)
+            for atom in molecule.atoms
+        ]
+    )
 
     # Assign the bond (edge) features.
     if len(bond_features) > 0:
