@@ -18,7 +18,7 @@ from nagl.dataset.features import (
     BondFeature,
     BondIsInRing,
 )
-from nagl.models.models import ConvolutionConfig, MolSAGE, ReadoutConfig
+from nagl.models.models import ConvolutionConfig, MolGraph, ReadoutConfig
 from nagl.nn import SequentialLayers
 from nagl.nn.pooling import PoolAtomFeatures, PoolBondFeatures
 from nagl.nn.process import ComputePartialCharges
@@ -112,7 +112,7 @@ def main():
     training_set, test_set, n_features = load_data_sets(atom_features, bond_features)
 
     # Define the model.
-    model = MolSAGE(
+    model = MolGraph(
         convolution_config=ConvolutionConfig(
             in_feats=n_features,
             hidden_feats=[128, 128, 128],

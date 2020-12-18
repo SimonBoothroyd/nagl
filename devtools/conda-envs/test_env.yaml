@@ -13,10 +13,11 @@ dependencies:
   - pip
 
     # Core dependencies
+  - click
+  - pydantic
   - pytorch
   - pytorch-lightning
   - dgl
-  - dgllife
 
     # Molecule loading and processing.
   - openforcefield

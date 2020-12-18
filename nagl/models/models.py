@@ -3,37 +3,47 @@ from typing import Callable, Dict, List, Optional
 
 import dgl.function
 import torch.nn.functional
-from dgllife.model import GraphSAGE
+from pydantic import BaseModel, Field
+from typing_extensions import Literal
 
 from nagl.nn import SequentialLayers
+from nagl.nn.gcn import SAGEConvStack
 from nagl.nn.pooling import PoolingLayer
 from nagl.nn.process import PostprocessLayer
 
-ActivationFunction = Callable[[torch.tensor, bool], torch.Tensor]
+ActivationFunction = Callable[[torch.tensor], torch.Tensor]
+
+_GRAPH_ARCHITECTURES = {
+    "SAGEConv": SAGEConvStack,
+    # "GINConv": GINConvStack,
+}
 
 
-@dataclass
-class ConvolutionConfig:
-    """
-    Args:
-        in_feats: Number of input node features.
+class ConvolutionConfig(BaseModel):
+    """Configuration options for the convolution layers in a GCN model."""
 
-        hidden_feats: ``hidden_feats[i]`` gives the size of node representations after
-            the i-th GraphSAGE layer. ``len(hidden_feats)`` equals the number of
-            GraphSAGE layers.
+    architecture: Literal["SAGEConv"] = Field(
+        "GINConv", description="The graph convolutional architecture to use."
+    )
 
-        activation: If not None, ``activation[i]`` gives the activation function to be
-            used for the i-th GraphSAGE layer. ``len(activation)`` equals the number of
-            GraphSAGE layers.
+    in_feats: int = Field(..., description="The number of input node features.")
 
-        dropout: ``dropout[i]`` decides the dropout probability on the output of the i-th
-            GraphSAGE layer. ``len(dropout)`` equals the number of GraphSAGE layers.
-    """
-
-    in_feats: int
-    hidden_feats: List[int]
-    activation: Optional[List[ActivationFunction]] = None
-    dropout: Optional[List[float]] = None
+    hidden_feats: List[int] = Field(
+        ...,
+        description="``hidden_feats[i]`` gives the size of node representations after "
+        "the i-th GCN layer. ``len(hidden_feats)`` equals the number of GCN layers.",
+    )
+    activation: Optional[List[ActivationFunction]] = Field(
+        None,
+        description="If not None, ``activation[i]`` gives the activation function to "
+        "be used for the i-th GCN layer. ``len(activation)`` equals the number of GCN "
+        "layers.",
+    )
+    dropout: Optional[List[float]] = Field(
+        None,
+        description="``dropout[i]`` decides the dropout probability on the output of "
+        "the i-th GCN layer. ``len(dropout)`` equals the number of GCN layers.",
+    )
 
 
 @dataclass
@@ -67,8 +77,8 @@ class ReadoutConfig:
     postprocess_layer: Optional[PostprocessLayer] = None
 
 
-class MolSAGE(torch.nn.Module):
-    """A models which applies a graph convolutional step followed by multiple (labelled)
+class MolGraph(torch.nn.Module):
+    """A model which applies a graph convolutional step followed by multiple (labelled)
     pooling and readout steps.
     """
 
@@ -78,13 +88,13 @@ class MolSAGE(torch.nn.Module):
         readout_configs: Dict[str, ReadoutConfig],
     ):
 
-        super(MolSAGE, self).__init__()
+        super(MolGraph, self).__init__()
 
-        self.convolution = GraphSAGE(
+        self.convolution = _GRAPH_ARCHITECTURES[convolution_config.architecture](
             in_feats=convolution_config.in_feats,
             hidden_feats=convolution_config.hidden_feats,
             activation=convolution_config.activation,
-            aggregator_type=["mean"] * len(convolution_config.hidden_feats),
+            dropout=convolution_config.dropout,
         )
 
         self._pooling_layers: Dict[str, PoolingLayer] = {

@@ -1,13 +1,25 @@
 import pickle
 from multiprocessing.pool import Pool
-from typing import Optional, Tuple
+from typing import Generator, Optional, Tuple
 
-from openeye import oechem
+from openeye import oechem, oequacpac
 from openff.recharge.charges.charges import ChargeGenerator, ChargeSettings
 from openff.recharge.conformers import ConformerGenerator, ConformerSettings
 from openff.recharge.utilities.openeye import smiles_to_molecule
 from openforcefield.topology import Molecule
 from tqdm import tqdm
+
+
+def enumerate_tautomers(oe_molecule: oechem.OEMol) -> Generator[oechem.OEMol]:
+
+    tautomer_options = oequacpac.OETautomerOptions()
+    tautomer_options.SetMaxTautomersGenerated(4096)
+    tautomer_options.SetMaxTautomersToReturn(16)
+    tautomer_options.SetCarbonHybridization(True)
+    tautomer_options.SetMaxZoneSize(50)
+    tautomer_options.SetApplyWarts(True)
+
+    return oequacpac.OEGetReasonableTautomers(oe_molecule, tautomer_options, True)
 
 
 def process_molecule(smiles: str) -> Tuple[Optional[Molecule], Optional[str]]:
@@ -17,7 +29,7 @@ def process_molecule(smiles: str) -> Tuple[Optional[Molecule], Optional[str]]:
     try:
         oe_molecule = smiles_to_molecule(smiles, guess_stereochemistry=True)
 
-        # Generate a set of conformers and charges for the molecule.
+        # Generate a set of 5 ELF conformers and charges for the molecule.
         conformers = ConformerGenerator.generate(oe_molecule, ConformerSettings())
         charges = ChargeGenerator.generate(oe_molecule, conformers, ChargeSettings())
 
@@ -50,9 +62,9 @@ def main():
     n_processes = 4
 
     # Load in the train and test sets.
-    for label in ["train", "test"]:
+    for label in ["train"]:
 
-        with open(f"{label}-smiles-small.txt") as file:
+        with open(f"{label}-smiles-scaffold.txt") as file:
             smiles_patterns = file.read().split("\n")
 
         with Pool(processes=n_processes) as pool:
