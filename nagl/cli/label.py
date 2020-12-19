@@ -1,4 +1,5 @@
 import pickle
+import sys
 
 import click
 from dask import distributed
@@ -84,12 +85,12 @@ def label(input_path: str, output_path: str, worker_type: str, n_workers: int):
         molecule, error = future.result()
 
         if i % 1000 == 0:
-            print(f"Finished labelling molecule {i + 1}.")
+            print(f"Finished labelling molecule {i + 1}.", file=sys.stdout)
 
         if error is not None:
 
-            print("=".join(["="] * 40))
-            print(error + "\n")
+            print("=".join(["="] * 40), file=sys.stderr)
+            print(error + "\n", file=sys.stderr)
 
             continue
 
