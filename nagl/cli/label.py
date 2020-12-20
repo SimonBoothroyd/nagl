@@ -40,7 +40,16 @@ from nagl.utilities.openeye import enumerate_tautomers, guess_stereochemistry
     help="The number of workers to distribute the labelling across.",
     type=int,
 )
-def label(input_path: str, output_path: str, worker_type: str, n_workers: int):
+@click.option(
+    "--queue",
+    help="The LSF queue to submit workers to.",
+    type=str,
+    default="default",
+    show_default=True,
+)
+def label(
+    input_path: str, output_path: str, worker_type: str, n_workers: int, queue: str
+):
 
     input_molecule_stream = oechem.oemolistream()
     input_molecule_stream.open(input_path)
@@ -54,7 +63,7 @@ def label(input_path: str, output_path: str, worker_type: str, n_workers: int):
     # Set-up dask to distribute the processing.
     if worker_type == "lsf":
         dask_cluster = LSFCluster(
-            queue="default",
+            queue=queue,
             cores=1,
             memory="2000000000B",
             walltime="02:00",
