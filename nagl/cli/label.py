@@ -36,15 +36,15 @@ from nagl.utilities.openeye import enumerate_tautomers, guess_stereochemistry
     help="The type of worker to distribute the labelling across.",
 )
 @click.option(
-    "--worker-memory",
-    help="The amount of memory (GB) to request per worker.",
-    default=3,
-    show_default=True,
+    "--n-workers",
+    help="The number of workers to distribute the labelling across.",
     type=int,
 )
 @click.option(
-    "--n-workers",
-    help="The number of workers to distribute the labelling across.",
+    "--worker-memory",
+    help="The amount of memory (GB) to request per LSF queue worker.",
+    default=3,
+    show_default=True,
     type=int,
 )
 @click.option(
@@ -54,13 +54,19 @@ from nagl.utilities.openeye import enumerate_tautomers, guess_stereochemistry
     default="default",
     show_default=True,
 )
+@click.option(
+    "--conda-env",
+    help="The conda environment that LSF workers should run using.",
+    type=str,
+)
 def label(
     input_path: str,
     output_path: str,
     worker_type: str,
     worker_memory: int,
     n_workers: int,
-    queue: str
+    queue: str,
+    conda_env: str,
 ):
 
     input_molecule_stream = oechem.oemolistream()
@@ -81,13 +87,9 @@ def label(
             walltime="02:00",
             local_directory="dask-worker-space",
             log_directory="dask-worker-logs",
+            env_extra=[f"conda activate {conda_env}"],
         )
-        dask_cluster.adapt(
-            minimum=1,
-            maximum=n_workers,
-            interval="10000ms",
-            target_duration="0.00000000001s",
-        )
+        dask_cluster.adapt(minimum=1, maximum=n_workers)
 
     elif worker_type == "local":
         dask_cluster = LocalCluster(n_workers=n_workers)
