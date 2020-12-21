@@ -68,6 +68,7 @@ def label(
             memory="2000000000B",
             walltime="02:00",
             local_directory="dask-worker-space",
+            log_directory="dask-worker-logs",
         )
         dask_cluster.adapt(
             minimum=1,
