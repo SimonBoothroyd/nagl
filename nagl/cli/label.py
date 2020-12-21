@@ -6,6 +6,7 @@ from dask import distributed
 from dask_jobqueue import LSFCluster
 from distributed import LocalCluster, as_completed
 from openeye import oechem
+from tqdm import tqdm
 
 from nagl.labels.am1 import compute_am1_charge_and_wbo
 from nagl.utilities.openeye import enumerate_tautomers, guess_stereochemistry
@@ -80,11 +81,22 @@ def label(
     input_molecule_stream = oechem.oemolistream()
     input_molecule_stream.open(input_path)
 
-    enumerated_molecules = (
+    print("Enumerating tautomers\n")
+
+    output_stream = oechem.oeosstream()
+
+    oechem.OEThrow.SetOutputStream(output_stream)
+    oechem.OEThrow.Clear()
+
+    enumerated_molecules = [
         oechem.OEMol(oe_tautomer)
-        for oe_molecule in input_molecule_stream.GetOEMols()
-        for oe_tautomer in enumerate_tautomers(guess_stereochemistry(oe_molecule))
-    )
+        for oe_molecule in tqdm(input_molecule_stream.GetOEMols())
+        for oe_tautomer in tqdm(enumerate_tautomers(guess_stereochemistry(oe_molecule)))
+    ]
+
+    oechem.OEThrow.SetOutputStream(oechem.oeerr)
+
+    print("\nLabeling molecules\n")
 
     # Set-up dask to distribute the processing.
     if worker_type == "lsf":
@@ -106,9 +118,7 @@ def label(
 
     dask_client = distributed.Client(dask_cluster)
 
-    futures = (
-        dask_client.submit(compute_am1_charge_and_wbo, x) for x in enumerated_molecules
-    )
+    futures = dask_client.map(compute_am1_charge_and_wbo, enumerated_molecules)
 
     molecules = []
 
@@ -133,4 +143,5 @@ def label(
 
     input_molecule_stream.close()
 
-    dask_cluster.scale(n=1)
+    if worker_type == "lsf":
+        dask_cluster.scale(n=1)
