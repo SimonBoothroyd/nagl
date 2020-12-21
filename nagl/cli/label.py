@@ -36,6 +36,13 @@ from nagl.utilities.openeye import enumerate_tautomers, guess_stereochemistry
     help="The type of worker to distribute the labelling across.",
 )
 @click.option(
+    "--worker-memory",
+    help="The amount of memory (GB) to request per worker.",
+    default=3,
+    show_default=True,
+    type=int,
+)
+@click.option(
     "--n-workers",
     help="The number of workers to distribute the labelling across.",
     type=int,
@@ -48,7 +55,12 @@ from nagl.utilities.openeye import enumerate_tautomers, guess_stereochemistry
     show_default=True,
 )
 def label(
-    input_path: str, output_path: str, worker_type: str, n_workers: int, queue: str
+    input_path: str,
+    output_path: str,
+    worker_type: str,
+    worker_memory: int,
+    n_workers: int,
+    queue: str
 ):
 
     input_molecule_stream = oechem.oemolistream()
@@ -65,7 +77,7 @@ def label(
         dask_cluster = LSFCluster(
             queue=queue,
             cores=1,
-            memory="2000000000B",
+            memory=f"{worker_memory * 9}B",
             walltime="02:00",
             local_directory="dask-worker-space",
             log_directory="dask-worker-logs",
