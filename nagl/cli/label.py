@@ -83,7 +83,7 @@ def label(
         dask_cluster = LSFCluster(
             queue=queue,
             cores=1,
-            memory=f"{worker_memory * 9}B",
+            memory=f"{worker_memory * 1e9}B",
             walltime="02:00",
             local_directory="dask-worker-space",
             log_directory="dask-worker-logs",
