@@ -48,6 +48,13 @@ from nagl.utilities.openeye import enumerate_tautomers, guess_stereochemistry
     type=int,
 )
 @click.option(
+    "--worker-time",
+    help="The maximum wall-clock time to request per LSF queue worker.",
+    default="02:00",
+    show_default=True,
+    type=str,
+)
+@click.option(
     "--queue",
     help="The LSF queue to submit workers to.",
     type=str,
@@ -64,6 +71,7 @@ def label(
     output_path: str,
     worker_type: str,
     worker_memory: int,
+    worker_time: str,
     n_workers: int,
     queue: str,
     conda_env: str,
@@ -84,12 +92,12 @@ def label(
             queue=queue,
             cores=1,
             memory=f"{worker_memory * 1e9}B",
-            walltime="02:00",
+            walltime=worker_time,
             local_directory="dask-worker-space",
             log_directory="dask-worker-logs",
             env_extra=[f"conda activate {conda_env}"],
         )
-        dask_cluster.adapt(minimum=1, maximum=n_workers)
+        dask_cluster.scale(n=n_workers)
 
     elif worker_type == "local":
         dask_cluster = LocalCluster(n_workers=n_workers)
@@ -124,3 +132,5 @@ def label(
         pickle.dump(molecules, file)
 
     input_molecule_stream.close()
+
+    dask_cluster.scale(n=1)
