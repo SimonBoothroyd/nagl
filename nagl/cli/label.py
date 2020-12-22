@@ -1,14 +1,30 @@
 import pickle
 import sys
+from typing import List, Optional, Tuple
 
 import click
 from dask import distributed
 from dask_jobqueue import LSFCluster
-from distributed import LocalCluster
+from distributed import LocalCluster, as_completed
 from openeye import oechem
+from openforcefield.topology import Molecule
 
 from nagl.labels.am1 import compute_am1_charge_and_wbo
 from nagl.utilities.openeye import enumerate_tautomers, guess_stereochemistry
+
+
+def label_molecule_batch(
+    oe_molecules: List[oechem.OEMol],
+) -> List[Tuple[Optional[Molecule], Optional[str]]]:
+    """Labels a batch of molecules using ``compute_am1_charge_and_wbo``.
+
+    Returns
+    -------
+        A list of tuples. Each tuple will contain the processed molecule containing the
+        AM1 charges and WBO if no exceptions were raised (``None`` otherwise) and the
+        error string if an exception was raised (``None`` otherwise).
+    """
+    return [compute_am1_charge_and_wbo(oe_molecule) for oe_molecule in oe_molecules]
 
 
 @click.command(
@@ -80,22 +96,27 @@ def label(
     input_molecule_stream = oechem.oemolistream()
     input_molecule_stream.open(input_path)
 
-    print("Enumerating tautomers\n")
+    print("Enumerating tautomers")
 
     output_stream = oechem.oeosstream()
 
     oechem.OEThrow.SetOutputStream(output_stream)
     oechem.OEThrow.Clear()
-
     enumerated_molecules = [
         oechem.OEMol(oe_tautomer)
         for oe_molecule in input_molecule_stream.GetOEMols()
         for oe_tautomer in enumerate_tautomers(guess_stereochemistry(oe_molecule))
     ]
 
+    input_molecule_stream.close()
     oechem.OEThrow.SetOutputStream(oechem.oeerr)
 
-    print("\nLabeling molecules\n")
+    print("Stripping salts")
+
+    for oe_molecule in enumerated_molecules:
+        oechem.OEDeleteEverythingExceptTheFirstLargestComponent(oe_molecule)
+
+    print("Labeling molecules")
 
     # Set-up dask to distribute the processing.
     if worker_type == "lsf":
@@ -117,27 +138,33 @@ def label(
 
     dask_client = distributed.Client(dask_cluster)
 
-    futures = dask_client.map(compute_am1_charge_and_wbo, enumerated_molecules)
+    # Submit the tasks to be computed in chunked batches.
+    def batch(iterable, batch_size):
+        n_iterables = len(iterable)
 
-    molecules = []
+        for i in range(0, n_iterables, batch_size):
+            yield iterable[i : min(i + batch_size, n_iterables)]
 
-    for future in dask_client.gather(futures, errors="skip"):
+    futures = [
+        dask_client.submit(label_molecule_batch, batched_molecules)
+        for batched_molecules in batch(enumerated_molecules, batch_size=500)
+    ]
 
-        molecule, error = future.result()
-
-        if error is not None:
-
-            print("=".join(["="] * 40), file=sys.stderr)
-            print(error + "\n", file=sys.stderr)
-
-            continue
-
-        molecules.append(molecule)
-
+    # Save out the molecules as they are ready.
     with open(output_path, "wb") as file:
-        pickle.dump(molecules, file)
 
-    input_molecule_stream.close()
+        for future in as_completed(futures, raise_errors=False):
+
+            for molecule, error in future.result():
+
+                if error is not None:
+
+                    print("=".join(["="] * 40), file=sys.stderr)
+                    print(error + "\n", file=sys.stderr)
+
+                    continue
+
+                pickle.dump(molecule, file)
 
     if worker_type == "lsf":
-        dask_cluster.scale(n=1)
+        dask_cluster.scale(n=0)
