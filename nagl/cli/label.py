@@ -166,5 +166,7 @@ def label(
 
                 pickle.dump(molecule, file)
 
+            future.release()
+
     if worker_type == "lsf":
         dask_cluster.scale(n=0)
