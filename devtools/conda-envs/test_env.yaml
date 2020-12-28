@@ -22,8 +22,11 @@ dependencies:
   - openff-recharge >= 0.0.1a6
   - openeye-toolkits
 
-   # Plotting
+    # Plotting
   - matplotlib
+
+    # Python < 3.7
+  - typing-extensions
 
     # Testing
   - pytest
