@@ -19,8 +19,8 @@ from nagl.dataset.features import (
     BondIsInRing,
 )
 from nagl.models.models import ConvolutionConfig, MolGraph, ReadoutConfig
-from nagl.nn import SequentialLayers
-from nagl.nn.pooling import PoolAtomFeatures, PoolBondFeatures
+from nagl.nn import SequentialConfig
+from nagl.nn.pooling import PoolAtomFeatures
 from nagl.nn.process import ComputePartialCharges
 
 
@@ -36,9 +36,9 @@ def label_function(molecule: Molecule) -> Dict[str, torch.Tensor]:
             ],
             dtype=torch.float,
         ),
-        "am1_wbo": torch.tensor(
-            [bond.fractional_bond_order for bond in molecule.bonds], dtype=torch.float
-        ),
+        # "am1_wbo": torch.tensor(
+        #     [bond.fractional_bond_order for bond in molecule.bonds], dtype=torch.float
+        # ),
     }
 
 
@@ -50,20 +50,25 @@ def load_data_sets(
     """
     from simtk import unit
 
-    with open("train-set-large.pkl", "rb") as file:
+    training_set_path = "train-set-large.pkl"
+    test_set_path = "test-set-large.pkl"
+
+    with open(training_set_path, "rb") as file:
         training_molecules = pickle.load(file)
-    with open("test-set-large.pkl", "rb") as file:
+
+    with open(test_set_path, "rb") as file:
         test_molecules = pickle.load(file)
 
     # For now limit to only uncharged molecules.
     training_molecules = [
         molecule
         for molecule in training_molecules
+        if all(len(atom.bonds) > 0 for atom in molecule.atoms)
         if all(
             atom.formal_charge == 0 * unit.elementary_charge for atom in molecule.atoms
         )
         and all(
-            abs(atom.partial_charge) < 1.0 * unit.elementary_charge
+            abs(atom.partial_charge) < 1.5 * unit.elementary_charge
             for atom in molecule.atoms
         )
     ]
@@ -74,7 +79,7 @@ def load_data_sets(
             atom.formal_charge == 0 * unit.elementary_charge for atom in molecule.atoms
         )
         and all(
-            abs(atom.partial_charge) < 1.0 * unit.elementary_charge
+            abs(atom.partial_charge) < 1.5 * unit.elementary_charge
             for atom in molecule.atoms
         )
     ]
@@ -86,7 +91,7 @@ def load_data_sets(
         test_molecules, atom_features, bond_features, label_function
     )
 
-    training_set = MoleculeGraphDataLoader(training_data, batch_size=256, shuffle=True)
+    training_set = MoleculeGraphDataLoader(training_data, batch_size=32, shuffle=True)
     test_set = MoleculeGraphDataLoader(
         test_data, batch_size=len(test_data), shuffle=False
     )
@@ -98,9 +103,9 @@ def main():
 
     # Define the features of interest.
     atom_features = [
-        AtomicElement(["C", "O", "H", "N", "S", "F", "Br", "Cl"]),
+        AtomicElement(["C", "O", "H", "N", "S", "F", "Br", "Cl", "I", "P"]),
         AtomConnectivity(),
-        AtomFormalCharge([0]),
+        AtomFormalCharge([-1, 0, 1]),
         AtomIsInRing(),
     ]
     bond_features = [
@@ -112,38 +117,49 @@ def main():
     training_set, test_set, n_features = load_data_sets(atom_features, bond_features)
 
     # Define the model.
+    n_node_features = 64
+
     model = MolGraph(
         convolution_config=ConvolutionConfig(
+            architecture="SAGEConv",
             in_feats=n_features,
-            hidden_feats=[128, 128, 128],
+            hidden_feats=[n_node_features] * 4,
         ),
         readout_configs={
             "am1_charges": ReadoutConfig(
-                pooling_layer=PoolAtomFeatures(),
-                hidden_feats=[128, 128, 128, 2],
-                postprocess_layer=ComputePartialCharges(),
-            ),
-            "am1_wbo": ReadoutConfig(
-                pooling_layer=PoolBondFeatures(
-                    layers=SequentialLayers(
-                        in_feats=128 * 2,
-                        hidden_feats=[128 * 2],
-                    )
+                pooling_layer=PoolAtomFeatures.Config(),
+                readout_layers=SequentialConfig(
+                    in_feats=n_node_features,
+                    hidden_feats=[128, 128, 128, 2],
+                    activation=["ReLU", "ReLU", "ReLU", "Identity"],
                 ),
-                hidden_feats=[256, 256, 256, 1],
+                postprocess_layer=ComputePartialCharges.Config(),
             ),
+            # "am1_wbo": ReadoutConfig(
+            #     pooling_layer=PoolBondFeatures.Config(
+            #         layers=SequentialConfig(
+            #             in_feats=n_node_features * 2,
+            #             hidden_feats=[n_node_features * 2],
+            #         )
+            #     ),
+            #     readout_layers=SequentialConfig(
+            #         in_feats=n_node_features * 2,
+            #         hidden_feats=[256, 256, 256, 1],
+            #         activation=["ReLU", "ReLU", "ReLU", "Identity"],
+            #     ),
+            # ),
         },
     )
 
     print(model)
 
     # Define the optimizer and the loss function.
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.0002)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.00001)
     criterion = torch.nn.MSELoss()
 
     losses = []
 
-    for epoch in range(100):
+    for epoch in range(30):
 
         graph: dgl.DGLGraph
 

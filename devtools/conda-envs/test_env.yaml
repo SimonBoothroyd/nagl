@@ -1,11 +1,9 @@
 name: test
 channels:
   - dglteam
-  - pytorch
   - openeye
   - conda-forge
   - omnia
-  - defaults
 
 dependencies:
     # Base depends
@@ -14,14 +12,14 @@ dependencies:
 
     # Core dependencies
   - click
+  - click-option-group
   - pydantic
   - pytorch
-  - pytorch-lightning
   - dgl
 
     # Molecule loading and processing.
-  - openforcefield
-  - openff-recharge
+  - openforcefield >= 0.8.1
+  - openff-recharge >= 0.0.1a6
   - openeye-toolkits
 
    # Plotting

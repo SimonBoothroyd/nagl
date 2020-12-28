@@ -51,7 +51,7 @@ class GCNStack(torch.nn.Module, Generic[S, T], abc.ABC):
                 i-th GCN layer. ``len(dropout)`` equals the number of GCN layers.
                 By default, no dropout is performed for all layers.
             aggregator_type: ``aggregator_type[i]`` decides the aggregator type for the
-                i-th GCN layer, which can be one of ``"sum"``, ``"max"``, ``"mean"``.
+                i-th GCN layer.
         """
 
         super(GCNStack, self).__init__()

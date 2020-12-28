@@ -2,6 +2,7 @@
 
 [![tests](https://github.com/SimonBoothroyd/nagl/workflows/CI/badge.svg?branch=main)](https://github.com/SimonBoothroyd/nagl/actions?query=workflow%3ACI)
 [![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/SimonBoothroyd/nagl.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/SimonBoothroyd/nagl/context:python)
+[![codecov](https://codecov.io/gh/SimonBoothroyd/nagl/branch/main/graph/badge.svg?token=Aa8STE8WBZ)](https://codecov.io/gh/SimonBoothroyd/nagl)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A playground for applying graph convolutional networks to molecules, with a focus on learning continuous "atom-type"
@@ -23,8 +24,9 @@ python setup.py develop
 
 ## Scripts
 
-* `scripts/data-set-generation/run.py` - A script which will load a set of molecules from their SMILES representations,
-  compute their AM1 partial charges and Wiberg bond orders (WBO) then pickle these ready for featurization.
+* `scripts/data-set-generation/openff/run.py` - A script which will load a set of molecules from their SMILES 
+  representations, compute their AM1 partial charges and Wiberg bond orders (WBO) then pickle these ready for 
+  featurization.
   
 * `scripts/training/run.py` - A script which loads a train and test set of pickled molecules, featurizes them, and
    then attempts to train a generalizable NN model which is able to predict the AM1 partial charges and WBOs.

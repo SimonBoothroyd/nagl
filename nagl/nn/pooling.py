@@ -3,12 +3,21 @@ import abc
 import dgl
 import torch.nn
 from dgl.udf import EdgeBatch
+from pydantic import BaseModel, Field
+from typing_extensions import Literal
+
+from nagl.nn import SequentialConfig, SequentialLayers
 
 
 class PoolingLayer(torch.nn.Module, abc.ABC):
     """A convenience class for pooling together node feature vectors produced by
     a graph convolutional layer.
     """
+
+    @classmethod
+    @abc.abstractmethod
+    def from_config(cls, config):
+        """Create an instance of a pooling layer from its configuration."""
 
     @classmethod
     @abc.abstractmethod
@@ -27,9 +36,18 @@ class PoolAtomFeatures(PoolingLayer):
     This class simply returns the features "h" from the graphs node data.
     """
 
+    class Config(BaseModel):
+        """Configuration options for a ``PoolAtomFeatures`` layer."""
+
+        type: Literal["PoolAtomFeatures"] = "PoolAtomFeatures"
+
     @classmethod
     def n_feature_columns(cls):
         return 1
+
+    @classmethod
+    def from_config(cls, config: "PoolAtomFeatures.Config"):
+        return cls()
 
     def forward(self, graph: dgl.DGLGraph) -> torch.Tensor:
         return graph.ndata["h"]
@@ -40,6 +58,15 @@ class PoolBondFeatures(PoolingLayer):
     a graph convolutional layer into a set of symmetric bond (edge) features.
     """
 
+    class Config(BaseModel):
+        """Configuration options for a ``PoolBondFeatures`` layer."""
+
+        type: Literal["PoolBondFeatures"] = "PoolBondFeatures"
+
+        layers: SequentialConfig = Field(
+            ..., description="The NN layers to apply to the bond features."
+        )
+
     @classmethod
     def n_feature_columns(cls):
         return 2
@@ -47,6 +74,10 @@ class PoolBondFeatures(PoolingLayer):
     def __init__(self, layers):
         super().__init__()
         self.layers = layers
+
+    @classmethod
+    def from_config(cls, config: "PoolBondFeatures.Config"):
+        return cls(layers=SequentialLayers.from_config(config.layers))
 
     @classmethod
     def _apply_edges(cls, edges: EdgeBatch):

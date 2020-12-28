@@ -1,10 +1,18 @@
 import abc
 import logging
-from typing import Callable, Collection, Dict, List, NamedTuple, Optional, TypeVar
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    Collection,
+    Dict,
+    List,
+    NamedTuple,
+    Optional,
+    TypeVar,
+)
 
 import dgl
 import torch
-from openforcefield.topology import Molecule
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
@@ -14,14 +22,21 @@ from nagl.dataset.features import (
     BondFeature,
     BondFeaturizer,
 )
+from nagl.utilities.utilities import requires_package
+
+if TYPE_CHECKING:
+    from openforcefield.topology import Molecule
+
 
 T = TypeVar("T", bound="MoleculeGraphDataset")
 
 logger = logging.getLogger(__name__)
 
 
+@requires_package("openforcefield")
+@requires_package("simtk")
 def molecule_to_graph(
-    molecule: Molecule,
+    molecule: "Molecule",
     atom_features: List[AtomFeature],
     bond_features: List[BondFeature],
 ) -> dgl.DGLGraph:
@@ -52,7 +67,9 @@ def molecule_to_graph(
     )
 
     # Assign the atom (node) features.
-    molecule_graph.ndata["feat"] = AtomFeaturizer.featurize(molecule, atom_features)
+    if len(atom_features) > 0:
+        molecule_graph.ndata["feat"] = AtomFeaturizer.featurize(molecule, atom_features)
+
     molecule_graph.ndata["formal_charge"] = torch.tensor(
         [
             atom.formal_charge.value_in_unit(unit.elementary_charge)
@@ -98,38 +115,12 @@ class MoleculeGraphDataset(Dataset, abc.ABC):
         self._entries = entries
 
     @classmethod
-    def from_smiles(
-        cls: T,
-        smiles_patterns: Collection[str],
-        atom_features: List[AtomFeature],
-        bond_features: List[BondFeature],
-        label_function: Callable[[Molecule], Dict[str, torch.Tensor]],
-    ) -> T:
-        """Creates a data set from a specified list of SMILES patterns.
-
-        Args:
-            smiles_patterns: The SMILES representations of the molecules to load into
-                the set.
-            atom_features: The atom features to compute for each molecule.
-            bond_features: The bond features to compute for each molecule.
-            label_function: A function which will return a label for a given molecule.
-                The function should take a molecule as input, and return and tensor
-                with shape=(n_atoms,) containing the label of each atom.
-        """
-
-        molecules = [Molecule.from_smiles(smiles) for smiles in smiles_patterns]
-
-        return cls.from_molecules(
-            molecules, atom_features, bond_features, label_function
-        )
-
-    @classmethod
     def from_molecules(
         cls: T,
-        molecules: Collection[Molecule],
+        molecules: Collection["Molecule"],
         atom_features: List[AtomFeature],
         bond_features: List[BondFeature],
-        label_function: Callable[[Molecule], Dict[str, torch.Tensor]],
+        label_function: Callable[["Molecule"], Dict[str, torch.Tensor]],
     ) -> T:
         """Creates a data set from a specified list of molecule objects.
 
@@ -157,10 +148,10 @@ class MoleculeGraphDataset(Dataset, abc.ABC):
     @classmethod
     def _build_entry(
         cls,
-        molecule: Molecule,
+        molecule: "Molecule",
         atom_features: List[AtomFeature],
         bond_features: List[BondFeature],
-        label_function: Callable[[Molecule], Dict[str, torch.Tensor]],
+        label_function: Callable[["Molecule"], Dict[str, torch.Tensor]],
     ) -> MoleculeGraphEntry:
         """Maps a molecule into a labeled, featurized graph representation.
 
@@ -171,8 +162,6 @@ class MoleculeGraphDataset(Dataset, abc.ABC):
             label_function: A function which will return a label for a given molecule.
                 The function should take a molecule as input, and return and tensor
                 with shape=(n_atoms,) containing the label of each atom.
-            compute_charges: Whether to compute AM1 ELF10 partial charges for each atom.
-            compute_wbo: Whether to compute the AM1 Wiberg bond order for each bond.
 
         Returns:
             A named tuple containing the featurized molecule graph, a tensor of the atom

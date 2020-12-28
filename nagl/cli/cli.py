@@ -1,11 +1,15 @@
 import click
 
-from nagl.cli.label import label
+from nagl.cli.label import label_cli
+from nagl.cli.prepare import prepare_cli
 
 
 @click.group()
 def cli():
-    """The root group for all CLI commands."""
+    """A framework for learning classical force field parameters using graph
+    convolutional neural networks.
+    """
 
 
-cli.add_command(label)
+cli.add_command(prepare_cli)
+cli.add_command(label_cli)

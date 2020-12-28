@@ -1,8 +1,10 @@
 import abc
-from typing import Generic, List, Optional, TypeVar
+from typing import TYPE_CHECKING, Generic, List, Optional, TypeVar
 
 import torch
-from openforcefield.topology import Molecule
+
+if TYPE_CHECKING:
+    from openforcefield.topology import Molecule
 
 
 def one_hot_encode(item, elements):
@@ -12,22 +14,11 @@ def one_hot_encode(item, elements):
     ).reshape(1, -1)
 
 
-def cross_one_hot(feature_a: torch.Tensor, feature_b: torch.Tensor) -> torch.Tensor:
-    """Computes the feature cross of two one-hot encoded features."""
-
-    return torch.vstack(
-        [
-            torch.flatten(torch.outer(feature_a[i], feature_b[i]))
-            for i in range(len(feature_a))
-        ]
-    )
-
-
 class _Feature(abc.ABC):
     """The base class for features of molecules."""
 
     @abc.abstractmethod
-    def __call__(self, molecule: Molecule) -> torch.Tensor:
+    def __call__(self, molecule: "Molecule") -> torch.Tensor:
         """A function which should generate the relevant feature tensor for the
         molecule.
         """
@@ -38,19 +29,9 @@ T = TypeVar("T", bound=_Feature)
 
 class _Featurizer(Generic[T], abc.ABC):
     @classmethod
-    def featurize(cls, molecule: Molecule, features: List[T]) -> torch.Tensor:
+    def featurize(cls, molecule: "Molecule", features: List[T]) -> torch.Tensor:
         """Featurizes a given molecule based on a given feature list."""
         return torch.hstack([feature(molecule) for feature in features])
-
-
-class CrossOneHot(_Feature):
-    def __init__(self, feature_a: T, feature_b: T):
-
-        self.feature_a = feature_a
-        self.feature_b = feature_b
-
-    def __call__(self, molecule: Molecule) -> torch.Tensor:
-        return cross_one_hot(self.feature_a(molecule), self.feature_b(molecule))
 
 
 class AtomFeature(_Feature, abc.ABC):
@@ -73,7 +54,7 @@ class AtomicElement(AtomFeature):
         """
         self.elements = elements
 
-    def __call__(self, molecule: Molecule) -> torch.Tensor:
+    def __call__(self, molecule: "Molecule") -> torch.Tensor:
         """A function which should generate the relevant feature tensor for the
         molecule.
         """
@@ -93,7 +74,7 @@ class AtomConnectivity(AtomFeature):
 
     _CONNECTIONS = [1, 2, 3, 4]
 
-    def __call__(self, molecule: Molecule) -> torch.Tensor:
+    def __call__(self, molecule: "Molecule") -> torch.Tensor:
 
         return torch.vstack(
             [
@@ -106,7 +87,7 @@ class AtomConnectivity(AtomFeature):
 class AtomIsAromatic(AtomFeature):
     """One-hot encodes whether each atom in a molecule is aromatic."""
 
-    def __call__(self, molecule: Molecule) -> torch.Tensor:
+    def __call__(self, molecule: "Molecule") -> torch.Tensor:
 
         return torch.vstack(
             [one_hot_encode(int(atom.is_aromatic), [0, 1]) for atom in molecule.atoms]
@@ -116,7 +97,7 @@ class AtomIsAromatic(AtomFeature):
 class AtomIsInRing(AtomFeature):
     """One-hot encodes whether each atom in a molecule is in a ring of any size."""
 
-    def __call__(self, molecule: Molecule) -> torch.Tensor:
+    def __call__(self, molecule: "Molecule") -> torch.Tensor:
 
         return torch.vstack(
             [one_hot_encode(int(atom.is_in_ring), [0, 1]) for atom in molecule.atoms]
@@ -139,7 +120,7 @@ class AtomFormalCharge(AtomFeature):
         """
         self.charges = charges
 
-    def __call__(self, molecule: Molecule) -> torch.Tensor:
+    def __call__(self, molecule: "Molecule") -> torch.Tensor:
 
         from simtk import unit
 
@@ -166,7 +147,7 @@ class BondIsAromatic(BondFeature):
     """One-hot encodes whether each bond in a molecule is aromatic."""
 
     @classmethod
-    def __call__(cls, molecule: Molecule) -> torch.Tensor:
+    def __call__(cls, molecule: "Molecule") -> torch.Tensor:
 
         return torch.vstack(
             [one_hot_encode(int(bond.is_aromatic), [0, 1]) for bond in molecule.bonds]
@@ -176,7 +157,7 @@ class BondIsAromatic(BondFeature):
 class BondIsInRing(BondFeature):
     """One-hot encodes whether each bond in a molecule is in a ring of any size."""
 
-    def __call__(self, molecule: Molecule) -> torch.Tensor:
+    def __call__(self, molecule: "Molecule") -> torch.Tensor:
 
         return torch.vstack(
             [one_hot_encode(int(bond.is_in_ring), [0, 1]) for bond in molecule.bonds]
@@ -187,7 +168,7 @@ class WibergBondOrder(BondFeature):
     """Encodes the fractional Wiberg bond order of all of the bonds in a molecule."""
 
     @classmethod
-    def __call__(cls, molecule: Molecule) -> torch.Tensor:
+    def __call__(cls, molecule: "Molecule") -> torch.Tensor:
         return torch.tensor(
             [bond.fractional_bond_order for bond in molecule.bonds]
         ).reshape(-1, 1)
