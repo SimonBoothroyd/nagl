@@ -56,7 +56,7 @@ def compute_wbo(
     return bond_orders
 
 
-@requires_package("openff-recharge")
+@requires_package("openff.recharge")
 def compute_am1_charge_and_wbo(
     oe_molecule: "oechem.OEMol", wbo_method: str
 ) -> Tuple[Optional["Molecule"], Optional[str]]:
