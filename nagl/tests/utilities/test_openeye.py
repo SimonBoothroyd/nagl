@@ -43,14 +43,14 @@ def test_requires_oe_package(monkeypatch):
 #     )
 
 
-def test_enumerate_tautomers():
-    oe_molecule = oechem.OEMol()
-    oechem.OESmilesToMol(oe_molecule, "CC=C(C)O")
-
-    tautomers = enumerate_tautomers(oe_molecule)
-    assert len(tautomers) == 2
-
-    assert {oechem.OEMolToSmiles(tautomer) for tautomer in tautomers} == {
-        "CCC(=O)C",
-        "CC=C(C)O",
-    }
+# def test_enumerate_tautomers():
+#     oe_molecule = oechem.OEMol()
+#     oechem.OESmilesToMol(oe_molecule, "CC=C(C)O")
+#
+#     tautomers = enumerate_tautomers(oe_molecule)
+#     assert len(tautomers) == 2
+#
+#     assert {oechem.OEMolToSmiles(tautomer) for tautomer in tautomers} == {
+#         "CCC(=O)C",
+#         "CC=C(C)O",
+#     }
