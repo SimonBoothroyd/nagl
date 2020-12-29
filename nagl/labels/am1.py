@@ -118,15 +118,18 @@ def compute_am1_charge_and_wbo(
 
         for bond in molecule.bonds:
 
-            bond_order = sum(
-                conformer_wbo[
-                    (
-                        min(bond.atom1_index, bond.atom2_index),
-                        max(bond.atom1_index, bond.atom2_index),
-                    )
-                ]
-                for conformer_wbo in wbo_per_conformer
-            ) / len(wbo_conformers)
+            bond_order = (
+                sum(
+                    conformer_wbo[
+                        (
+                            min(bond.atom1_index, bond.atom2_index),
+                            max(bond.atom1_index, bond.atom2_index),
+                        )
+                    ]
+                    for conformer_wbo in wbo_per_conformer
+                )
+                / len(wbo_conformers)
+            )
 
             bond.fractional_bond_order = bond_order
 

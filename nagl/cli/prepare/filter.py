@@ -88,7 +88,10 @@ def apply_filter(
 @requires_oe_package("oechem")
 @requires_oe_package("oemolprop")
 def filter_cli(
-    input_path: str, output_path: str, n_processes: int, strip_ions: bool,
+    input_path: str,
+    output_path: str,
+    n_processes: int,
+    strip_ions: bool,
 ):
     from openeye import oechem
 

@@ -63,7 +63,9 @@ def guess_stereochemistry(oe_molecule: "oechem.OEMol") -> "oechem.OEMol":
 @requires_oe_package("oechem")
 @requires_oe_package("oequacpac")
 def enumerate_tautomers(
-    oe_molecule: "oechem.OEMol", max_tautomers: int = 16, pka_normalize: bool = True,
+    oe_molecule: "oechem.OEMol",
+    max_tautomers: int = 16,
+    pka_normalize: bool = True,
 ) -> List["oechem.OEMol"]:
     """Enumerates the pKa normalized tautomers (up to a specified maximum) of an input
     molecule.
