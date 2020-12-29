@@ -1,10 +1,16 @@
 import functools
 import importlib
+import os
+from contextlib import contextmanager
+from tempfile import TemporaryDirectory
+from typing import Optional
 
 _CONDA_INSTALLATION_COMMANDS = {
     "openforcefield": "conda install -c conda-forge -c omnia openforcefield",
     "openeye": "conda install -c openeye openeye-toolkits",
-    "openff-recharge": "conda install -c conda-forge -c omnia openff-recharge",
+    "openff.recharge": "conda install -c conda-forge -c omnia openff-recharge",
+    "dask.distributed": "conda install -c conda-forge distributed",
+    "dask_jobqueue": "conda install -c conda-forge dask-jobqueue",
 }
 
 
@@ -57,3 +63,38 @@ def requires_package(library_path: str):
         return wrapper
 
     return inner_decorator
+
+
+@contextmanager
+def temporary_cd(directory_path: Optional[str] = None):
+    """Temporarily move the current working directory to the path
+    specified. If no path is given, a temporary directory will be
+    created, moved into, and then destroyed when the context manager
+    is closed.
+
+    Args
+        directory_path: The optional path to change to. If none is specified a random
+        temporary directory will be changed to.
+    """
+
+    if directory_path is not None and len(directory_path) == 0:
+        yield
+        return
+
+    old_directory = os.getcwd()
+
+    try:
+
+        if directory_path is None:
+
+            with TemporaryDirectory() as new_directory:
+                os.chdir(new_directory)
+                yield
+
+        else:
+
+            os.chdir(directory_path)
+            yield
+
+    finally:
+        os.chdir(old_directory)

@@ -23,6 +23,10 @@ dependencies:
   - openff-recharge >= 0.0.1a6
   - openeye-toolkits
 
+    # Distributed molecule processing / labelling.
+  - distributed
+  - dask-jobqueue
+
     # Plotting
   - matplotlib
 

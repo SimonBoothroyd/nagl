@@ -5,12 +5,10 @@ from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import click
 from click_option_group import optgroup
-from dask import distributed
-from dask_jobqueue import LSFCluster
-from distributed import LocalCluster, as_completed
 from tqdm import tqdm
 
 from nagl.labels.am1 import compute_am1_charge_and_wbo
+from nagl.utilities.dask import setup_dask_local_cluster, setup_dask_lsf_cluster
 from nagl.utilities.openeye import (
     capture_oe_warnings,
     guess_stereochemistry,
@@ -67,7 +65,7 @@ def label_molecule_batch(
 @click.option(
     "--wbo-method",
     type=click.Choice(["single-conformer", "elf10-average"]),
-    default="lsf",
+    default="single-conformer",
     show_default=True,
     help="The method by which to compute the WBOs. WBOs may be computed using only a "
     "single conformer ('single-conformer'), or by computing the WBO for each ELF10 "
@@ -87,14 +85,15 @@ def label_molecule_batch(
     help="The number of workers to distribute the labelling across. Use -1 to request "
     "one worker per batch.",
     type=int,
-    required=True,
+    default=1,
+    show_default=True,
 )
 @optgroup.option(
     "--worker-type",
-    type=click.Choice(["lsf", "local"]),
-    default="lsf",
-    show_default=True,
     help="The type of worker to distribute the labelling across.",
+    type=click.Choice(["lsf", "local"]),
+    default="local",
+    show_default=True,
 )
 @optgroup.option(
     "--batch-size",
@@ -130,8 +129,9 @@ def label_molecule_batch(
     help="The conda environment that LSF workers should run using.",
     type=str,
 )
-@requires_package("openforcefield")
 @requires_oe_package("oechem")
+@requires_package("dask.distributed")
+@requires_package("openforcefield")
 def label_cli(
     input_path: str,
     output_path: str,
@@ -146,24 +146,25 @@ def label_cli(
     lsf_env: str,
 ):
 
+    from dask import distributed
     from openeye import oechem
 
-    input_molecule_stream = oechem.oemolistream()
-    input_molecule_stream.open(input_path)
+    input_stream = oechem.oemolistream(input_path)
 
     print(" - Labeling molecules")
 
     with capture_oe_warnings():
 
         oe_molecules = [
-            oe_molecule for oe_molecule in input_molecule_stream.GetOEMols()
+            oechem.OEMol(oe_molecule) for oe_molecule in input_stream.GetOEMols()
         ]
+
+        input_stream.close()
 
         if guess_stereo:
 
             oe_molecules = [
-                oechem.OEMol(guess_stereochemistry(oe_molecule))
-                for oe_molecule in oe_molecules
+                guess_stereochemistry(oe_molecule) for oe_molecule in oe_molecules
             ]
 
     n_batches = int(math.ceil(len(oe_molecules) / batch_size))
@@ -181,19 +182,11 @@ def label_cli(
 
     # Set-up dask to distribute the processing.
     if worker_type == "lsf":
-        dask_cluster = LSFCluster(
-            queue=lsf_queue,
-            cores=1,
-            memory=f"{lsf_memory * 1e9}B",
-            walltime=lsf_walltime,
-            local_directory="dask-worker-space",
-            log_directory="dask-worker-logs",
-            env_extra=[f"conda activate {lsf_env}"],
+        dask_cluster = setup_dask_lsf_cluster(
+            n_workers, lsf_queue, lsf_memory, lsf_walltime, lsf_env
         )
-        dask_cluster.scale(n=n_workers)
-
     elif worker_type == "local":
-        dask_cluster = LocalCluster(n_workers=n_workers)
+        dask_cluster = setup_dask_local_cluster(n_workers)
     else:
         raise NotImplementedError()
 
@@ -216,7 +209,7 @@ def label_cli(
     # Save out the molecules as they are ready.
     with open(output_path, "wb") as file:
 
-        for future in as_completed(futures, raise_errors=False):
+        for future in distributed.as_completed(futures, raise_errors=False):
 
             for molecule, error in future.result():
 

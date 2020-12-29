@@ -36,7 +36,7 @@ def apply_filter(
                     for atom in oe_molecule.GetAtoms()
                 )
                 and (250.0 < oechem.OECalculateMolecularWeight(oe_molecule) < 350.0)
-                and (oemolprop.OEGetRotatableBondCount(oe_molecule) < 7)
+                and (oemolprop.OEGetRotatableBondCount(oe_molecule) <= 7)
             ),
         )
 
