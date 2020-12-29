@@ -4,6 +4,7 @@ channels:
   - openeye
   - conda-forge
   - omnia
+  - defaults
 
 dependencies:
     # Base depends
@@ -14,7 +15,7 @@ dependencies:
   - click
   - click-option-group
   - pydantic
-  - pytorch
+  - pytorch-cpu
   - dgl
 
     # Molecule loading and processing.
