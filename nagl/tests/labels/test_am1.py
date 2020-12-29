@@ -3,8 +3,10 @@ from openforcefield.topology import Molecule
 from simtk import unit
 
 from nagl.labels.am1 import compute_am1_charge_and_wbo, compute_wbo
+from nagl.utilities.openeye import requires_oe_package
 
 
+@requires_oe_package("oechem")
 def test_compute_wbo(methane: Molecule):
 
     oe_molecule = methane.to_openeye()
@@ -18,6 +20,7 @@ def test_compute_wbo(methane: Molecule):
     assert all(numpy.isclose(x, 0.9878536626) for x in wbo_per_bond.values())
 
 
+@requires_oe_package("oechem")
 def test_compute_am1_charge_and_wbo(methane: Molecule):
 
     labelled_molecule, error = compute_am1_charge_and_wbo(

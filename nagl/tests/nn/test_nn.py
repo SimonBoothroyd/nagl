@@ -8,10 +8,7 @@ from nagl.nn import SequentialLayers
 
 def test_init_sequential_layers_default():
 
-    sequential_layers = SequentialLayers(
-        in_feats=1,
-        hidden_feats=[2],
-    )
+    sequential_layers = SequentialLayers(in_feats=1, hidden_feats=[2])
 
     assert len(sequential_layers.layers) == 3
 

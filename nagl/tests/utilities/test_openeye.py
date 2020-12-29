@@ -1,5 +1,4 @@
 import pytest
-from openeye import oechem
 
 from nagl.utilities.openeye import (
     enumerate_tautomers,
@@ -16,6 +15,8 @@ def dummy_oe_function():
 
 def test_requires_oe_package(monkeypatch):
 
+    from openeye import oechem
+
     monkeypatch.setattr(oechem, "OEChemIsLicensed", lambda: False)
 
     with pytest.raises(MissingOptionalDependency) as error_info:
@@ -25,7 +26,10 @@ def test_requires_oe_package(monkeypatch):
     assert error_info.value.license_issue is True
 
 
+@requires_oe_package("oechem")
 def test_guess_stereochemistry():
+
+    from openeye import oechem
 
     oe_molecule = oechem.OEMol()
     oechem.OESmilesToMol(oe_molecule, "C(F)(Cl)(Br)")
@@ -43,7 +47,11 @@ def test_guess_stereochemistry():
     )
 
 
+@requires_oe_package("oechem")
 def test_enumerate_tautomers():
+
+    from openeye import oechem
+
     oe_molecule = oechem.OEMol()
     oechem.OESmilesToMol(oe_molecule, "CC=C(C)O")
 

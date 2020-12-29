@@ -28,13 +28,16 @@ def apply_filter(
         # Retain H, C, N, O, F, P, S, Cl, Br, I
         allowed_elements = [1, 6, 7, 8, 9, 15, 16, 17, 35, 53]
 
-        return oe_molecule, (
-            all(
-                atom.GetAtomicNum() in allowed_elements
-                for atom in oe_molecule.GetAtoms()
-            )
-            and (250.0 < oechem.OECalculateMolecularWeight(oe_molecule) < 350.0)
-            and (oemolprop.OEGetRotatableBondCount(oe_molecule) < 7)
+        return (
+            oe_molecule,
+            (
+                all(
+                    atom.GetAtomicNum() in allowed_elements
+                    for atom in oe_molecule.GetAtoms()
+                )
+                and (250.0 < oechem.OECalculateMolecularWeight(oe_molecule) < 350.0)
+                and (oemolprop.OEGetRotatableBondCount(oe_molecule) < 7)
+            ),
         )
 
 

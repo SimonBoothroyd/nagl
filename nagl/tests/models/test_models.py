@@ -8,10 +8,7 @@ from nagl.nn.process import ComputePartialCharges
 def test_init_mol_graph():
 
     model = MolGraph(
-        convolution_config=ConvolutionConfig(
-            in_feats=1,
-            hidden_feats=[2, 2],
-        ),
+        convolution_config=ConvolutionConfig(in_feats=1, hidden_feats=[2, 2]),
         readout_configs={
             "atom": ReadoutConfig(
                 pooling_layer=PoolAtomFeatures.Config(),
@@ -24,10 +21,7 @@ def test_init_mol_graph():
                 pooling_layer=PoolBondFeatures.Config(
                     layers=SequentialConfig(in_feats=4, hidden_feats=[4])
                 ),
-                readout_layers=SequentialConfig(
-                    in_feats=4,
-                    hidden_feats=[8],
-                ),
+                readout_layers=SequentialConfig(in_feats=4, hidden_feats=[8]),
             ),
         },
     )
@@ -50,10 +44,7 @@ def test_init_mol_graph():
 def test_mol_graph_forward(methane_graph):
 
     model = MolGraph(
-        convolution_config=ConvolutionConfig(
-            in_feats=4,
-            hidden_feats=[4],
-        ),
+        convolution_config=ConvolutionConfig(in_feats=4, hidden_feats=[4]),
         readout_configs={
             "atom": ReadoutConfig(
                 pooling_layer=PoolAtomFeatures.Config(),
