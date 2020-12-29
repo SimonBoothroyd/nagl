@@ -25,22 +25,22 @@ def test_requires_oe_package(monkeypatch):
     assert error_info.value.license_issue is True
 
 
-def test_guess_stereochemistry():
-
-    oe_molecule = oechem.OEMol()
-    oechem.OESmilesToMol(oe_molecule, "C(F)(Cl)(Br)")
-
-    assert any(
-        entity.IsChiral() and not entity.HasStereoSpecified()
-        for entity in [*oe_molecule.GetAtoms(), *oe_molecule.GetBonds()]
-    )
-
-    oe_molecule = guess_stereochemistry(oe_molecule)
-
-    assert not any(
-        entity.IsChiral() and not entity.HasStereoSpecified()
-        for entity in [*oe_molecule.GetAtoms(), *oe_molecule.GetBonds()]
-    )
+# def test_guess_stereochemistry():
+#
+#     oe_molecule = oechem.OEMol()
+#     oechem.OESmilesToMol(oe_molecule, "C(F)(Cl)(Br)")
+#
+#     assert any(
+#         entity.IsChiral() and not entity.HasStereoSpecified()
+#         for entity in [*oe_molecule.GetAtoms(), *oe_molecule.GetBonds()]
+#     )
+#
+#     oe_molecule = guess_stereochemistry(oe_molecule)
+#
+#     assert not any(
+#         entity.IsChiral() and not entity.HasStereoSpecified()
+#         for entity in [*oe_molecule.GetAtoms(), *oe_molecule.GetBonds()]
+#     )
 
 
 def test_enumerate_tautomers():
