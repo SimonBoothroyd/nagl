@@ -74,6 +74,7 @@ def enumerate_cli(
     print(" - Enumerating tautomers")
 
     output_molecule_stream = oechem.oemolostream(output_path)
+    unique_molecules = set()
 
     with capture_oe_warnings():
 
@@ -92,6 +93,19 @@ def enumerate_cli(
 
                 for oe_molecule in oe_molecules:
 
+                    smiles_options = (
+                        oechem.OESMILESFlag_Canonical
+                        | oechem.OESMILESFlag_AtomStereo
+                        | oechem.OESMILESFlag_BondStereo
+                        | oechem.OESMILESFlag_Hydrogens
+                    )
+
+                    smiles = oechem.OECreateSmiString(oe_molecule, smiles_options)
+
+                    if smiles in unique_molecules:
+                        continue
+
                     oechem.OEWriteMolecule(
                         output_molecule_stream, oechem.OEMol(oe_molecule)
                     )
+                    unique_molecules.add(smiles)

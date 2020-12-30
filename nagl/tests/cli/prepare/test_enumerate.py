@@ -9,7 +9,12 @@ from nagl.cli.prepare.enumerate import enumerate_cli
 def test_enumerate_cli(methane: Molecule, runner):
 
     # Create an SDF file to enumerate.
-    Molecule.from_smiles(r"C/C=C(/C)\O").to_file("molecules.sdf", "sdf")
+    buteneol = Molecule.from_smiles(r"C/C=C(/C)\O")
+
+    output_stream = oechem.oemolostream("molecules.sdf")
+    oechem.OEWriteMolecule(output_stream, buteneol.to_openeye())
+    oechem.OEWriteMolecule(output_stream, buteneol.to_openeye())
+    output_stream.close()
 
     arguments = [
         "--input",
