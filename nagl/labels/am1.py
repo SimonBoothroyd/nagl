@@ -105,8 +105,12 @@ def compute_am1_charge_and_wbo(
         for oe_atom in oe_molecule.GetAtoms():
             oe_atom.SetPartialCharge(charges[oe_atom.GetIdx()].item())
 
-        # Map to an OpenFF molecule object.
-        molecule = Molecule.from_openeye(oe_molecule)
+        oe_molecule.DeleteConfs()
+
+        for conformer in conformers:
+            oe_molecule.NewConf(oechem.OEFloatArray(conformer.flatten()))
+
+        oechem.OE3DToInternalStereo(oe_molecule)
 
         # Compute the WBOs
         wbo_conformers = (
@@ -115,6 +119,9 @@ def compute_am1_charge_and_wbo(
         wbo_per_conformer = [
             compute_wbo(oe_molecule, conformer) for conformer in wbo_conformers
         ]
+
+        # Map to an OpenFF molecule object.
+        molecule = Molecule.from_openeye(oe_molecule, allow_undefined_stereo=True)
 
         for bond in molecule.bonds:
 
