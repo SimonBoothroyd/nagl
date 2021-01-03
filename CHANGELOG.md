@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.1-alpha.4](https://github.com/SimonBoothroyd/nagl/tree/0.0.1-alpha.4) (2021-01-03)
+
+[Full Changelog](https://github.com/SimonBoothroyd/nagl/compare/0.0.1-alpha.3...0.0.1-alpha.4)
+
+**Fixed bugs:**
+
+- Add Explicit Hydrogens When Computing AM1 Labels [\#4](https://github.com/SimonBoothroyd/nagl/pull/4) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+
 ## [0.0.1-alpha.3](https://github.com/SimonBoothroyd/nagl/tree/0.0.1-alpha.3) (2020-12-31)
 
 [Full Changelog](https://github.com/SimonBoothroyd/nagl/compare/0.0.1-alpha.2...0.0.1-alpha.3)
