@@ -28,6 +28,10 @@ def compute_wbo(
 
     oechem.OE3DToInternalStereo(oe_molecule)
 
+    # Make sure the input molecule has explicit hydrogens.
+    if oechem.OEHasImplicitHydrogens(oe_molecule):
+        oechem.OEAddExplicitHydrogens(oe_molecule)
+
     am1 = oequacpac.OEAM1()
     am1.GetOptions().SetSemiMethod(oequacpac.OEMethodType_AM1)
 
@@ -87,6 +91,10 @@ def compute_am1_charge_and_wbo(
     try:
 
         smiles = oechem.OEMolToSmiles(oe_molecule)
+
+        # Make sure the input molecule has explicit hydrogens.
+        if oechem.OEHasImplicitHydrogens(oe_molecule):
+            oechem.OEAddExplicitHydrogens(oe_molecule)
 
         # Generate a set of conformers and charges for the molecule.
         conformers = ConformerGenerator.generate(
