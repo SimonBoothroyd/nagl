@@ -1,6 +1,8 @@
 import functools
+import logging
+import re
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Type, TypeVar
 
 from typing_extensions import Literal
 
@@ -8,6 +10,27 @@ from nagl.utilities.utilities import MissingOptionalDependency, requires_package
 
 if TYPE_CHECKING:
     from openeye import oechem
+
+logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
+
+
+class MoleculeFromSmilesError(RuntimeError):
+    """An exception raised when attempting to create a molecule from a
+    SMILES pattern."""
+
+    def __init__(self, *args, smiles: str, **kwargs):
+        """
+
+        Parameters
+        ----------
+        smiles
+            The SMILES pattern which could not be parsed.
+        """
+
+        super(MoleculeFromSmilesError, self).__init__(*args, **kwargs)
+        self.smiles = smiles
 
 
 def requires_oe_package(
@@ -37,6 +60,59 @@ def requires_oe_package(
 
 
 @requires_oe_package("oechem")
+def call_openeye(
+    oe_callable: Callable[[T], bool],
+    *args: T,
+    exception_type: Type[BaseException] = RuntimeError,
+    exception_kwargs: Dict[str, Any] = None,
+):
+    """Wraps a call to an OpenEye function, either capturing the output in an
+    exception if the function does not complete successfully, or redirecting it
+    to the logger.
+
+    Parameters
+    ----------
+    oe_callable
+        The OpenEye function to call.
+    args
+        The arguments to pass to the OpenEye function.
+    exception_type:
+        The type of exception to raise when the function does not
+        successfully complete.
+    exception_kwargs
+        The keyword arguments to pass to the exception.
+    """
+
+    from openeye import oechem
+
+    if exception_kwargs is None:
+        exception_kwargs = {}
+
+    output_stream = oechem.oeosstream()
+
+    oechem.OEThrow.SetOutputStream(output_stream)
+    oechem.OEThrow.Clear()
+
+    status = oe_callable(*args)
+
+    oechem.OEThrow.SetOutputStream(oechem.oeerr)
+
+    output_string = output_stream.str().decode("UTF-8")
+
+    output_string = output_string.replace("Warning: ", "")
+    output_string = re.sub("^: +", "", output_string, flags=re.MULTILINE)
+    output_string = re.sub("\n$", "", output_string)
+
+    if not status:
+
+        # noinspection PyArgumentList
+        raise exception_type("\n" + output_string, **exception_kwargs)
+
+    elif len(output_string) > 0:
+        logger.debug(output_string)
+
+
+@requires_oe_package("oechem")
 @requires_oe_package("oeomega")
 def guess_stereochemistry(oe_molecule: "oechem.OEMol") -> "oechem.OEMol":
     """Generates and returns a random stereoisomer of the input molecule if the
@@ -56,6 +132,56 @@ def guess_stereochemistry(oe_molecule: "oechem.OEMol") -> "oechem.OEMol":
     if unspecified_stereochemistry:
         stereoisomer = next(iter(oeomega.OEFlipper(oe_molecule.GetActive(), 12, True)))
         oe_molecule = oechem.OEMol(stereoisomer)
+
+    return oe_molecule
+
+
+@requires_oe_package("oechem")
+def smiles_to_molecule(
+    smiles: str, choose_stereochemistry: bool = False
+) -> "oechem.OEMol":
+    """Attempts to parse a smiles pattern into a molecule object.
+
+    Parameters
+    ----------
+    smiles
+        The smiles pattern to parse.
+    choose_stereochemistry
+        If true, the stereochemistry of molecules which is not
+        defined in the SMILES pattern will be guessed using the
+        OpenEye ``OEFlipper`` utility.
+
+    Returns
+    -------
+    The parsed molecule.
+    """
+
+    from openeye import oechem
+
+    oe_molecule = oechem.OEMol()
+
+    call_openeye(
+        oechem.OESmilesToMol,
+        oe_molecule,
+        smiles,
+        exception_type=MoleculeFromSmilesError,
+        exception_kwargs={"smiles": smiles},
+    )
+    call_openeye(
+        oechem.OEAddExplicitHydrogens,
+        oe_molecule,
+        exception_type=MoleculeFromSmilesError,
+        exception_kwargs={"smiles": smiles},
+    )
+    call_openeye(
+        oechem.OEPerceiveChiral,
+        oe_molecule,
+        exception_type=MoleculeFromSmilesError,
+        exception_kwargs={"smiles": smiles},
+    )
+
+    if choose_stereochemistry:
+        oe_molecule = guess_stereochemistry(oe_molecule)
 
     return oe_molecule
 

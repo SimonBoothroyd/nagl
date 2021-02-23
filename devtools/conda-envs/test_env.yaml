@@ -18,6 +18,10 @@ dependencies:
   - pytorch-cpu
   - dgl
 
+    # SQL based molecule storage.
+  - sqlalchemy
+  - sqlite
+
     # Molecule loading and processing.
   - openforcefield >= 0.8.1
   - openff-recharge >= 0.0.1a6

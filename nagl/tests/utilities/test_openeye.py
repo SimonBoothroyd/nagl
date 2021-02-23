@@ -1,9 +1,11 @@
 import pytest
 
 from nagl.utilities.openeye import (
+    MoleculeFromSmilesError,
     enumerate_tautomers,
     guess_stereochemistry,
     requires_oe_package,
+    smiles_to_molecule,
 )
 from nagl.utilities.utilities import MissingOptionalDependency
 
@@ -45,6 +47,19 @@ def test_guess_stereochemistry():
         entity.IsChiral() and not entity.HasStereoSpecified()
         for entity in [*oe_molecule.GetAtoms(), *oe_molecule.GetBonds()]
     )
+
+
+def test_smiles_to_molecule():
+    """Tests that the `smiles_to_molecule` behaves as expected."""
+
+    # Test a smiles pattern which should be able to be parsed.
+    smiles_to_molecule("CO")
+
+    # Test a bad smiles pattern.
+    with pytest.raises(MoleculeFromSmilesError) as error_info:
+        smiles_to_molecule("X")
+
+    assert error_info.value.smiles == "X"
 
 
 @requires_oe_package("oechem")
