@@ -115,12 +115,16 @@ class ConformerRecord(_BaseStoredModel):
             values
         ), "multiple charge sets computed using the same method are not allowed"
 
+        return values
+
     @validator("bond_orders")
     def validate_bond_orders(cls, values):
 
         assert len({value.method for value in values}) == len(
             values
         ), "multiple bond order sets computed using the same method are not allowed"
+
+        return values
 
 
 class MoleculeRecord(_BaseStoredModel):
