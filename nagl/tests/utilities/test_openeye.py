@@ -1,9 +1,12 @@
 import pytest
 
 from nagl.utilities.openeye import (
+    MoleculeFromSmilesError,
     enumerate_tautomers,
     guess_stereochemistry,
+    map_indexed_smiles,
     requires_oe_package,
+    smiles_to_molecule,
 )
 from nagl.utilities.utilities import MissingOptionalDependency
 
@@ -47,6 +50,19 @@ def test_guess_stereochemistry():
     )
 
 
+def test_smiles_to_molecule():
+    """Tests that the `smiles_to_molecule` behaves as expected."""
+
+    # Test a smiles pattern which should be able to be parsed.
+    smiles_to_molecule("CO")
+
+    # Test a bad smiles pattern.
+    with pytest.raises(MoleculeFromSmilesError) as error_info:
+        smiles_to_molecule("X")
+
+    assert error_info.value.smiles == "X"
+
+
 @requires_oe_package("oechem")
 def test_enumerate_tautomers():
 
@@ -62,3 +78,14 @@ def test_enumerate_tautomers():
         "CCC(=O)C",
         "CC=C(C)O",
     }
+
+
+@pytest.mark.parametrize(
+    "smiles_a,smiles_b,expected",
+    [
+        ("[Cl:1][H:2]", "[Cl:2][H:1]", {0: 1, 1: 0}),
+        ("[Cl:1][H:3]", "[Cl:2][H:1]", {0: 1, 2: 0}),
+    ],
+)
+def test_map_indexed_smiles(smiles_a, smiles_b, expected):
+    assert map_indexed_smiles(smiles_a, smiles_b) == expected
