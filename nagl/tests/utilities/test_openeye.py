@@ -4,6 +4,7 @@ from nagl.utilities.openeye import (
     MoleculeFromSmilesError,
     enumerate_tautomers,
     guess_stereochemistry,
+    map_indexed_smiles,
     requires_oe_package,
     smiles_to_molecule,
 )
@@ -77,3 +78,14 @@ def test_enumerate_tautomers():
         "CCC(=O)C",
         "CC=C(C)O",
     }
+
+
+@pytest.mark.parametrize(
+    "smiles_a,smiles_b,expected",
+    [
+        ("[Cl:1][H:2]", "[Cl:2][H:1]", {0: 1, 1: 0}),
+        ("[Cl:1][H:3]", "[Cl:2][H:1]", {0: 1, 2: 0}),
+    ],
+)
+def test_map_indexed_smiles(smiles_a, smiles_b, expected):
+    assert map_indexed_smiles(smiles_a, smiles_b) == expected

@@ -232,3 +232,40 @@ def capture_oe_warnings() -> "oechem.oeosstream":
     yield output_stream
 
     oechem.OEThrow.SetOutputStream(oechem.oeerr)
+
+
+@requires_oe_package("oechem")
+def map_indexed_smiles(smiles_a: str, smiles_b: str) -> Dict[int, int]:
+    """Creates a map between the indices of atoms in one indexed SMILES pattern and
+    the indices of atoms in another indexed SMILES pattern.
+
+    Args:
+        smiles_a: The first indexed SMILES pattern.
+        smiles_b: The second indexed SMILES pattern.
+
+    Returns
+        A dictionary where each key is the index of an atom in ``smiles_a`` and the
+        corresponding value the index of the corresponding atom in ``smiles_b``.
+
+    Examples:
+
+        >>> map_indexed_smiles("[Cl:1][H:2]", "[Cl:2][H:1]")
+        {0: 1, 1: 0}
+    """
+
+    from openeye import oechem
+
+    oe_original_molecule = oechem.OEGraphMol()
+    call_openeye(oechem.OESmilesToMol, oe_original_molecule, smiles_a)
+
+    oe_expected_molecule = oechem.OESubSearch(smiles_b)
+    oechem.OEPrepareSearch(oe_original_molecule, oe_expected_molecule)
+
+    match = next(iter(oe_expected_molecule.Match(oe_original_molecule)))
+
+    index_map = {
+        atom.target.GetMapIdx() - 1: atom.pattern.GetMapIdx() - 1
+        for atom in match.GetAtoms()
+    }
+
+    return index_map
