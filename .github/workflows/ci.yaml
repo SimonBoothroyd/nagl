@@ -43,7 +43,7 @@ jobs:
       run: |
         conda install --yes --only-deps -c conda-forge openff-toolkit
 
-        git clone git@github.com:openforcefield/openff-toolkit.git
+        git clone https://github.com/openforcefield/openff-toolkit.git
 
         cd openff-toolkit
         python setup.py develop
