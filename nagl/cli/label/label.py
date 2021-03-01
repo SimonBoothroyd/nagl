@@ -267,7 +267,8 @@ def label_cli(
         for molecule_record, error in future.result():
 
             try:
-                storage.store(molecule_record)
+                if molecule_record is not None and error is None:
+                    storage.store(molecule_record)
             except (BaseException, Exception) as e:
                 error = str(e)
 

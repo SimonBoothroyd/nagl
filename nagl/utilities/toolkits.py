@@ -34,7 +34,7 @@ def _rdkit_stream_from_file(file_path: str) -> Generator["Molecule", None, None]
     from rdkit import Chem
 
     for rd_molecule in Chem.SupplierFromFilename(
-        file_path, removeHs=False, sanitize=False, strictParsing=True
+        file_path, removeHs=False, sanitize=True, strictParsing=True
     ):
 
         if rd_molecule is None:
@@ -81,7 +81,7 @@ def _rdkit_stream_to_file(file_path: str):
 
     output_molecule_stream = Chem.SDWriter(file_path)
 
-    def _save_molecule(molecule: Molecule):
+    def _save_molecule(molecule):
         output_molecule_stream.write(molecule.to_rdkit())
         output_molecule_stream.flush()
 
