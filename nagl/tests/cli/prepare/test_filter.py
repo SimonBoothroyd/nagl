@@ -1,24 +1,19 @@
 import os
 
-from openeye import oechem
-from openforcefield.topology import Molecule
+from openff.toolkit.topology import Molecule
+from openff.toolkit.utils import RDKitToolkitWrapper
 
 from nagl.cli.prepare.filter import filter_cli
+from nagl.utilities.toolkits import stream_from_file, stream_to_file
 
 
 def test_filter_cli(methane: Molecule, runner):
 
     # Create an SDF file to filter.
-    output_stream = oechem.oemolostream("molecules.sdf")
-    oechem.OEWriteMolecule(
-        output_stream,
-        Molecule.from_smiles("C1(=C(C(=C(C(=C1Cl)Cl)Cl)Cl)Cl)[O-].[Na+]").to_openeye(),
-    )
-    oechem.OEWriteMolecule(
-        output_stream,
-        Molecule.from_smiles("CCC(C)(C)C(F)(F)CCCCC(F)(F)C(C)(C)CC").to_openeye(),
-    )
-    output_stream.close()
+    with stream_to_file("molecules.sdf") as writer:
+
+        writer(Molecule.from_smiles("C1(=C(C(=C(C(=C1Cl)Cl)Cl)Cl)Cl)[O-].[Na+]"))
+        writer(Molecule.from_smiles("CCC(C)(C)C(F)(F)CCCCC(F)(F)C(C)(C)CC"))
 
     arguments = ["--input", "molecules.sdf", "--output", "filtered.sdf", "--strip-ions"]
 
@@ -29,13 +24,12 @@ def test_filter_cli(methane: Molecule, runner):
 
     assert os.path.isfile("filtered.sdf")
 
-    input_stream = oechem.oemolistream("filtered.sdf")
-    filtered_molecules = [
-        oechem.OEMol(oe_molecule) for oe_molecule in input_stream.GetOEMols()
-    ]
-    input_stream.close()
-
+    filtered_molecules = [molecule for molecule in stream_from_file("filtered.sdf")]
     assert len(filtered_molecules) == 1
 
-    filtered_molecule = Molecule.from_openeye(filtered_molecules[0])
-    assert filtered_molecule.to_smiles() == "c1(c(c(c(c(c1Cl)Cl)Cl)Cl)Cl)[O-]"
+    filtered_molecule = filtered_molecules[0]
+
+    assert (
+        filtered_molecule.to_smiles(toolkit_registry=RDKitToolkitWrapper())
+        == "[O-][c]1[c]([Cl])[c]([Cl])[c]([Cl])[c]([Cl])[c]1[Cl]"
+    )

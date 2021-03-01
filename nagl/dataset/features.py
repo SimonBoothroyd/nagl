@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Generic, List, Optional, TypeVar
 import torch
 
 if TYPE_CHECKING:
-    from openforcefield.topology import Molecule
+    from openff.toolkit.topology import Molecule
 
 
 def one_hot_encode(item, elements):

@@ -1,15 +1,44 @@
 import functools
 from multiprocessing import Pool
+from typing import TYPE_CHECKING, List
 
 import click
 from click_option_group import optgroup
 from tqdm import tqdm
 
-from nagl.utilities.openeye import (
-    capture_oe_warnings,
-    enumerate_tautomers,
-    requires_oe_package,
+from nagl.utilities import requires_package
+from nagl.utilities.toolkits import (
+    capture_toolkit_warnings,
+    stream_from_file,
+    stream_to_file,
 )
+
+if TYPE_CHECKING:
+    from openff.toolkit.topology import Molecule
+
+
+@requires_package("openff.toolkit")
+def enumerate_tautomers(molecule: "Molecule", max_tautomers: int) -> List["Molecule"]:
+
+    with capture_toolkit_warnings():
+
+        from openff.toolkit.utils import (
+            OpenEyeToolkitWrapper,
+            RDKitToolkitWrapper,
+            ToolkitRegistry,
+        )
+
+        toolkit_registry = ToolkitRegistry(
+            toolkit_precedence=[RDKitToolkitWrapper, OpenEyeToolkitWrapper],
+            exception_if_unavailable=False,
+        )
+
+        return [
+            molecule,
+            *molecule.enumerate_tautomers(
+                max_states=max_tautomers, toolkit_registry=toolkit_registry
+            ),
+        ]
 
 
 @click.command(
@@ -41,14 +70,6 @@ from nagl.utilities.openeye import (
     default=16,
     show_default=True,
 )
-@click.option(
-    "--pka-normalize",
-    help="Whether to set the ionization state of each tautomer to the predominate state "
-    "at pH ~7.4.",
-    type=bool,
-    default=True,
-    show_default=True,
-)
 @optgroup.group("Parallelization configuration")
 @optgroup.option(
     "--n-processes",
@@ -57,55 +78,38 @@ from nagl.utilities.openeye import (
     default=1,
     show_default=True,
 )
-@requires_oe_package("oechem")
+@requires_package("openff.toolkit")
 def enumerate_cli(
     input_path: str,
     output_path: str,
     max_tautomers: int,
-    pka_normalize: bool,
     n_processes: int,
 ):
 
-    from openeye import oechem
-
-    input_molecule_stream = oechem.oemolistream()
-    input_molecule_stream.open(input_path)
-
     print(" - Enumerating tautomers")
 
-    output_molecule_stream = oechem.oemolostream(output_path)
     unique_molecules = set()
 
-    with capture_oe_warnings():
+    with capture_toolkit_warnings():
+        with stream_to_file(output_path) as writer:
 
-        with Pool(processes=n_processes) as pool:
+            with Pool(processes=n_processes) as pool:
 
-            for oe_molecules in tqdm(
-                pool.imap(
-                    functools.partial(
-                        enumerate_tautomers,
-                        max_tautomers=max_tautomers,
-                        pka_normalize=pka_normalize,
+                for molecules in tqdm(
+                    pool.imap(
+                        functools.partial(
+                            enumerate_tautomers, max_tautomers=max_tautomers
+                        ),
+                        stream_from_file(input_path),
                     ),
-                    input_molecule_stream.GetOEMols(),
-                ),
-            ):
+                ):
 
-                for oe_molecule in oe_molecules:
+                    for molecule in molecules:
 
-                    smiles_options = (
-                        oechem.OESMILESFlag_Canonical
-                        | oechem.OESMILESFlag_AtomStereo
-                        | oechem.OESMILESFlag_BondStereo
-                        | oechem.OESMILESFlag_Hydrogens
-                    )
+                        smiles = molecule.to_smiles()
 
-                    smiles = oechem.OECreateSmiString(oe_molecule, smiles_options)
+                        if smiles in unique_molecules:
+                            continue
 
-                    if smiles in unique_molecules:
-                        continue
-
-                    oechem.OEWriteMolecule(
-                        output_molecule_stream, oechem.OEMol(oe_molecule)
-                    )
-                    unique_molecules.add(smiles)
+                        writer(molecule)
+                        unique_molecules.add(smiles)

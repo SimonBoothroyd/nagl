@@ -1,6 +1,6 @@
 import numpy
 import pytest
-from openforcefield.topology import Molecule
+from openff.toolkit.topology import Molecule
 from simtk import unit
 
 from nagl.dataset.dataset import molecule_to_graph

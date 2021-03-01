@@ -1,9 +1,7 @@
 name: test
 channels:
   - dglteam
-  - openeye
   - conda-forge
-  - omnia
   - defaults
 
 dependencies:
@@ -21,18 +19,14 @@ dependencies:
     # SQL based molecule storage.
   - sqlalchemy
   - sqlite
+  - rdkit
 
     # Molecule loading and processing.
-  - openforcefield >= 0.8.1
-  - openff-recharge >= 0.0.1a6
-  - openeye-toolkits
+  # - openff-toolkit
 
     # Distributed molecule processing / labelling.
   - distributed
   - dask-jobqueue
-
-    # Plotting
-  - matplotlib
 
     # Python < 3.7
   - typing-extensions

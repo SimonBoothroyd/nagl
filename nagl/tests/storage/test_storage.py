@@ -134,25 +134,9 @@ def test_to_canonical_smiles():
     assert MoleculeStore._to_canonical_smiles("[Cl:2][H:1]") == "Cl"
 
 
-@pytest.mark.parametrize("smiles, expected", [("[Cl:2][H:1]", "ClH"), ("C", "CH4")])
+@pytest.mark.parametrize("smiles, expected", [("[Cl:2][H:1]", "HCl"), ("C", "CH4")])
 def test_to_hill_formula(smiles, expected):
     assert MoleculeStore._to_hill_formula(smiles) == expected
-
-
-@pytest.mark.parametrize(
-    "smiles, expected", [("[Cl:2][H:1]", {17: 1, 1: 0}), ("[Cl:1][H:2]", {17: 0, 1: 1})]
-)
-def test_to_rdkit(smiles, expected):
-
-    from rdkit import Chem
-
-    rdkit_molecule: Chem.RWMol = MoleculeStore._to_rdkit(smiles)
-
-    atom_indices = {
-        atom.GetAtomicNum(): atom.GetIdx() for atom in rdkit_molecule.GetAtoms()
-    }
-
-    assert atom_indices == expected
 
 
 def test_db_version(tmp_path):

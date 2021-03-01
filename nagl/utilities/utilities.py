@@ -6,9 +6,7 @@ from tempfile import TemporaryDirectory
 from typing import Optional
 
 _CONDA_INSTALLATION_COMMANDS = {
-    "openforcefield": "conda install -c conda-forge -c omnia openforcefield",
-    "openeye": "conda install -c openeye openeye-toolkits",
-    "openff.recharge": "conda install -c conda-forge -c omnia openff-recharge",
+    "openff.toolkit": "conda install -c conda-forge openff-toolkit",
     "dask.distributed": "conda install -c conda-forge distributed",
     "dask_jobqueue": "conda install -c conda-forge dask-jobqueue",
 }
