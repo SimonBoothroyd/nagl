@@ -15,6 +15,7 @@ dependencies:
   - pydantic
   - pytorch-cpu
   - dgl
+  - tqdm
 
     # SQL based molecule storage.
   - sqlalchemy
