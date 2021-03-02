@@ -1,6 +1,6 @@
 import numpy
 import torch
-from openforcefield.topology import Molecule
+from openff.toolkit.topology import Molecule
 from simtk import unit
 
 from nagl.dataset.dataset import (

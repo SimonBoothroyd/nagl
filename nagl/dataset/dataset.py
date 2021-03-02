@@ -22,10 +22,10 @@ from nagl.dataset.features import (
     BondFeature,
     BondFeaturizer,
 )
-from nagl.utilities.utilities import requires_package
+from nagl.utilities import requires_package
 
 if TYPE_CHECKING:
-    from openforcefield.topology import Molecule
+    from openff.toolkit.topology import Molecule
 
 
 T = TypeVar("T", bound="MoleculeGraphDataset")
@@ -33,7 +33,7 @@ T = TypeVar("T", bound="MoleculeGraphDataset")
 logger = logging.getLogger(__name__)
 
 
-@requires_package("openforcefield")
+@requires_package("openff.toolkit")
 @requires_package("simtk")
 def molecule_to_graph(
     molecule: "Molecule",

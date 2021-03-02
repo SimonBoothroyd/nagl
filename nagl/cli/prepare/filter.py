@@ -6,37 +6,46 @@ import click
 from click_option_group import optgroup
 from tqdm import tqdm
 
-from nagl.utilities.openeye import capture_oe_warnings, requires_oe_package
+from nagl.utilities import requires_package
+from nagl.utilities.toolkits import (
+    capture_toolkit_warnings,
+    stream_from_file,
+    stream_to_file,
+)
 
 if TYPE_CHECKING:
-    from openeye import oechem
+    from openff.toolkit.topology import Molecule
 
 
-@requires_oe_package("oechem")
-@requires_oe_package("oemolprop")
-def apply_filter(
-    oe_molecule: "oechem.OEMol", retain_largest: bool
-) -> Tuple["oechem.OEMol", bool]:
+def apply_filter(molecule: "Molecule", retain_largest: bool) -> Tuple["Molecule", bool]:
 
-    from openeye import oechem, oemolprop
+    with capture_toolkit_warnings():
 
-    with capture_oe_warnings():
+        from openff.toolkit.topology import Molecule
+        from simtk import unit as simtk_unit
 
-        if retain_largest:
-            oechem.OEDeleteEverythingExceptTheFirstLargestComponent(oe_molecule)
+        split_smiles = molecule.to_smiles().split(".")
+        n_sub_molecules = len(split_smiles)
+
+        if retain_largest and n_sub_molecules > 1:
+
+            largest_smiles = max(split_smiles, key=len)
+            molecule = Molecule.from_smiles(largest_smiles, allow_undefined_stereo=True)
 
         # Retain H, C, N, O, F, P, S, Cl, Br, I
         allowed_elements = [1, 6, 7, 8, 9, 15, 16, 17, 35, 53]
 
+        mass = sum(
+            atom.mass.value_in_unit(simtk_unit.gram / simtk_unit.mole)
+            for atom in molecule.atoms
+        )
+
         return (
-            oe_molecule,
+            molecule,
             (
-                all(
-                    atom.GetAtomicNum() in allowed_elements
-                    for atom in oe_molecule.GetAtoms()
-                )
-                and (250.0 < oechem.OECalculateMolecularWeight(oe_molecule) < 350.0)
-                and (oemolprop.OEGetRotatableBondCount(oe_molecule) <= 7)
+                all(atom.atomic_number in allowed_elements for atom in molecule.atoms)
+                and (250.0 < mass < 350.0)
+                and (len(molecule.find_rotatable_bonds()) <= 7)
             ),
         )
 
@@ -85,35 +94,29 @@ def apply_filter(
     default=1,
     show_default=True,
 )
-@requires_oe_package("oechem")
-@requires_oe_package("oemolprop")
+@requires_package("openff.toolkit")
 def filter_cli(
     input_path: str,
     output_path: str,
     n_processes: int,
     strip_ions: bool,
 ):
-    from openeye import oechem
-
-    input_molecule_stream = oechem.oemolistream()
-    input_molecule_stream.open(input_path)
 
     print(" - Filtering molecules")
 
-    output_molecule_stream = oechem.oemolostream(output_path)
+    with capture_toolkit_warnings():
+        with stream_to_file(output_path) as writer:
 
-    with capture_oe_warnings():
+            with Pool(processes=n_processes) as pool:
 
-        with Pool(processes=n_processes) as pool:
+                for molecule, should_include in tqdm(
+                    pool.imap(
+                        functools.partial(apply_filter, retain_largest=strip_ions),
+                        stream_from_file(input_path),
+                    ),
+                ):
 
-            for oe_molecule, should_include in tqdm(
-                pool.imap(
-                    functools.partial(apply_filter, retain_largest=strip_ions),
-                    input_molecule_stream.GetOEMols(),
-                ),
-            ):
+                    if not should_include:
+                        continue
 
-                if not should_include:
-                    continue
-
-                oechem.OEWriteMolecule(output_molecule_stream, oe_molecule)
+                    writer(molecule)

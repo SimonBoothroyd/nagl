@@ -35,12 +35,9 @@ from nagl.storage.db import (
     DBWibergBondOrderSet,
 )
 from nagl.storage.exceptions import IncompatibleDBVersion
-from nagl.utilities.openeye import (
-    map_indexed_smiles,
-    requires_oe_package,
-    smiles_to_molecule,
-)
-from nagl.utilities.utilities import requires_package
+from nagl.utilities import requires_package
+from nagl.utilities.rmsd import are_conformers_identical
+from nagl.utilities.smiles import map_indexed_smiles
 
 if TYPE_CHECKING:
     Array = numpy.ndarray
@@ -341,7 +338,7 @@ class MoleculeStore:
 
     @classmethod
     @functools.lru_cache(512)
-    @requires_oe_package("oechem")
+    @requires_package("openff.toolkit")
     def _to_canonical_smiles(cls, smiles: str) -> str:
         """Converts a SMILES pattern which may contain atom indices into
         a canonical SMILES pattern without indices.
@@ -355,19 +352,15 @@ class MoleculeStore:
         -------
             The canonical smiles pattern.
         """
+        from openff.toolkit.topology import Molecule
 
-        from openeye import oechem
-
-        oe_molecule = smiles_to_molecule(smiles)
-
-        for atom in oe_molecule.GetAtoms():
-            atom.SetMapIdx(0)
-
-        return oechem.OECreateCanSmiString(oe_molecule)
+        return Molecule.from_smiles(smiles, allow_undefined_stereo=True).to_smiles(
+            isomeric=False, explicit_hydrogens=False
+        )
 
     @classmethod
     @functools.lru_cache(512)
-    @requires_oe_package("oechem")
+    @requires_package("openff.toolkit")
     def _to_hill_formula(cls, smiles: str) -> str:
         """Converts a SMILES pattern to a Hill ordered molecular formula.
 
@@ -380,44 +373,12 @@ class MoleculeStore:
         -------
             The Hill ordered molecular formula.
         """
+        from openff.toolkit.topology import Molecule
 
-        from openeye import oechem
-
-        oe_molecule = oechem.OEMol()
-        oechem.OESmilesToMol(oe_molecule, smiles)
-
-        output_stream = oechem.oemolostream()
-        output_stream.SetFormat(oechem.OEFormat_MF)
-
-        output_stream.openstring()
-
-        oechem.OEWriteMolecule(output_stream, oe_molecule)
-
-        formula = output_stream.GetString().decode().strip().replace("\n", "")
-        output_stream.close()
-
-        return formula
+        return Molecule.from_smiles(smiles, allow_undefined_stereo=True).hill_formula
 
     @classmethod
-    @requires_package("rdkit")
-    def _to_rdkit(cls, smiles: str):
-        """Creates an RDKit molecule object from an indexed SMILES pattern."""
-        from rdkit import Chem
-
-        rdkit_smiles_options = Chem.SmilesParserParams()
-        rdkit_smiles_options.removeHs = False
-
-        rdkit_molecule: Chem.RWMol = Chem.MolFromSmiles(smiles, rdkit_smiles_options)
-        rdkit_atoms = {atom.GetIdx(): atom for atom in rdkit_molecule.GetAtoms()}
-
-        new_order = [
-            rdkit_atoms[i].GetAtomMapNum() - 1 for i in range(len(rdkit_atoms))
-        ]
-
-        return Chem.RenumberAtoms(rdkit_molecule, new_order)
-
-    @classmethod
-    @requires_package("rdkit")
+    @requires_package("openff.toolkit")
     def _match_conformers(
         cls,
         indexed_smiles: str,
@@ -439,73 +400,42 @@ class MoleculeStore:
             conformer are not included.
         """
 
-        from rdkit import Chem, Geometry
-        from rdkit.Chem import AllChem
+        from openff.toolkit.topology import Molecule
 
-        rdkit_molecule_a = cls._to_rdkit(indexed_smiles)
-        rdkit_molecule_b = Chem.Mol(rdkit_molecule_a)
-
-        # Add the DB conformers to the molecule.
-        conformer_ids_a = []
-
-        for db_conformer in db_conformers:
-
-            rdkit_conformer = Chem.Conformer()
-
-            for i, db_coordinate in enumerate(db_conformer.coordinates):
-
-                rdkit_conformer.SetAtomPosition(
-                    i,
-                    Geometry.Point3D(db_coordinate.x, db_coordinate.y, db_coordinate.z),
-                )
-
-            conformer_ids_a.append(
-                rdkit_molecule_a.AddConformer(rdkit_conformer, assignId=True)
-            )
-
-        # Add the conformers to add to the molecule.
-        conformer_ids_b = []
-
-        for record in conformers:
-
-            rdkit_conformer = Chem.Conformer()
-
-            for i in range(len(record.coordinates)):
-
-                rdkit_conformer.SetAtomPosition(
-                    i,
-                    Geometry.Point3D(
-                        record.coordinates[i, 0],
-                        record.coordinates[i, 1],
-                        record.coordinates[i, 2],
-                    ),
-                )
-
-            conformer_ids_b.append(
-                rdkit_molecule_b.AddConformer(rdkit_conformer, assignId=True)
-            )
+        molecule = Molecule.from_mapped_smiles(
+            indexed_smiles, allow_undefined_stereo=True
+        )
 
         # See if any of the conformers to add are already in the DB.
         matches = {}
 
-        for j, id_b in enumerate(conformer_ids_b):
+        for index, conformer in enumerate(conformers):
 
-            matched_index = None
+            db_match = None
 
-            for i, id_a in enumerate(conformer_ids_a):
+            for db_index, db_conformer in enumerate(db_conformers):
 
-                rms = AllChem.GetBestRMS(rdkit_molecule_a, rdkit_molecule_b, id_a, id_b)
+                are_identical = are_conformers_identical(
+                    molecule,
+                    conformer.coordinates,
+                    numpy.array(
+                        [
+                            [db_coordinate.x, db_coordinate.y, db_coordinate.z]
+                            for db_coordinate in db_conformer.coordinates
+                        ]
+                    ),
+                )
 
-                if rms >= 0.001:
+                if not are_identical:
                     continue
 
-                matched_index = i
+                db_match = db_index
                 break
 
-            if matched_index is None:
+            if db_match is None:
                 continue
 
-            matches[j] = matched_index
+            matches[index] = db_match
 
         return matches
 
@@ -547,7 +477,8 @@ class MoleculeStore:
 
                 if partial_charges.method in existing_charge_methods:
                     raise RuntimeError(
-                        f"{partial_charges.method} charges already stored for {smiles}"
+                        f"{partial_charges.method} charges already stored for {smiles} "
+                        f"with coordinates {record.coordinates}"
                     )
 
                 db_record.partial_charges.append(
@@ -567,7 +498,8 @@ class MoleculeStore:
                 if bond_orders.method in existing_bond_methods:
 
                     raise RuntimeError(
-                        f"{bond_orders.method} WBOs already stored for {smiles}"
+                        f"{bond_orders.method} WBOs already stored for {smiles} "
+                        f"with coordinates {record.coordinates}"
                     )
 
                 db_record.bond_orders.append(

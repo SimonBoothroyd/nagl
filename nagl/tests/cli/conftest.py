@@ -2,7 +2,7 @@ import pytest
 from click.testing import CliRunner
 
 
-@pytest.yield_fixture(scope="module")
+@pytest.fixture(scope="module")
 def runner() -> CliRunner:
     """Creates a new click CLI runner object."""
     click_runner = CliRunner()

@@ -16,14 +16,11 @@ jobs:
     name: Test on ${{ matrix.os }}, Python ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
 
-    env:
-      OE_LICENSE: ${{ github.workspace }}/oe_license.txt
-
     strategy:
       fail-fast: false
       matrix:
         os: [macOS-latest, ubuntu-latest]
-        python-version: [3.6, 3.7]
+        python-version: [3.8, 3.9]
 
     steps:
     - uses: actions/checkout@v2
@@ -34,20 +31,24 @@ jobs:
         python-version: ${{ matrix.cfg.python-version }}
         environment-file: devtools/conda-envs/test_env.yaml
 
-        channels: dglteam,openeye,conda-forge,omnia,defaults
+        channels: dglteam,conda-forge,defaults
 
         activate-environment: test
         auto-update-conda: true
         auto-activate-base: false
         show-channel-urls: true
 
-    - name: License OpenEye
+    - name: Install the OpenFF Toolkit (pre 0.9.1 release)
       shell: bash -l {0}
       run: |
-        echo "${SECRET_OE_LICENSE}" > ${OE_LICENSE}
-        python -c "from openeye import oechem; assert oechem.OEChemIsLicensed()"
-      env:
-        SECRET_OE_LICENSE: ${{ secrets.OE_LICENSE }}
+        conda install --yes --only-deps -c conda-forge openff-toolkit-base
+        conda install --yes -c conda-forge rdkit ambertools
+
+        git clone https://github.com/openforcefield/openff-toolkit.git
+
+        cd openff-toolkit
+        python setup.py develop
+        cd ..
 
     - name: Install Package
       shell: bash -l {0}

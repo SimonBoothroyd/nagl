@@ -1,31 +1,92 @@
 import math
-import pickle
 import sys
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import click
 from click_option_group import optgroup
-from tqdm import tqdm
 
-from nagl.labels.am1 import compute_am1_charge_and_wbo
-from nagl.utilities.dask import setup_dask_local_cluster, setup_dask_lsf_cluster
-from nagl.utilities.openeye import (
-    capture_oe_warnings,
-    guess_stereochemistry,
-    requires_oe_package,
+from nagl.storage.storage import (
+    ConformerRecord,
+    MoleculeRecord,
+    MoleculeStore,
+    PartialChargeSet,
+    WibergBondOrderSet,
 )
-from nagl.utilities.utilities import requires_package
+from nagl.utilities import requires_package
+from nagl.utilities.dask import setup_dask_local_cluster, setup_dask_lsf_cluster
+from nagl.utilities.smiles import smiles_to_molecule
+from nagl.utilities.toolkits import capture_toolkit_warnings, stream_from_file
 
 if TYPE_CHECKING:
-    from openeye import oechem
-    from openforcefield.topology import Molecule
+    from openff.toolkit.topology import Molecule
 
 
-@requires_package("openforcefield")
-@requires_oe_package("oechem")
+@requires_package("openff.toolkit")
+def _label_molecule(molecule: "Molecule") -> MoleculeRecord:
+
+    from simtk import unit
+
+    OPENFF_CHARGE_METHODS = {"am1": "am1-mulliken", "am1bcc": "am1bcc"}
+
+    # Generate a diverse set of ELF10 conformers
+    molecule.generate_conformers(n_conformers=500, rms_cutoff=0.05 * unit.angstrom)
+    molecule.apply_elf_conformer_selection()
+
+    conformer_records = []
+
+    for conformer in molecule.conformers:
+
+        charge_sets = []
+
+        # Compute partial charges.
+        for charge_method in ["am1", "am1bcc"]:
+            molecule.assign_partial_charges(
+                OPENFF_CHARGE_METHODS[charge_method], use_conformers=[conformer]
+            )
+
+            charge_sets.append(
+                PartialChargeSet(
+                    method=charge_method,
+                    values=[
+                        atom.partial_charge.value_in_unit(unit.elementary_charge)
+                        for atom in molecule.atoms
+                    ],
+                )
+            )
+
+        # Compute WBOs.
+        molecule.assign_fractional_bond_orders(use_conformers=[conformer])
+
+        conformer_records.append(
+            ConformerRecord(
+                coordinates=conformer.value_in_unit(unit.angstrom),
+                partial_charges=charge_sets,
+                bond_orders=[
+                    WibergBondOrderSet(
+                        method="am1",
+                        values=[
+                            (
+                                bond.atom1_index,
+                                bond.atom2_index,
+                                bond.fractional_bond_order,
+                            )
+                            for bond in molecule.bonds
+                        ],
+                    )
+                ],
+            )
+        )
+
+    return MoleculeRecord(
+        smiles=molecule.to_smiles(isomeric=False, mapped=True),
+        conformers=conformer_records,
+    )
+
+
+@requires_package("openff.toolkit")
 def label_molecule_batch(
-    oe_molecules: List["oechem.OEMol"], wbo_method: str
-) -> List[Tuple[Optional["Molecule"], Optional[str]]]:
+    molecules: List["Molecule"],
+) -> List[Tuple[Optional[MoleculeRecord], Optional[str]]]:
     """Labels a batch of molecules using ``compute_am1_charge_and_wbo``.
 
     Returns
@@ -34,10 +95,25 @@ def label_molecule_batch(
         AM1 charges and WBO if no exceptions were raised (``None`` otherwise) and the
         error string if an exception was raised (``None`` otherwise).
     """
-    return [
-        compute_am1_charge_and_wbo(oe_molecule, wbo_method=wbo_method)
-        for oe_molecule in tqdm(oe_molecules)
-    ]
+
+    molecule_records = []
+
+    for molecule in molecules:
+
+        molecule_record = None
+        error = None
+
+        try:
+            molecule_record = _label_molecule(molecule)
+        except (BaseException, Exception) as e:
+            error = (
+                f"Failed to process {molecule.to_smiles(explicit_hydrogens=False)}: "
+                f"{str(e)}"
+            )
+
+        molecule_records.append((molecule_record, error))
+
+    return molecule_records
 
 
 @click.command(
@@ -61,15 +137,6 @@ def label_molecule_batch(
     help="The path to save the labelled and pickled molecules to.",
     type=click.Path(exists=False, file_okay=True, dir_okay=False),
     required=True,
-)
-@click.option(
-    "--wbo-method",
-    type=click.Choice(["single-conformer", "elf10-average"]),
-    default="single-conformer",
-    show_default=True,
-    help="The method by which to compute the WBOs. WBOs may be computed using only a "
-    "single conformer ('single-conformer'), or by computing the WBO for each ELF10 "
-    "conformer and taking the average ('elf10-average')",
 )
 @click.option(
     "--guess-stereo",
@@ -129,13 +196,11 @@ def label_molecule_batch(
     help="The conda environment that LSF workers should run using.",
     type=str,
 )
-@requires_oe_package("oechem")
 @requires_package("dask.distributed")
-@requires_package("openforcefield")
+@requires_package("openff.toolkit")
 def label_cli(
     input_path: str,
     output_path: str,
-    wbo_method: str,
     guess_stereo: bool,
     worker_type: str,
     n_workers: int,
@@ -147,27 +212,17 @@ def label_cli(
 ):
 
     from dask import distributed
-    from openeye import oechem
-
-    input_stream = oechem.oemolistream(input_path)
 
     print(" - Labeling molecules")
 
-    with capture_oe_warnings():
+    with capture_toolkit_warnings():
 
-        oe_molecules = [
-            oechem.OEMol(oe_molecule) for oe_molecule in input_stream.GetOEMols()
+        molecules = [
+            smiles_to_molecule(molecule.to_smiles(), guess_stereochemistry=guess_stereo)
+            for molecule in stream_from_file(input_path)
         ]
 
-        input_stream.close()
-
-        if guess_stereo:
-
-            oe_molecules = [
-                guess_stereochemistry(oe_molecule) for oe_molecule in oe_molecules
-            ]
-
-    n_batches = int(math.ceil(len(oe_molecules) / batch_size))
+    n_batches = int(math.ceil(len(molecules) / batch_size))
 
     if n_workers < 0:
         n_workers = n_batches
@@ -200,29 +255,31 @@ def label_cli(
             yield iterable[i : min(i + batch_size, n_iterables)]
 
     futures = [
-        dask_client.submit(
-            label_molecule_batch, batched_molecules, wbo_method=wbo_method
-        )
-        for batched_molecules in batch(oe_molecules)
+        dask_client.submit(label_molecule_batch, batched_molecules)
+        for batched_molecules in batch(molecules)
     ]
 
     # Save out the molecules as they are ready.
-    with open(output_path, "wb") as file:
+    storage = MoleculeStore(output_path)
 
-        for future in distributed.as_completed(futures, raise_errors=False):
+    for future in distributed.as_completed(futures, raise_errors=False):
 
-            for molecule, error in future.result():
+        for molecule_record, error in future.result():
 
-                if error is not None:
+            try:
+                if molecule_record is not None and error is None:
+                    storage.store(molecule_record)
+            except (BaseException, Exception) as e:
+                error = str(e)
 
-                    print("=".join(["="] * 40), file=sys.stderr)
-                    print(error + "\n", file=sys.stderr)
+            if error is not None:
 
-                    continue
+                print("=".join(["="] * 40), file=sys.stderr)
+                print(error + "\n", file=sys.stderr)
 
-                pickle.dump(molecule, file)
+                continue
 
-            future.release()
+        future.release()
 
     if worker_type == "lsf":
         dask_cluster.scale(n=0)

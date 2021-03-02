@@ -2,12 +2,8 @@ import os
 
 import pytest
 
-from nagl.utilities.utilities import (
-    _CONDA_INSTALLATION_COMMANDS,
-    MissingOptionalDependency,
-    requires_package,
-    temporary_cd,
-)
+from nagl.utilities import MissingOptionalDependency, requires_package, temporary_cd
+from nagl.utilities.utilities import _CONDA_INSTALLATION_COMMANDS
 
 
 def compare_paths(path_1: str, path_2: str) -> bool:

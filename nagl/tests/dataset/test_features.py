@@ -1,6 +1,6 @@
 import numpy
 import pytest
-from openforcefield.topology import Molecule
+from openff.toolkit.topology import Molecule
 
 from nagl.dataset.features import (
     AtomConnectivity,
