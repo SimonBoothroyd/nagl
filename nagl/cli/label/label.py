@@ -1,5 +1,6 @@
 import math
 import sys
+from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import click
@@ -14,6 +15,7 @@ from nagl.storage.storage import (
 )
 from nagl.utilities import requires_package
 from nagl.utilities.dask import setup_dask_local_cluster, setup_dask_lsf_cluster
+from nagl.utilities.provenance import get_labelling_software_provenance
 from nagl.utilities.smiles import smiles_to_molecule
 from nagl.utilities.toolkits import capture_toolkit_warnings, stream_from_file
 
@@ -259,9 +261,18 @@ def label_cli(
         for batched_molecules in batch(molecules)
     ]
 
-    # Save out the molecules as they are ready.
+    # Create a database to store the labelled molecules in and store general
+    # provenance information.
     storage = MoleculeStore(output_path)
 
+    storage.set_provenance(
+        general_provenance={
+            "date": datetime.now().strftime("%d-%m-%Y"),
+        },
+        software_provenance=get_labelling_software_provenance(),
+    )
+
+    # Save out the molecules as they are ready.
     for future in distributed.as_completed(futures, raise_errors=False):
 
         for molecule_record, error in future.result():
