@@ -17,16 +17,15 @@ dependencies:
   - dgl
   - tqdm
 
+    # Molecule loading and processing.
+  - openff-toolkit >=0.9.1
+
     # SQL based molecule storage.
   - sqlalchemy
   - sqlite
-  - rdkit
-
-    # Molecule loading and processing.
-  # - openff-toolkit
 
     # Distributed molecule processing / labelling.
-  - distributed
+  - distributed <=2.30.1
   - dask-jobqueue
 
     # Python < 3.7
