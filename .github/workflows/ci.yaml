@@ -38,18 +38,6 @@ jobs:
         auto-activate-base: false
         show-channel-urls: true
 
-    - name: Install the OpenFF Toolkit (pre 0.9.1 release)
-      shell: bash -l {0}
-      run: |
-        conda install --yes --only-deps -c conda-forge openff-toolkit-base
-        conda install --yes -c conda-forge rdkit ambertools
-
-        git clone https://github.com/openforcefield/openff-toolkit.git
-
-        cd openff-toolkit
-        python setup.py develop
-        cd ..
-
     - name: Install Package
       shell: bash -l {0}
       run: |
