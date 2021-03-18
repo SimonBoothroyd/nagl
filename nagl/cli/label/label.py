@@ -1,10 +1,11 @@
 import math
-import sys
 from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import click
 from click_option_group import optgroup
+from openff.toolkit.utils import UndefinedStereochemistryError
+from tqdm import tqdm
 
 from nagl.storage.storage import (
     ConformerRecord,
@@ -136,7 +137,7 @@ def label_molecule_batch(
 @click.option(
     "--output",
     "output_path",
-    help="The path to save the labelled and pickled molecules to.",
+    help="The path to the SQLite database (.sqlite) to save the labelled molecules in.",
     type=click.Path(exists=False, file_okay=True, dir_okay=False),
     required=True,
 )
@@ -219,10 +220,23 @@ def label_cli(
 
     with capture_toolkit_warnings():
 
-        molecules = [
-            smiles_to_molecule(molecule.to_smiles(), guess_stereochemistry=guess_stereo)
-            for molecule in stream_from_file(input_path)
-        ]
+        molecules = []
+
+        for molecule in stream_from_file(input_path):
+
+            try:
+
+                molecule = smiles_to_molecule(
+                    molecule.to_smiles(), guess_stereochemistry=guess_stereo
+                )
+                molecules.append(molecule)
+
+            except UndefinedStereochemistryError:
+
+                print(
+                    f"Skipping {molecule.to_smiles()} due to unguessable "
+                    f"stereochemistry."
+                )
 
     n_batches = int(math.ceil(len(molecules) / batch_size))
 
@@ -246,6 +260,11 @@ def label_cli(
         dask_cluster = setup_dask_local_cluster(n_workers)
     else:
         raise NotImplementedError()
+
+    print(
+        f"   * {len(molecules)} molecules will labelled in {n_batches} batches across "
+        f"{n_workers} workers\n"
+    )
 
     dask_client = distributed.Client(dask_cluster)
 
@@ -273,24 +292,30 @@ def label_cli(
     )
 
     # Save out the molecules as they are ready.
-    for future in distributed.as_completed(futures, raise_errors=False):
+    error_file_path = output_path.replace(".sqlite", "-errors.log")
 
-        for molecule_record, error in future.result():
+    with open(error_file_path, "w") as file:
 
-            try:
-                if molecule_record is not None and error is None:
-                    storage.store(molecule_record)
-            except (BaseException, Exception) as e:
-                error = str(e)
+        for future in tqdm(
+            distributed.as_completed(futures, raise_errors=False), total=n_batches
+        ):
 
-            if error is not None:
+            for molecule_record, error in future.result():
 
-                print("=".join(["="] * 40), file=sys.stderr)
-                print(error + "\n", file=sys.stderr)
+                try:
+                    if molecule_record is not None and error is None:
+                        storage.store(molecule_record)
+                except (BaseException, Exception) as e:
+                    error = str(e)
 
-                continue
+                if error is not None:
 
-        future.release()
+                    file.write("=".join(["="] * 40) + "\n")
+                    file.write(error + "\n")
+
+                    continue
+
+            future.release()
 
     if worker_type == "lsf":
         dask_cluster.scale(n=0)
