@@ -2,12 +2,14 @@
 in different conformers.
 """
 from collections import defaultdict
-from typing import Tuple
+from typing import TYPE_CHECKING, Tuple
 
 import numpy
-from openff.toolkit.topology import Molecule
 
 from nagl.utilities import requires_package
+
+if TYPE_CHECKING:
+    from openff.toolkit.topology import Molecule
 
 
 def _compute_rmsd(
@@ -66,7 +68,7 @@ def compute_rmsd(conformer_a: numpy.ndarray, conformer_b: numpy.ndarray) -> floa
 
 @requires_package("openff.toolkit")
 def compute_best_rmsd(
-    molecule: Molecule, conformer_a: numpy.ndarray, conformer_b: numpy.ndarray
+    molecule: "Molecule", conformer_a: numpy.ndarray, conformer_b: numpy.ndarray
 ) -> float:
     """A method which attempts to compute the smallest RMSD between two conformers
     by considering all permutations of topologically symmetric atoms and aligning each
@@ -105,7 +107,7 @@ def compute_best_rmsd(
 
 @requires_package("openff.toolkit")
 def are_conformers_identical(
-    molecule: Molecule,
+    molecule: "Molecule",
     conformer_a: numpy.ndarray,
     conformer_b: numpy.ndarray,
     rtol: float = 1.0e-5,
