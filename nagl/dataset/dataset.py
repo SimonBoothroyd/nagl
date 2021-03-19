@@ -1,5 +1,6 @@
-import abc
+import functools
 import logging
+from collections import defaultdict
 from typing import (
     TYPE_CHECKING,
     Callable,
@@ -8,10 +9,11 @@ from typing import (
     List,
     NamedTuple,
     Optional,
-    TypeVar,
+    Union,
 )
 
 import dgl
+import numpy
 import torch
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
@@ -22,13 +24,11 @@ from nagl.dataset.features import (
     BondFeature,
     BondFeaturizer,
 )
+from nagl.storage.storage import ChargeMethod, MoleculeStore, WBOMethod
 from nagl.utilities import requires_package
 
 if TYPE_CHECKING:
     from openff.toolkit.topology import Molecule
-
-
-T = TypeVar("T", bound="MoleculeGraphDataset")
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,7 @@ class MoleculeGraphEntry(NamedTuple):
     labels: Dict[str, torch.Tensor]
 
 
-class MoleculeGraphDataset(Dataset, abc.ABC):
+class MoleculeGraphDataset(Dataset):
     """A data set which stores a featurized graph representation of a labelled set of
     molecules."""
 
@@ -116,12 +116,12 @@ class MoleculeGraphDataset(Dataset, abc.ABC):
 
     @classmethod
     def from_molecules(
-        cls: T,
+        cls: "MoleculeGraphDataset",
         molecules: Collection["Molecule"],
         atom_features: List[AtomFeature],
         bond_features: List[BondFeature],
         label_function: Callable[["Molecule"], Dict[str, torch.Tensor]],
-    ) -> T:
+    ) -> "MoleculeGraphDataset":
         """Creates a data set from a specified list of molecule objects.
 
         Args:
@@ -142,6 +142,148 @@ class MoleculeGraphDataset(Dataset, abc.ABC):
             )
             for molecule in tqdm(molecules)
         ]
+
+        return cls(entries)
+
+    @classmethod
+    def _labelled_molecule_to_dict(
+        cls,
+        molecule: "Molecule",
+        partial_charge_method: Optional[ChargeMethod],
+        bond_order_method: Optional[WBOMethod],
+    ) -> Dict[str, torch.Tensor]:
+        """A convenience method for mapping a pre-labelled molecule to a dictionary
+        of label tensors.
+
+        Args:
+            molecule: The labelled molecule object.
+            partial_charge_method: The method which was used to generate the partial
+                charge on each atom, or ``None`` if charge labels should not be included.
+            bond_order_method: The method which was used to generate the Wiberg bond
+                orders of each bond, or ``None`` if WBO labels should not be included.
+
+        Returns:
+            A dictionary of the tensor labels.
+        """
+        from simtk import unit
+
+        labels = {}
+
+        if partial_charge_method is not None:
+            labels[f"{partial_charge_method}-charges"] = torch.tensor(
+                [
+                    atom.partial_charge.value_in_unit(unit.elementary_charge)
+                    for atom in molecule.atoms
+                ],
+                dtype=torch.float,
+            )
+
+        if bond_order_method is not None:
+
+            labels[f"{bond_order_method}-wbo"] = torch.tensor(
+                [bond.fractional_bond_order for bond in molecule.bonds],
+                dtype=torch.float,
+            )
+
+        return labels
+
+    @classmethod
+    def from_molecule_stores(
+        cls: "MoleculeGraphDataset",
+        molecule_stores: Union[MoleculeStore, Collection[MoleculeStore]],
+        partial_charge_method: Optional[ChargeMethod],
+        bond_order_method: Optional[WBOMethod],
+        atom_features: List[AtomFeature],
+        bond_features: List[BondFeature],
+    ) -> "MoleculeGraphDataset":
+        """Creates a data set from a specified set of labelled molecule stores.
+
+        Args:
+            molecule_stores: The molecule stores which contain the pre-labelled
+                molecules.
+            partial_charge_method: The partial charge method to label each atom using.
+                If ``None``, atoms won't be labelled with partial charges.
+            bond_order_method: The Wiberg bond order method to label each bond using.
+                If ``None``, bonds won't be labelled with WBOs.
+            atom_features: The atom features to compute for each molecule.
+            bond_features: The bond features to compute for each molecule.
+        """
+
+        from openff.toolkit.topology import Molecule
+        from simtk import unit
+
+        assert partial_charge_method is not None or bond_order_method is not None, (
+            "at least one of the ``partial_charge_method`` and  ``bond_order_method`` "
+            "must not be ``None``."
+        )
+
+        if isinstance(molecule_stores, MoleculeStore):
+            molecule_stores = [molecule_stores]
+
+        stored_records = (
+            record
+            for molecule_store in molecule_stores
+            for record in molecule_store.retrieve(
+                partial_charge_method, bond_order_method
+            )
+        )
+
+        entries = []
+
+        for record in tqdm(stored_records):
+
+            molecule: Molecule = Molecule.from_mapped_smiles(record.smiles)
+
+            if partial_charge_method is not None:
+
+                average_partial_charges = (
+                    numpy.mean(
+                        [
+                            charge_set.values
+                            for conformer in record.conformers
+                            for charge_set in conformer.partial_charges
+                            if charge_set.method == partial_charge_method
+                        ],
+                        axis=0,
+                    )
+                    * unit.elementary_charge
+                )
+
+                molecule.partial_charges = average_partial_charges
+
+            if bond_order_method is not None:
+
+                bond_order_value_tuples = [
+                    value_tuple
+                    for conformer in record.conformers
+                    for bond_order_set in conformer.bond_orders
+                    if bond_order_set.method == bond_order_method
+                    for value_tuple in bond_order_set.values
+                ]
+
+                bond_orders = defaultdict(list)
+
+                for index_a, index_b, value in bond_order_value_tuples:
+                    bond_orders[tuple(sorted([index_a, index_b]))].append(value)
+
+                for bond in molecule.bonds:
+
+                    bond.fractional_bond_order = numpy.mean(
+                        bond_orders[tuple(sorted([bond.atom1_index, bond.atom2_index]))]
+                    )
+
+            entries.append(
+                cls._build_entry(
+                    molecule,
+                    atom_features,
+                    bond_features,
+                    functools.partial(
+                        cls._labelled_molecule_to_dict,
+                        partial_charge_method=partial_charge_method,
+                        bond_order_method=bond_order_method,
+                    ),
+                )
+            )
 
         return cls(entries)
 
