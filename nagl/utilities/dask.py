@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from nagl.utilities import requires_package
+from openff.utilities import requires_package
 
 if TYPE_CHECKING:
     from dask_jobqueue import LSFCluster

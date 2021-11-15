@@ -4,9 +4,9 @@ from typing import TYPE_CHECKING, Tuple
 
 import click
 from click_option_group import optgroup
+from openff.utilities import requires_package
 from tqdm import tqdm
 
-from nagl.utilities import requires_package
 from nagl.utilities.toolkits import (
     capture_toolkit_warnings,
     stream_from_file,

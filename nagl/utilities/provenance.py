@@ -1,7 +1,7 @@
 import importlib
 from typing import Dict, Optional
 
-import pkg_resources
+from openff.utilities.provenance import get_ambertools_version
 
 import nagl
 
@@ -24,15 +24,6 @@ def _get_optional_dependency_version(import_path: str) -> Optional[str]:
         return None
 
 
-def _get_ambertools_version() -> Optional[str]:
-
-    try:
-        distribution = pkg_resources.get_distribution("AmberTools")
-        return distribution.version
-    except pkg_resources.DistributionNotFound:
-        return None
-
-
 def get_labelling_software_provenance() -> Dict[str, str]:
     """Returns the versions of the core dependencies used when labelling a set of
     molecules."""
@@ -42,7 +33,7 @@ def get_labelling_software_provenance() -> Dict[str, str]:
         "openff-toolkit": _get_optional_dependency_version("openff.toolkit"),
         "openeye": _get_optional_dependency_version("openeye"),
         "rdkit": _get_optional_dependency_version("rdkit"),
-        "ambertools": _get_ambertools_version(),
+        "ambertools": get_ambertools_version(),
     }
 
     return {

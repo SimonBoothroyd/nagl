@@ -83,11 +83,11 @@ class ComputePartialCharges(PostprocessLayer):
 
             charges.append(
                 self.atomic_parameters_to_charges(
-                    x[counter : counter + len(mol_graph), 0],
-                    x[counter : counter + len(mol_graph), 1],
+                    x[counter : counter + mol_graph.number_of_nodes(), 0],
+                    x[counter : counter + mol_graph.number_of_nodes(), 1],
                     total_charge,
                 )
             )
-            counter += len(mol_graph)
+            counter += mol_graph.number_of_nodes()
 
         return torch.vstack(charges)

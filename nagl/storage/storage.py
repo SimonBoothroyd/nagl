@@ -16,6 +16,7 @@ from typing import (
 )
 
 import numpy
+from openff.utilities import requires_package
 from pydantic import BaseModel, Field, validator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -35,7 +36,6 @@ from nagl.storage.db import (
     DBWibergBondOrderSet,
 )
 from nagl.storage.exceptions import IncompatibleDBVersion
-from nagl.utilities import requires_package
 from nagl.utilities.rmsd import are_conformers_identical
 from nagl.utilities.smiles import map_indexed_smiles
 

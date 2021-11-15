@@ -1,7 +1,7 @@
 import logging
 from typing import TYPE_CHECKING, Dict, TypeVar
 
-from nagl.utilities import requires_package
+from openff.utilities import requires_package
 
 if TYPE_CHECKING:
     from openff.toolkit.topology import Molecule

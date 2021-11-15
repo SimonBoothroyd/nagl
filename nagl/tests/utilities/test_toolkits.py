@@ -1,6 +1,6 @@
 from openff.toolkit.topology import Molecule
+from openff.utilities import temporary_cd
 
-from nagl.utilities import temporary_cd
 from nagl.utilities.toolkits import stream_from_file, stream_to_file
 
 

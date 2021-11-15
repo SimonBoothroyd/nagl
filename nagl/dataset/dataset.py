@@ -15,6 +15,7 @@ from typing import (
 import dgl
 import numpy
 import torch
+from openff.utilities import requires_package
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
@@ -25,7 +26,6 @@ from nagl.dataset.features import (
     BondFeaturizer,
 )
 from nagl.storage.storage import ChargeMethod, MoleculeStore, WBOMethod
-from nagl.utilities import requires_package
 
 if TYPE_CHECKING:
     from openff.toolkit.topology import Molecule
