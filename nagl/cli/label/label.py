@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, List, Optional, Tuple
 import click
 from click_option_group import optgroup
 from openff.toolkit.utils import UndefinedStereochemistryError
+from openff.utilities import requires_package
 from tqdm import tqdm
 
 from nagl.storage.storage import (
@@ -14,7 +15,6 @@ from nagl.storage.storage import (
     PartialChargeSet,
     WibergBondOrderSet,
 )
-from nagl.utilities import requires_package
 from nagl.utilities.dask import setup_dask_local_cluster, setup_dask_lsf_cluster
 from nagl.utilities.provenance import get_labelling_software_provenance
 from nagl.utilities.smiles import smiles_to_molecule
@@ -23,13 +23,13 @@ from nagl.utilities.toolkits import capture_toolkit_warnings, stream_from_file
 if TYPE_CHECKING:
     from openff.toolkit.topology import Molecule
 
+_OPENFF_CHARGE_METHODS = {"am1": "am1-mulliken", "am1bcc": "am1bcc"}
+
 
 @requires_package("openff.toolkit")
 def _label_molecule(molecule: "Molecule") -> MoleculeRecord:
 
     from simtk import unit
-
-    OPENFF_CHARGE_METHODS = {"am1": "am1-mulliken", "am1bcc": "am1bcc"}
 
     # Generate a diverse set of ELF10 conformers
     molecule.generate_conformers(n_conformers=500, rms_cutoff=0.05 * unit.angstrom)
@@ -44,7 +44,7 @@ def _label_molecule(molecule: "Molecule") -> MoleculeRecord:
         # Compute partial charges.
         for charge_method in ["am1", "am1bcc"]:
             molecule.assign_partial_charges(
-                OPENFF_CHARGE_METHODS[charge_method], use_conformers=[conformer]
+                _OPENFF_CHARGE_METHODS[charge_method], use_conformers=[conformer]
             )
 
             charge_sets.append(
@@ -58,7 +58,7 @@ def _label_molecule(molecule: "Molecule") -> MoleculeRecord:
             )
 
         # Compute WBOs.
-        molecule.assign_fractional_bond_orders(use_conformers=[conformer])
+        molecule.assign_fractional_bond_orders("am1-wiberg", use_conformers=[conformer])
 
         conformer_records.append(
             ConformerRecord(

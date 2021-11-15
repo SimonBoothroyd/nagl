@@ -1,6 +1,7 @@
 import os
 
-from nagl.utilities import temporary_cd
+from openff.utilities import temporary_cd
+
 from nagl.utilities.dask import setup_dask_local_cluster, setup_dask_lsf_cluster
 
 

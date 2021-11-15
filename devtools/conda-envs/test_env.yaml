@@ -14,22 +14,21 @@ dependencies:
   - click-option-group
   - pydantic
   - pytorch-cpu
-  - dgl
+  - dgl >=0.7
   - tqdm
 
     # Molecule loading and processing.
   - openff-toolkit >=0.9.1
+  - openff-utilities
 
     # SQL based molecule storage.
   - sqlalchemy
   - sqlite
 
     # Distributed molecule processing / labelling.
+  - dask <=2.30.1
   - distributed <=2.30.1
   - dask-jobqueue
-
-    # Python < 3.7
-  - typing-extensions
 
     # Testing
   - pytest

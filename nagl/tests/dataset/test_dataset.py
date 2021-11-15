@@ -75,7 +75,7 @@ def test_data_set_from_molecules(methane):
     molecule_graph, features, labels = data_set[0]
 
     assert molecule_graph is not None
-    assert len(molecule_graph) == 5
+    assert molecule_graph.number_of_nodes() == 5
 
     assert features.numpy().shape == (5, 4)
 
@@ -146,7 +146,7 @@ def test_data_set_from_molecule_stores(tmpdir):
     molecule_graph, features, labels = data_set[0]
 
     assert molecule_graph is not None
-    assert len(molecule_graph) == 2
+    assert molecule_graph.number_of_nodes() == 2
 
     assert features.numpy().shape == (2, 4)
 
@@ -172,6 +172,6 @@ def test_data_set_loader():
 
     for graph, features, labels in entries:
 
-        assert graph is not None and len(graph) == 5
+        assert graph is not None and graph.number_of_nodes() == 5
         assert features.numpy().shape == (5, 4)
         assert "formal_charges" in labels

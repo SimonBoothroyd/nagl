@@ -5,8 +5,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Tuple
 
 import numpy
-
-from nagl.utilities import requires_package
+from openff.utilities import requires_package
 
 if TYPE_CHECKING:
     from openff.toolkit.topology import Molecule

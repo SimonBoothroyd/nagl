@@ -4,7 +4,8 @@ available in the OpenFF toolkit.
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Generator
 
-from nagl.utilities import MissingOptionalDependency, requires_package
+from openff.utilities import requires_package
+from openff.utilities.utilities import MissingOptionalDependency
 
 if TYPE_CHECKING:
     from openff.toolkit.topology import Molecule
