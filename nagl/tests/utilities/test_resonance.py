@@ -17,7 +17,7 @@ from nagl.utilities.resonance import (
 
 @pytest.fixture()
 def openff_carboxylate() -> Molecule:
-    return Molecule.from_mapped_smiles("[C:1]([O-:2])(=[O:3])([H:4])([H:5])")
+    return Molecule.from_mapped_smiles("[C:1]([O-:2])(=[O:3])([H:4])")
 
 
 @pytest.fixture()
@@ -79,9 +79,7 @@ def test_xxx_to_networkx(to_function, input_object):
 )
 def test_xxx_from_networkx(from_function):
 
-    expected_molecule = Molecule.from_mapped_smiles(
-        "[C:1]([O-:2])(=[O:3])([H:4])([H:5])"
-    )
+    expected_molecule = Molecule.from_mapped_smiles("[C:1]([O-:2])(=[O:3])([H:4])")
 
     nx_graph = _openff_molecule_to_networkx(expected_molecule)
     actual_molecule = from_function(nx_graph)
@@ -93,7 +91,7 @@ def test_xxx_from_networkx(from_function):
         )
 
         assert are_isomorphic
-        assert atom_map == {i: i for i in range(5)}
+        assert atom_map == {i: i for i in range(4)}
 
 
 @pytest.mark.parametrize(
@@ -130,7 +128,12 @@ def test_enumerate_resonance_forms(input_smiles, expected_smiles, lowest_energy_
     actual_molecules = enumerate_resonance_forms(input_molecule, lowest_energy_only)
 
     assert (
-        sorted(molecule.to_smiles() for molecule in actual_molecules) == expected_smiles
+        # Handle differences in OE and RDKit SMILES
+        sorted(molecule.to_smiles() for molecule in actual_molecules)
+        == sorted(
+            Molecule.from_smiles(smiles, allow_undefined_stereo=True).to_smiles()
+            for smiles in expected_smiles
+        )
     )
 
 
