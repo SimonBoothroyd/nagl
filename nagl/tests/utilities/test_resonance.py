@@ -11,6 +11,7 @@ from nagl.utilities.resonance import (
     _openff_molecule_from_networkx,
     _openff_molecule_to_networkx,
     _perform_electron_transfer,
+    _select_lowest_energy_forms,
     enumerate_resonance_forms,
 )
 
@@ -120,6 +121,8 @@ def test_xxx_from_networkx(from_function):
             ],
             True,
         ),
+        ("C", ["C"], False),
+        ("C", ["C"], True),
     ],
 )
 def test_enumerate_resonance_forms(input_smiles, expected_smiles, lowest_energy_only):
@@ -172,3 +175,21 @@ def test_perform_electron_transfer(nx_carboxylate):
     assert final_graph[0][2]["bond_order"] == 1
     assert nx_carboxylate[0][1]["bond_order"] == 1
     assert nx_carboxylate[0][2]["bond_order"] == 2
+
+
+def test_select_lowest_energy_forms():
+
+    input_molecules = [
+        Molecule.from_mapped_smiles("[N:1]([H:2])([H:3])[C:4](=[O:5])[H:6]"),
+        Molecule.from_mapped_smiles("[N+:1]([H:2])([H:3])=[C:4]([O-:5])[H:6]"),
+    ]
+
+    lowest_energy_forms = _select_lowest_energy_forms(
+        [_openff_molecule_to_networkx(molecule) for molecule in input_molecules], {0, 4}
+    )
+    assert len(lowest_energy_forms) == 1
+
+    lowest_energy_form = _openff_molecule_from_networkx(lowest_energy_forms[0])
+    assert Molecule.are_isomorphic(lowest_energy_form, input_molecules[0])[0]
+
+    print(lowest_energy_forms)

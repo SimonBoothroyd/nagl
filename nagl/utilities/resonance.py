@@ -309,28 +309,12 @@ def enumerate_resonance_forms(molecule, lowest_energy_only: bool = True):
 
     if lowest_energy_only:
 
-        found_resonance_form_energies = []
+        found_resonance_forms = _select_lowest_energy_forms(
+            found_resonance_forms, donor_acceptor_indices
+        )
 
-        for resonance_graph in found_resonance_forms:
-
-            resonance_keys = [
-                _ResonanceTypeKey(**resonance_graph.nodes[atom_index])
-                for atom_index in donor_acceptor_indices
-            ]
-
-            total_energy = sum(_RESONANCE_TYPES[key].energy for key in resonance_keys)
-
-            found_resonance_form_energies.append(total_energy)
-
-        lowest_energy = min(found_resonance_form_energies)
-
-        found_resonance_forms = [
-            resonance_form
-            for resonance_form, resonance_energy in zip(
-                found_resonance_forms, found_resonance_form_energies
-            )
-            if numpy.isclose(resonance_energy, lowest_energy)
-        ]
+    if len(found_resonance_forms) == 0:
+        found_resonance_forms = [original_nx_graph]
 
     if isinstance(molecule, Molecule):
         resonance_forms = [
@@ -552,3 +536,36 @@ def _perform_electron_transfer(
         flipped_graph[atom_index_a][atom_index_b]["bond_order"] += increment
 
     return flipped_graph
+
+
+def _select_lowest_energy_forms(
+    resonance_forms: List[networkx.Graph], donor_acceptor_indices: Set[int]
+) -> List[networkx.Graph]:
+    """Select the lowest 'energy' resonance forms from an input list."""
+
+    if len(resonance_forms) == 0:
+        return []
+
+    resonance_form_energies = []
+
+    for resonance_form in resonance_forms:
+        resonance_keys = [
+            _ResonanceTypeKey(**resonance_form.nodes[atom_index])
+            for atom_index in donor_acceptor_indices
+        ]
+
+        total_energy = sum(_RESONANCE_TYPES[key].energy for key in resonance_keys)
+
+        resonance_form_energies.append(total_energy)
+
+    lowest_energy = min(resonance_form_energies)
+
+    lowest_energy_forms = [
+        resonance_form
+        for resonance_form, resonance_energy in zip(
+            resonance_forms, resonance_form_energies
+        )
+        if numpy.isclose(resonance_energy, lowest_energy)
+    ]
+
+    return lowest_energy_forms
