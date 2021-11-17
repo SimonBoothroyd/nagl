@@ -30,12 +30,12 @@ def nx_carboxylate(openff_carboxylate) -> networkx.Graph:
     [
         (
             _openff_molecule_to_networkx,
-            Molecule.from_mapped_smiles("[C:1]([O-:2])(=[O:3])([H:4])([H:5])"),
+            Molecule.from_mapped_smiles("[C:1]([O-:2])(=[O:3])([H:4])"),
         ),
         (
             _dgl_molecule_to_networkx,
             DGLMolecule.from_openff(
-                Molecule.from_mapped_smiles("[C:1]([O-:2])(=[O:3])([H:4])([H:5])"),
+                Molecule.from_mapped_smiles("[C:1]([O-:2])(=[O:3])([H:4])"),
                 [],
                 [],
                 False,
@@ -48,14 +48,13 @@ def test_xxx_to_networkx(to_function, input_object):
     nx_graph = to_function(input_object)
     assert isinstance(nx_graph, networkx.Graph)
 
-    assert nx_graph.number_of_nodes() == 5
-    assert nx_graph.number_of_edges() == 4
+    assert nx_graph.number_of_nodes() == 4
+    assert nx_graph.number_of_edges() == 3
 
     assert [nx_graph.nodes[i]["element"] for i in nx_graph.nodes] == [
         "C",
         "O",
         "O",
-        "H",
         "H",
     ]
     assert [nx_graph.nodes[i]["formal_charge"] for i in nx_graph.nodes] == [
@@ -63,13 +62,11 @@ def test_xxx_to_networkx(to_function, input_object):
         -1,
         0,
         0,
-        0,
     ]
     assert [nx_graph.nodes[i]["bond_orders"] for i in nx_graph.nodes] == [
-        (1, 1, 1, 2),
+        (1, 1, 2),
         (1,),
         (2,),
-        (1,),
         (1,),
     ]
 

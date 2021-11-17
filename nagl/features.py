@@ -174,5 +174,15 @@ class WibergBondOrder(BondFeature):
         ).reshape(-1, 1)
 
 
+class BondOrder(BondFeature):
+    """Encodes the fractional Wiberg bond order of all of the bonds in a molecule."""
+
+    @classmethod
+    def __call__(cls, molecule: "Molecule") -> torch.Tensor:
+        return torch.tensor(
+            [bond.bond_order for bond in molecule.bonds]
+        ).reshape(-1, 1).float()
+
+
 class BondFeaturizer(_Featurizer[BondFeature]):
     """A class for featurizing the bonds in a molecule."""
