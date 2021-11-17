@@ -3,12 +3,12 @@ import pytest
 from openff.toolkit.topology import Molecule
 from simtk import unit
 
-from nagl.dataset.dataset import molecule_to_graph
-from nagl.dataset.features import AtomConnectivity, BondIsInRing
+from nagl.features import AtomConnectivity, BondIsInRing
+from nagl.molecules import DGLMolecule
 
 
 @pytest.fixture()
-def methane() -> Molecule:
+def openff_methane() -> Molecule:
 
     molecule: Molecule = Molecule.from_smiles("C")
     molecule.add_conformer(
@@ -28,5 +28,7 @@ def methane() -> Molecule:
 
 
 @pytest.fixture()
-def methane_graph(methane):
-    return molecule_to_graph(methane, [AtomConnectivity()], [BondIsInRing()])
+def dgl_methane(openff_methane) -> DGLMolecule:
+    return DGLMolecule.from_openff(
+        openff_methane, [AtomConnectivity()], [BondIsInRing()]
+    )

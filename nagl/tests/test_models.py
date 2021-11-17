@@ -1,4 +1,4 @@
-from nagl.models.models import ConvolutionConfig, MolGraph, ReadoutConfig
+from nagl.models import ConvolutionConfig, MoleculeGCNModel, ReadoutConfig
 from nagl.nn import SequentialConfig, SequentialLayers
 from nagl.nn.gcn import SAGEConvStack
 from nagl.nn.pooling import PoolAtomFeatures, PoolBondFeatures
@@ -7,7 +7,7 @@ from nagl.nn.process import ComputePartialCharges
 
 def test_init_mol_graph():
 
-    model = MolGraph(
+    model = MoleculeGCNModel(
         convolution_config=ConvolutionConfig(in_feats=1, hidden_feats=[2, 2]),
         readout_configs={
             "atom": ReadoutConfig(
@@ -41,9 +41,9 @@ def test_init_mol_graph():
     assert "bond" not in model._postprocess_layers
 
 
-def test_mol_graph_forward(methane_graph):
+def test_mol_graph_forward(dgl_methane):
 
-    model = MolGraph(
+    model = MoleculeGCNModel(
         convolution_config=ConvolutionConfig(in_feats=4, hidden_feats=[4]),
         readout_configs={
             "atom": ReadoutConfig(
@@ -54,7 +54,7 @@ def test_mol_graph_forward(methane_graph):
         },
     )
 
-    output = model.forward(methane_graph, methane_graph.ndata["feat"].float())
+    output = model.forward(dgl_methane)
     assert "atom" in output
 
     assert output["atom"].shape == (5, 1)

@@ -2,7 +2,7 @@ import numpy
 import pytest
 from openff.toolkit.topology import Molecule
 
-from nagl.dataset.features import (
+from nagl.features import (
     AtomConnectivity,
     AtomFormalCharge,
     AtomicElement,
@@ -10,6 +10,7 @@ from nagl.dataset.features import (
     AtomIsInRing,
     BondIsAromatic,
     BondIsInRing,
+    BondOrder,
     WibergBondOrder,
     one_hot_encode,
 )
@@ -21,9 +22,9 @@ def test_one_hot_encode():
     assert numpy.allclose(encoding, numpy.array([0, 1, 0]))
 
 
-def test_atomic_element(methane: Molecule):
+def test_atomic_element(openff_methane: Molecule):
 
-    encoding = AtomicElement(["H", "C"])(methane).numpy()
+    encoding = AtomicElement(["H", "C"])(openff_methane).numpy()
 
     assert encoding.shape == (5, 2)
 
@@ -34,9 +35,9 @@ def test_atomic_element(methane: Molecule):
     assert numpy.isclose(encoding[0, 1], 1.0)
 
 
-def test_atom_connectivity(methane: Molecule):
+def test_atom_connectivity(openff_methane: Molecule):
 
-    encoding = AtomConnectivity()(methane).numpy()
+    encoding = AtomConnectivity()(openff_methane).numpy()
 
     assert encoding.shape == (5, 4)
 
@@ -85,12 +86,20 @@ def test_is_in_ring(feature_class):
     assert numpy.allclose(encoding[6:, 1], 0.0)
 
 
-def test_wiberg_bond_order(methane):
+def test_bond_order():
 
-    for i, bond in enumerate(methane.bonds):
+    encoding = BondOrder()(Molecule.from_smiles("C=O")).numpy()
+    assert encoding.shape == (3, 1)
+
+    assert numpy.allclose(encoding, numpy.array([[2.0], [1.0], [1.0]]))
+
+
+def test_wiberg_bond_order(openff_methane):
+
+    for i, bond in enumerate(openff_methane.bonds):
         bond.fractional_bond_order = float(i)
 
-    encoding = WibergBondOrder()(methane).numpy()
+    encoding = WibergBondOrder()(openff_methane).numpy()
     assert encoding.shape == (4, 1)
 
     assert numpy.allclose(encoding, numpy.arange(4).reshape(-1, 1))

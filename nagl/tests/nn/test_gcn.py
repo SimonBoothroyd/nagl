@@ -1,10 +1,9 @@
-import dgl
 import numpy
 import pytest
 import torch
 import torch.nn
 import torch.nn.functional
-from dgl.nn import SAGEConv
+from dgl.nn.pytorch import SAGEConv
 
 from nagl.nn.gcn import SAGEConvStack
 
@@ -56,11 +55,11 @@ def test_init_sequential_layers_invalid():
     )
 
 
-def test_gcn_stack_forward(methane_graph: dgl.DGLHeteroGraph):
+def test_gcn_stack_forward(dgl_methane):
 
-    methane_graph = dgl.to_homogeneous(methane_graph, ndata=["feat"])
+    homograph = dgl_methane.homograph
 
     conv_stack = SAGEConvStack(in_feats=4, hidden_feats=[2])
-    h = conv_stack.forward(methane_graph, methane_graph.ndata["feat"].float())
+    h = conv_stack.forward(homograph, dgl_methane.atom_features)
 
     assert h.detach().numpy().shape == (5, 2)

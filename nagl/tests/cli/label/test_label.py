@@ -7,10 +7,10 @@ from nagl.cli.label import label_cli
 from nagl.storage.storage import MoleculeStore
 
 
-def test_label_cli(methane: Molecule, runner):
+def test_label_cli(openff_methane: Molecule, runner):
 
     # Create an SDF file to label.
-    methane.to_file("methane.sdf", "sdf")
+    openff_methane.to_file("methane.sdf", "sdf")
 
     arguments = [
         "--input",
@@ -32,7 +32,8 @@ def test_label_cli(methane: Molecule, runner):
 
     molecule_record = store.retrieve()[0]
     assert (
-        Molecule.from_smiles(molecule_record.smiles).to_smiles() == methane.to_smiles()
+        Molecule.from_smiles(molecule_record.smiles).to_smiles()
+        == openff_methane.to_smiles()
     )
 
     assert len(molecule_record.conformers) == 1

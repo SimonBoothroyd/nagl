@@ -7,7 +7,7 @@ from nagl.cli.prepare.enumerate import enumerate_cli
 from nagl.utilities.toolkits import stream_from_file, stream_to_file
 
 
-def test_enumerate_cli(methane: Molecule, runner):
+def test_enumerate_cli(openff_methane: Molecule, runner):
 
     # Create an SDF file to enumerate.
     buteneol = Molecule.from_smiles(r"C/C=C(/C)\O")

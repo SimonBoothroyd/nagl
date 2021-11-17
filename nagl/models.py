@@ -1,10 +1,10 @@
 from typing import Dict, Union
 
-import dgl.function
 import torch.nn.functional
 from pydantic import BaseModel, Field
 from typing_extensions import Literal
 
+from nagl.molecules import DGLMolecule, DGLMoleculeBatch
 from nagl.nn import SequentialConfig, SequentialLayers
 from nagl.nn.gcn import SAGEConvStack
 from nagl.nn.pooling import PoolAtomFeatures, PoolBondFeatures, PoolingLayer
@@ -53,7 +53,7 @@ class ReadoutConfig(BaseModel):
     )
 
 
-class MolGraph(torch.nn.Module):
+class MoleculeGCNModel(torch.nn.Module):
     """A model which applies a graph convolutional step followed by multiple (labelled)
     pooling and readout steps.
     """
@@ -64,7 +64,7 @@ class MolGraph(torch.nn.Module):
         readout_configs: Dict[str, ReadoutConfig],
     ):
 
-        super(MolGraph, self).__init__()
+        super(MoleculeGCNModel, self).__init__()
 
         self._convolution = _GRAPH_ARCHITECTURES[convolution_config.architecture](
             in_feats=convolution_config.in_feats,
@@ -103,25 +103,25 @@ class MolGraph(torch.nn.Module):
             setattr(self, f"postprocess_{postprocess_type}", postprocess_layer)
 
     def forward(
-        self, graph: dgl.DGLGraph, inputs: torch.Tensor
+        self, molecule: Union[DGLMolecule, DGLMoleculeBatch]
     ) -> Dict[str, torch.Tensor]:
 
         # The input graph will be heterogeneous - the edges are split into forward
         # edge types and their symmetric reverse counterparts. The convolution layer
         # doesn't need this information and hence we produce a homogeneous graph for
         # it to operate on with only a single edge type.
-        homo_graph = dgl.to_homogeneous(graph, ndata=["feat"], edata=["feat"])
-
-        graph.ndata["h"] = self._convolution(homo_graph, inputs)
+        molecule.graph.ndata["h"] = self._convolution(
+            molecule.homograph, molecule.atom_features
+        )
 
         # The pooling, readout and processing layers then operate on the fully edge
         # annotated graph.
         readouts: Dict[str, torch.Tensor] = {
-            readout_type: readout(self._pooling_layers[readout_type].forward(graph))
+            readout_type: readout(self._pooling_layers[readout_type].forward(molecule))
             for readout_type, readout in self._readouts.items()
         }
 
         for layer_name, layer in self._postprocess_layers.items():
-            readouts[layer_name] = layer.forward(graph, readouts[layer_name])
+            readouts[layer_name] = layer.forward(molecule, readouts[layer_name])
 
         return readouts
