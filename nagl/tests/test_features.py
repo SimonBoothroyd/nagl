@@ -10,6 +10,7 @@ from nagl.features import (
     AtomIsInRing,
     BondIsAromatic,
     BondIsInRing,
+    BondOrder,
     WibergBondOrder,
     one_hot_encode,
 )
@@ -83,6 +84,14 @@ def test_is_in_ring(feature_class):
 
     assert numpy.allclose(encoding[6:, 0], 1.0)
     assert numpy.allclose(encoding[6:, 1], 0.0)
+
+
+def test_bond_order():
+
+    encoding = BondOrder()(Molecule.from_smiles("C=O")).numpy()
+    assert encoding.shape == (3, 1)
+
+    assert numpy.allclose(encoding, numpy.array([[2.0], [1.0], [1.0]]))
 
 
 def test_wiberg_bond_order(openff_methane):

@@ -179,9 +179,11 @@ class BondOrder(BondFeature):
 
     @classmethod
     def __call__(cls, molecule: "Molecule") -> torch.Tensor:
-        return torch.tensor(
-            [bond.bond_order for bond in molecule.bonds]
-        ).reshape(-1, 1).float()
+        return (
+            torch.tensor([bond.bond_order for bond in molecule.bonds])
+            .reshape(-1, 1)
+            .float()
+        )
 
 
 class BondFeaturizer(_Featurizer[BondFeature]):
