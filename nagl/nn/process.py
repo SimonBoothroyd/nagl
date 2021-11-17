@@ -1,9 +1,11 @@
 import abc
+from typing import Union
 
-import dgl
 import torch.nn
 from pydantic import BaseModel
 from typing_extensions import Literal
+
+from nagl.molecules import DGLMolecule, DGLMoleculeBatch
 
 
 class PostprocessLayer(torch.nn.Module, abc.ABC):
@@ -15,7 +17,9 @@ class PostprocessLayer(torch.nn.Module, abc.ABC):
         """Create an instance of a post-process layer from its configuration."""
 
     @abc.abstractmethod
-    def forward(self, graph: dgl.DGLGraph, x: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, molecule: Union[DGLMolecule, DGLMoleculeBatch], inputs: torch.Tensor
+    ) -> torch.Tensor:
         """Returns the post-processed input vector."""
 
 
@@ -72,22 +76,47 @@ class ComputePartialCharges(PostprocessLayer):
 
         return charges
 
-    def forward(self, graph: dgl.DGLGraph, x: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, molecule: Union[DGLMolecule, DGLMoleculeBatch], inputs: torch.Tensor
+    ) -> torch.Tensor:
 
         charges = []
         counter = 0
 
-        for mol_graph in dgl.unbatch(graph):
+        graph = molecule.graph
 
-            total_charge = mol_graph.ndata["formal_charge"].sum()
+        n_atoms_per_molecule = (
+            (molecule.n_atoms,)
+            if isinstance(molecule, DGLMolecule)
+            else molecule.n_atoms_per_molecule
+        )
+        n_representations_per_molecule = (
+            (molecule.n_representations,)
+            if isinstance(molecule, DGLMolecule)
+            else molecule.n_representations_per_molecule
+        )
 
-            charges.append(
-                self.atomic_parameters_to_charges(
-                    x[counter : counter + mol_graph.number_of_nodes(), 0],
-                    x[counter : counter + mol_graph.number_of_nodes(), 1],
-                    total_charge,
-                )
-            )
-            counter += mol_graph.number_of_nodes()
+        for n_atoms, n_representations in zip(
+            n_atoms_per_molecule, n_representations_per_molecule
+        ):
+
+            atom_slices = [
+                slice(counter + i * n_atoms, counter + (i + 1) * n_atoms)
+                for i in range(n_representations)
+            ]
+
+            mol_charges = torch.stack(
+                [
+                    self.atomic_parameters_to_charges(
+                        inputs[atom_slice, 0],
+                        inputs[atom_slice, 1],
+                        graph.ndata["formal_charge"][atom_slice].sum(),
+                    )
+                    for atom_slice in atom_slices
+                ]
+            ).mean(dim=0)
+
+            charges.append(mol_charges)
+            counter += n_atoms * n_representations
 
         return torch.vstack(charges)

@@ -1,11 +1,12 @@
 import abc
+from typing import Union
 
-import dgl
 import torch.nn
 from dgl.udf import EdgeBatch
 from pydantic import BaseModel, Field
 from typing_extensions import Literal
 
+from nagl.molecules import DGLMolecule, DGLMoleculeBatch
 from nagl.nn import SequentialConfig, SequentialLayers
 
 
@@ -25,7 +26,7 @@ class PoolingLayer(torch.nn.Module, abc.ABC):
         """The number of concatenated feature columns."""
 
     @abc.abstractmethod
-    def forward(self, graph: dgl.DGLGraph) -> torch.Tensor:
+    def forward(self, molecule: Union[DGLMolecule, DGLMoleculeBatch]) -> torch.Tensor:
         """Returns the pooled feature vector."""
 
 
@@ -49,8 +50,8 @@ class PoolAtomFeatures(PoolingLayer):
     def from_config(cls, config: "PoolAtomFeatures.Config"):
         return cls()
 
-    def forward(self, graph: dgl.DGLGraph) -> torch.Tensor:
-        return graph.ndata["h"]
+    def forward(self, molecule: Union[DGLMolecule, DGLMoleculeBatch]) -> torch.Tensor:
+        return molecule.graph.ndata["h"]
 
 
 class PoolBondFeatures(PoolingLayer):
@@ -86,7 +87,9 @@ class PoolBondFeatures(PoolingLayer):
 
         return {"h": torch.cat([h_u, h_v], 1)}
 
-    def forward(self, graph: dgl.DGLGraph) -> torch.Tensor:
+    def forward(self, molecule: Union[DGLMolecule, DGLMoleculeBatch]) -> torch.Tensor:
+
+        graph = molecule.graph
 
         with graph.local_scope():
 

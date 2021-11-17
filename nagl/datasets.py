@@ -9,22 +9,18 @@ from typing import (
     List,
     NamedTuple,
     Optional,
+    Type,
     Union,
 )
 
 import dgl
 import numpy
 import torch
-from openff.utilities import requires_package
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
-from nagl.dataset.features import (
-    AtomFeature,
-    AtomFeaturizer,
-    BondFeature,
-    BondFeaturizer,
-)
+from nagl.features import AtomFeature, BondFeature
+from nagl.molecules import DGLMolecule, DGLMoleculeBatch
 from nagl.storage.storage import ChargeMethod, MoleculeStore, WBOMethod
 
 if TYPE_CHECKING:
@@ -33,81 +29,25 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@requires_package("openff.toolkit")
-@requires_package("simtk")
-def molecule_to_graph(
-    molecule: "Molecule",
-    atom_features: List[AtomFeature],
-    bond_features: List[BondFeature],
-) -> dgl.DGLGraph:
-    """Maps an OpenFF molecule object into a ``dgl`` graph complete with atom (node)
-    and bond (edge) features.
-    """
-    from simtk import unit
-
-    # Create the bond tensors.
-    indices_a = []
-    indices_b = []
-
-    for bond in molecule.bonds:
-
-        indices_a.append(bond.atom1_index)
-        indices_b.append(bond.atom2_index)
-
-    indices_a = torch.tensor(indices_a, dtype=torch.int32)
-    indices_b = torch.tensor(indices_b, dtype=torch.int32)
-
-    # Map the bond indices to a molecule graph, making sure to make the graph
-    # undirected.
-    molecule_graph = dgl.heterograph(
-        {
-            ("atom", "forward", "atom"): (indices_a, indices_b),
-            ("atom", "reverse", "atom"): (indices_b, indices_a),
-        }
-    )
-
-    # Assign the atom (node) features.
-    if len(atom_features) > 0:
-        molecule_graph.ndata["feat"] = AtomFeaturizer.featurize(molecule, atom_features)
-
-    molecule_graph.ndata["formal_charge"] = torch.tensor(
-        [
-            atom.formal_charge.value_in_unit(unit.elementary_charge)
-            for atom in molecule.atoms
-        ]
-    )
-
-    # Assign the bond (edge) features.
-    if len(bond_features) > 0:
-
-        feature_tensor = BondFeaturizer.featurize(molecule, bond_features)
-
-        molecule_graph.edges["forward"].data["feat"] = feature_tensor
-        molecule_graph.edges["reverse"].data["feat"] = feature_tensor
-
-    return molecule_graph
-
-
-class MoleculeGraphEntry(NamedTuple):
+class DGLMoleculeDatasetEntry(NamedTuple):
     """A named tuple containing a featurized molecule graph, a tensor of the atom
     features, and a tensor of the molecule label.
     """
 
-    graph: dgl.DGLGraph
-    features: torch.Tensor
+    molecule: DGLMolecule
     labels: Dict[str, torch.Tensor]
 
 
-class MoleculeGraphDataset(Dataset):
+class DGLMoleculeDataset(Dataset):
     """A data set which stores a featurized graph representation of a labelled set of
     molecules."""
 
     @property
     def n_features(self) -> int:
         """Returns the number of atom features"""
-        return 0 if len(self) == 0 else self[0][1].shape[1]
+        return 0 if len(self) == 0 else self[0][0].atom_features.shape[1]
 
-    def __init__(self, entries: List[MoleculeGraphEntry]):
+    def __init__(self, entries: List[DGLMoleculeDatasetEntry]):
         """
         Args:
             entries: The list of entries to add to the data set.
@@ -116,12 +56,13 @@ class MoleculeGraphDataset(Dataset):
 
     @classmethod
     def from_molecules(
-        cls: "MoleculeGraphDataset",
+        cls: Type["DGLMoleculeDataset"],
         molecules: Collection["Molecule"],
         atom_features: List[AtomFeature],
         bond_features: List[BondFeature],
         label_function: Callable[["Molecule"], Dict[str, torch.Tensor]],
-    ) -> "MoleculeGraphDataset":
+        enumerate_resonance: bool = False,
+    ) -> "DGLMoleculeDataset":
         """Creates a data set from a specified list of molecule objects.
 
         Args:
@@ -131,6 +72,9 @@ class MoleculeGraphDataset(Dataset):
             label_function: A function which will return a label for a given molecule.
                 The function should take a molecule as input, and return and tensor
                 with shape=(n_atoms,) containing the label of each atom.
+            enumerate_resonance: Whether to enumerate the lowest energy resonance
+                structures of each molecule and store each within the DGL graph
+                representation.
         """
 
         entries = [
@@ -139,11 +83,45 @@ class MoleculeGraphDataset(Dataset):
                 atom_features=atom_features,
                 bond_features=bond_features,
                 label_function=label_function,
+                enumerate_resonance=enumerate_resonance,
             )
             for molecule in tqdm(molecules)
         ]
 
         return cls(entries)
+
+    @classmethod
+    def from_smiles(
+        cls: Type["DGLMoleculeDataset"],
+        smiles: Collection[str],
+        atom_features: List[AtomFeature],
+        bond_features: List[BondFeature],
+        label_function: Callable[["Molecule"], Dict[str, torch.Tensor]],
+        enumerate_resonance: bool = False,
+    ) -> "DGLMoleculeDataset":
+        """Creates a data set from a specified list of SMILES patterns.
+
+        Args:
+            smiles: The SMILES representations of the molecules to load into the set.
+            atom_features: The atom features to compute for each molecule.
+            bond_features: The bond features to compute for each molecule.
+            label_function: A function which will return a label for a given molecule.
+                The function should take a molecule as input, and return and tensor
+                with shape=(n_atoms,) containing the label of each atom.
+            enumerate_resonance: Whether to enumerate the lowest energy resonance
+                structures of each molecule and store each within the DGL graph
+                representation.
+        """
+
+        from openff.toolkit.topology import Molecule
+
+        return cls.from_molecules(
+            [Molecule.from_smiles(pattern) for pattern in smiles],
+            atom_features,
+            bond_features,
+            label_function,
+            enumerate_resonance,
+        )
 
     @classmethod
     def _labelled_molecule_to_dict(
@@ -189,13 +167,13 @@ class MoleculeGraphDataset(Dataset):
 
     @classmethod
     def from_molecule_stores(
-        cls: "MoleculeGraphDataset",
+        cls: Type["DGLMoleculeDataset"],
         molecule_stores: Union[MoleculeStore, Collection[MoleculeStore]],
         partial_charge_method: Optional[ChargeMethod],
         bond_order_method: Optional[WBOMethod],
         atom_features: List[AtomFeature],
         bond_features: List[BondFeature],
-    ) -> "MoleculeGraphDataset":
+    ) -> "DGLMoleculeDataset":
         """Creates a data set from a specified set of labelled molecule stores.
 
         Args:
@@ -294,7 +272,8 @@ class MoleculeGraphDataset(Dataset):
         atom_features: List[AtomFeature],
         bond_features: List[BondFeature],
         label_function: Callable[["Molecule"], Dict[str, torch.Tensor]],
-    ) -> MoleculeGraphEntry:
+        enumerate_resonance: bool = False,
+    ) -> DGLMoleculeDatasetEntry:
         """Maps a molecule into a labeled, featurized graph representation.
 
         Args:
@@ -304,6 +283,9 @@ class MoleculeGraphDataset(Dataset):
             label_function: A function which will return a label for a given molecule.
                 The function should take a molecule as input, and return and tensor
                 with shape=(n_atoms,) containing the label of each atom.
+            enumerate_resonance: Whether to enumerate the lowest energy resonance
+                structures of each molecule and store each within the DGL graph
+                representation.
 
         Returns:
             A named tuple containing the featurized molecule graph, a tensor of the atom
@@ -312,33 +294,37 @@ class MoleculeGraphDataset(Dataset):
         label = label_function(molecule)
 
         # Map the molecule to a graph and assign features.
-        graph = molecule_to_graph(molecule, atom_features, bond_features)
-        features = graph.ndata["feat"].float()
+        dgl_molecule = DGLMolecule.from_openff(
+            molecule, atom_features, bond_features, enumerate_resonance
+        )
 
-        return MoleculeGraphEntry(graph, features, label)
+        return DGLMoleculeDatasetEntry(dgl_molecule, label)
 
     def __len__(self) -> int:
         return len(self._entries)
 
-    def __getitem__(self, index: int) -> MoleculeGraphEntry:
+    def __getitem__(self, index: int) -> DGLMoleculeDatasetEntry:
         return self._entries[index]
 
 
-class MoleculeGraphDataLoader(DataLoader):
-    """A custom data loader for batching ``MoleculeGraphDataset`` objects."""
+class DGLMoleculeDataLoader(DataLoader):
+    """A custom data loader for batching ``DGLMoleculeDataset`` objects."""
 
     def __init__(
         self,
-        dataset: MoleculeGraphDataset,
+        dataset: DGLMoleculeDataset,
         batch_size: Optional[int] = 1,
         shuffle: bool = False,
         num_workers: int = 0,
     ):
-        def collate(graph_entries: List[MoleculeGraphEntry]):
-            graphs, features, labels = zip(*graph_entries)
+        def collate(graph_entries: List[DGLMoleculeDatasetEntry]):
 
-            batched_graph = dgl.batch(graphs)
-            batched_features = torch.vstack(features)
+            if isinstance(graph_entries[0], dgl.DGLGraph):
+                graph_entries = [graph_entries]
+
+            molecules, labels = zip(*graph_entries)
+
+            batched_molecules = DGLMoleculeBatch(*molecules)
             batched_labels = {}
 
             for label_name in labels[0]:
@@ -347,9 +333,9 @@ class MoleculeGraphDataLoader(DataLoader):
                     [label[label_name].reshape(-1, 1) for label in labels]
                 )
 
-            return batched_graph, batched_features, batched_labels
+            return batched_molecules, batched_labels
 
-        super(MoleculeGraphDataLoader, self).__init__(
+        super(DGLMoleculeDataLoader, self).__init__(
             dataset=dataset,
             batch_size=batch_size,
             shuffle=shuffle,

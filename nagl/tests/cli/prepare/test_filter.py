@@ -7,7 +7,7 @@ from nagl.cli.prepare.filter import filter_cli
 from nagl.utilities.toolkits import stream_from_file, stream_to_file
 
 
-def test_filter_cli(methane: Molecule, runner):
+def test_filter_cli(openff_methane: Molecule, runner):
 
     # Create an SDF file to filter.
     with stream_to_file("molecules.sdf") as writer:
