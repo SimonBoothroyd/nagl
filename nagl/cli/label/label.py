@@ -1,4 +1,5 @@
 import math
+import traceback
 from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
@@ -111,7 +112,7 @@ def label_molecule_batch(
         except (BaseException, Exception) as e:
             error = (
                 f"Failed to process {molecule.to_smiles(explicit_hydrogens=False)}: "
-                f"{str(e)}"
+                f"{traceback.format_exception(etype=type(e), value=e, tb=e.__traceback__)}"
             )
 
         molecule_records.append((molecule_record, error))
@@ -306,7 +307,11 @@ def label_cli(
                     if molecule_record is not None and error is None:
                         storage.store(molecule_record)
                 except (BaseException, Exception) as e:
-                    error = str(e)
+
+                    formatted_traceback = traceback.format_exception(
+                        etype=type(e), value=e, tb=e.__traceback__
+                    )
+                    error = f"Could not store record: {formatted_traceback}"
 
                 if error is not None:
 

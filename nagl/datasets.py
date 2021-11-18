@@ -210,24 +210,16 @@ class DGLMoleculeDataset(Dataset):
 
         for record in tqdm(stored_records):
 
-            molecule: Molecule = Molecule.from_mapped_smiles(record.smiles)
+            molecule: Molecule = Molecule.from_mapped_smiles(
+                record.smiles, allow_undefined_stereo=True
+            )
 
             if partial_charge_method is not None:
 
-                average_partial_charges = (
-                    numpy.mean(
-                        [
-                            charge_set.values
-                            for conformer in record.conformers
-                            for charge_set in conformer.partial_charges
-                            if charge_set.method == partial_charge_method
-                        ],
-                        axis=0,
-                    )
+                molecule.partial_charges = (
+                    numpy.array(record.average_partial_charges(partial_charge_method))
                     * unit.elementary_charge
                 )
-
-                molecule.partial_charges = average_partial_charges
 
             if bond_order_method is not None:
 

@@ -13,6 +13,7 @@ from typing import (
     Literal,
     Optional,
     Tuple,
+    Union,
 )
 
 import numpy
@@ -25,14 +26,11 @@ from nagl.storage.db import (
     DB_VERSION,
     DBBase,
     DBConformerRecord,
-    DBCoordinate,
     DBGeneralProvenance,
     DBInformation,
     DBMoleculeRecord,
-    DBPartialCharge,
     DBPartialChargeSet,
     DBSoftwareProvenance,
-    DBWibergBondOrder,
     DBWibergBondOrderSet,
 )
 from nagl.storage.exceptions import IncompatibleDBVersion
@@ -52,6 +50,7 @@ WBOMethod = Literal["am1"]
 class _BaseStoredModel(BaseModel):
     class Config:
         orm_mode = True
+        allow_mutation = False
 
 
 class PartialChargeSet(_BaseStoredModel):
@@ -62,7 +61,7 @@ class PartialChargeSet(_BaseStoredModel):
         ..., description="The method used to compute these partial charges."
     )
 
-    values: List[float] = Field(
+    values: Union[Tuple[float, ...], List[float]] = Field(
         ..., description="The values [e] of the partial charges."
     )
 
@@ -75,7 +74,9 @@ class WibergBondOrderSet(_BaseStoredModel):
         ..., description="The method used to compute these bond orders."
     )
 
-    values: List[Tuple[int, int, float]] = Field(
+    values: Union[
+        Tuple[Tuple[int, int, float], ...], List[Tuple[int, int, float]]
+    ] = Field(
         ...,
         description="The values of the WBOs stored as tuples of the form "
         "`(index_a, index_b, value)` where `index_a` and `index_b` are the indices "
@@ -94,34 +95,71 @@ class ConformerRecord(_BaseStoredModel):
         "shape=(n_atoms, 3).",
     )
 
-    partial_charges: List[PartialChargeSet] = Field(
-        [],
+    partial_charges: Union[
+        Tuple[PartialChargeSet, ...], List[PartialChargeSet]
+    ] = Field(
+        tuple(),
         description="Sets of partial charges computed using this conformer and "
         "different charge methods (e.g. am1, am1bcc).",
     )
-    bond_orders: List[WibergBondOrderSet] = Field(
-        [],
+    bond_orders: Union[
+        Tuple[WibergBondOrderSet, ...], List[WibergBondOrderSet]
+    ] = Field(
+        tuple(),
         description="Sets of partial charges computed using this conformer and "
         "different computation methods (e.g. am1).",
     )
 
-    @validator("partial_charges")
-    def validate_partial_charges(cls, values):
+    @property
+    def partial_charges_by_method(self) -> Dict[ChargeMethod, Tuple[float, ...]]:
+        """Returns the values of partial charges [e] computed for this conformer using a
+        specific method."""
+        return {
+            charge_set.method: charge_set.values for charge_set in self.partial_charges
+        }
 
-        assert len({value.method for value in values}) == len(
-            values
+    @property
+    def bond_orders_by_method(
+        self,
+    ) -> Dict[WBOMethod, Tuple[Tuple[int, int, float], ...]]:
+        """Returns the values of the bond orders computed for this conformer using a
+        specific method."""
+
+        return {wbo_set.method: wbo_set.values for wbo_set in self.bond_orders}
+
+    @validator("coordinates")
+    def _validate_coordinates(cls, value):
+
+        assert (value.ndim == 2 and value.shape[1] == 3) or (
+            value.ndim == 1 and len(value) % 3 == 0
+        ), "coordinates must be re-shapable to `(n_atoms, 3)`"
+
+        value = value.reshape((-1, 3))
+        value.flags.writeable = False
+
+        return value
+
+    @validator("partial_charges")
+    def _validate_partial_charges(cls, value, values):
+
+        assert len({x.method for x in value}) == len(
+            value
         ), "multiple charge sets computed using the same method are not allowed"
 
-        return values
+        assert all(
+            len(x.values) == len(values["coordinates"]) for x in value
+        ), "the number of partial charges must match the number of coordinates"
+
+        return value
 
     @validator("bond_orders")
-    def validate_bond_orders(cls, values):
+    def _validate_bond_orders(cls, value, values):
 
-        assert len({value.method for value in values}) == len(
-            values
+        assert len({x.method for x in value}) == len(
+            value
         ), "multiple bond order sets computed using the same method are not allowed"
 
-        return values
+        return value
 
 
 class MoleculeRecord(_BaseStoredModel):
@@ -143,6 +181,20 @@ class MoleculeRecord(_BaseStoredModel):
         "from the conformer.",
     )
 
+    def average_partial_charges(self, method: ChargeMethod) -> Tuple[float, ...]:
+        """Computes the average partial charges [e] over all stored values."""
+
+        return tuple(
+            numpy.mean(
+                [
+                    conformer.partial_charges_by_method[method]
+                    for conformer in self.conformers
+                    if method in conformer.partial_charges_by_method
+                ],
+                axis=0,
+            )
+        )
+
     def reorder(self, expected_smiles: str) -> "MoleculeRecord":
         """Reorders is data stored in this record so that the atom ordering matches
         the ordering of the specified indexed SMILES pattern.
@@ -152,8 +204,11 @@ class MoleculeRecord(_BaseStoredModel):
                 ordering.
 
         Returns
-            The reordered record.
+            The reordered record, or the existing record if its order already matches.
         """
+
+        if self.smiles == expected_smiles:
+            return self
 
         map_indices = map_indexed_smiles(expected_smiles, self.smiles)
         inverse_map = {j: i for i, j in map_indices.items()}
@@ -167,26 +222,26 @@ class MoleculeRecord(_BaseStoredModel):
             conformers=[
                 ConformerRecord(
                     coordinates=conformer.coordinates[map_indices_array],
-                    partial_charges=[
+                    partial_charges=tuple(
                         PartialChargeSet(
                             method=charge_set.method,
-                            values=[
+                            values=tuple(
                                 charge_set.values[map_indices[i]]
                                 for i in range(len(map_indices))
-                            ],
+                            ),
                         )
                         for charge_set in conformer.partial_charges
-                    ],
-                    bond_orders=[
+                    ),
+                    bond_orders=tuple(
                         WibergBondOrderSet(
                             method=bond_order_set.method,
-                            values=[
+                            values=tuple(
                                 (inverse_map[index_a], inverse_map[index_b], value)
                                 for (index_a, index_b, value) in bond_order_set.values
-                            ],
+                            ),
                         )
                         for bond_order_set in conformer.bond_orders
-                    ],
+                    ),
                 )
                 for conformer in self.conformers
             ],
@@ -337,7 +392,7 @@ class MoleculeStore:
             session.close()
 
     @classmethod
-    @functools.lru_cache(512)
+    @functools.lru_cache(2048)
     @requires_package("openff.toolkit")
     def _to_canonical_smiles(cls, smiles: str) -> str:
         """Converts a SMILES pattern which may contain atom indices into
@@ -359,10 +414,10 @@ class MoleculeStore:
         )
 
     @classmethod
-    @functools.lru_cache(512)
+    @functools.lru_cache(2048)
     @requires_package("openff.toolkit")
-    def _to_hill_formula(cls, smiles: str) -> str:
-        """Converts a SMILES pattern to a Hill ordered molecular formula.
+    def _to_inchi_key(cls, smiles: str) -> str:
+        """Converts a SMILES pattern to a InChI key representation.
 
         Parameters
         ----------
@@ -371,11 +426,13 @@ class MoleculeStore:
 
         Returns
         -------
-            The Hill ordered molecular formula.
+            The InChI key representation.
         """
         from openff.toolkit.topology import Molecule
 
-        return Molecule.from_smiles(smiles, allow_undefined_stereo=True).hill_formula
+        return Molecule.from_smiles(smiles, allow_undefined_stereo=True).to_inchikey(
+            fixed_hydrogens=True
+        )
 
     @classmethod
     @requires_package("openff.toolkit")
@@ -418,12 +475,7 @@ class MoleculeStore:
                 are_identical = are_conformers_identical(
                     molecule,
                     conformer.coordinates,
-                    numpy.array(
-                        [
-                            [db_coordinate.x, db_coordinate.y, db_coordinate.z]
-                            for db_coordinate in db_conformer.coordinates
-                        ]
-                    ),
+                    db_conformer.coordinates,
                 )
 
                 if not are_identical:
@@ -443,8 +495,8 @@ class MoleculeStore:
     def _store_conformer_records(
         cls, smiles: str, db_parent: DBMoleculeRecord, records: List[ConformerRecord]
     ):
+        """Store a set of conformer records in an existing DB molecule record."""
 
-        # Find any matching conformers
         conformer_matches = cls._match_conformers(smiles, db_parent.conformers, records)
 
         # Create new database conformers for those unmatched conformers.
@@ -453,16 +505,7 @@ class MoleculeStore:
         for index in missing_indices:
             # noinspection PyTypeChecker
             db_parent.conformers.append(
-                DBConformerRecord(
-                    coordinates=[
-                        DBCoordinate(
-                            x=records[index].coordinates[i, 0],
-                            y=records[index].coordinates[i, 1],
-                            z=records[index].coordinates[i, 2],
-                        )
-                        for i in range(len(records[index].coordinates))
-                    ]
-                )
+                DBConformerRecord(coordinates=records[index].coordinates)
             )
             conformer_matches[index] = len(db_parent.conformers) - 1
 
@@ -484,10 +527,7 @@ class MoleculeStore:
                 db_record.partial_charges.append(
                     DBPartialChargeSet(
                         method=partial_charges.method,
-                        values=[
-                            DBPartialCharge(value=value)
-                            for value in partial_charges.values
-                        ],
+                        values=partial_charges.values,
                     )
                 )
 
@@ -504,86 +544,62 @@ class MoleculeStore:
 
                 db_record.bond_orders.append(
                     DBWibergBondOrderSet(
-                        method=bond_orders.method,
-                        values=[
-                            DBWibergBondOrder(
-                                index_a=index_a, index_b=index_b, value=value
-                            )
-                            for (index_a, index_b, value) in bond_orders.values
-                        ],
+                        method=bond_orders.method, values=bond_orders.values
                     )
                 )
 
     @classmethod
-    def _store_records_with_formula(
-        cls, db: Session, hill_formula: str, records: List[MoleculeRecord]
+    def _store_records_with_inchi_key(
+        cls, db: Session, inchi_key: str, records: List[MoleculeRecord]
     ):
-        """Stores a set of records which all store information for the same
-        molecule.
+        """Stores a set of records which all store information for molecules with the
+        same hill formula.
+
+        Notes
+        -----
+        * We split by the hill formula to speed up finding molecules that already exist
+        in the data
 
         Parameters
         ----------
         db
             The current database session.
-        hill_formula
-            The indexed SMILES representation of the molecule.
+        inchi_key
+            The **fixed hydrogen** InChI key representation of the molecule stored in
+            the records.
         records
             The records to store.
         """
 
-        # Partition the records by their unique SMILES patterns.
-        records_by_smiles = defaultdict(list)
-
-        for record in records:
-
-            canonical_smiles = cls._to_canonical_smiles(record.smiles)
-            records_by_smiles[canonical_smiles].append(record)
-
-        # Find all of the records which have the same hill formula and partition them
-        # by their unique, index-less SMILES patterns.
         existing_db_records: Collection[DBMoleculeRecord] = (
             db.query(DBMoleculeRecord)
-            .filter(DBMoleculeRecord.hill_formula == hill_formula)
+            .filter(DBMoleculeRecord.inchi_key == inchi_key)
             .all()
         )
 
-        db_records_by_smiles = {
-            cls._to_canonical_smiles(db_record.smiles): db_record
-            for db_record in existing_db_records
-        }
-
-        if len(db_records_by_smiles) != len(existing_db_records):
-            # Sanity check that no two DB records have the same SMILES patterns
-            # i.e. differ only by atom ordering.
+        if len(existing_db_records) > 1:
+            # Sanity check that no two DB records have the same InChI key
             raise RuntimeError("The database is not self consistent.")
 
-        # Create new DB records for molecules not yet in the DB.
-        for smiles in {*records_by_smiles} - {*db_records_by_smiles}:
+        db_record = (
+            DBMoleculeRecord(inchi_key=inchi_key, smiles=records[0].smiles)
+            if len(existing_db_records) == 0
+            else next(iter(existing_db_records))
+        )
 
-            db_records_by_smiles[smiles] = DBMoleculeRecord(
-                hill_formula=hill_formula, smiles=records[0].smiles
-            )
+        # Retrieve the DB indexed SMILES that defines the ordering the atoms in each
+        # record should have and re-order the incoming records to match.
+        expected_smiles = db_record.smiles
 
-        # Handle the re-ordering of conformers to match the expected DB order.
-        for smiles in records_by_smiles:
+        conformer_records = [
+            conformer_record
+            for record in records
+            for conformer_record in record.reorder(expected_smiles).conformers
+        ]
 
-            db_record = db_records_by_smiles[smiles]
+        cls._store_conformer_records(expected_smiles, db_record, conformer_records)
 
-            # Retrieve the DB indexed SMILES which defines what ordering the
-            # atoms in each record should have.
-            expected_smiles = db_record.smiles
-
-            # Re-order the records to match the database.
-            conformer_records = [
-                conformer_record
-                for record in records_by_smiles[smiles]
-                for conformer_record in record.reorder(expected_smiles).conformers
-            ]
-
-            cls._store_conformer_records(expected_smiles, db_record, conformer_records)
-
-        for db_record in db_records_by_smiles.values():
-            db.add(db_record)
+        db.add(db_record)
 
     def store(self, *records: MoleculeRecord):
         """Store the molecules and their computed properties in the data store.
@@ -594,22 +610,15 @@ class MoleculeStore:
             The records to store.
         """
 
-        # Validate and re-partition the records by their Hill formula.
-        records_by_formula: Dict[str, List[MoleculeRecord]] = defaultdict(list)
+        records_by_inchi_key: Dict[str, List[MoleculeRecord]] = defaultdict(list)
 
         for record in records:
+            records_by_inchi_key[self._to_inchi_key(record.smiles)].append(record)
 
-            record = record.copy(deep=True)
-            records_by_formula[self._to_hill_formula(record.smiles)].append(record)
-
-        # Store the records.
         with self._get_session() as db:
 
-            for hill_formula in records_by_formula:
-
-                self._store_records_with_formula(
-                    db, hill_formula, records_by_formula[hill_formula]
-                )
+            for inchi_key, inchi_records in records_by_inchi_key.items():
+                self._store_records_with_inchi_key(db, inchi_key, inchi_records)
 
     @classmethod
     def _db_records_to_model(
@@ -637,18 +646,11 @@ class MoleculeStore:
                 smiles=db_record.smiles,
                 conformers=[
                     ConformerRecord(
-                        coordinates=numpy.array(
-                            [
-                                [db_coordinate.x, db_coordinate.y, db_coordinate.z]
-                                for db_coordinate in db_conformer.coordinates
-                            ]
-                        ),
+                        coordinates=db_conformer.coordinates,
                         partial_charges=[
                             PartialChargeSet(
                                 method=db_partial_charges.method,
-                                values=[
-                                    value.value for value in db_partial_charges.values
-                                ],
+                                values=db_partial_charges.values,
                             )
                             for db_partial_charges in db_conformer.partial_charges
                             if partial_charge_method is None
@@ -657,10 +659,7 @@ class MoleculeStore:
                         bond_orders=[
                             WibergBondOrderSet(
                                 method=db_bond_orders.method,
-                                values=[
-                                    (value.index_a, value.index_b, value.value)
-                                    for value in db_bond_orders.values
-                                ],
+                                values=db_bond_orders.values,
                             )
                             for db_bond_orders in db_conformer.bond_orders
                             if bond_order_method is None

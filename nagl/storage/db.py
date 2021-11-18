@@ -1,32 +1,10 @@
-from sqlalchemy import Column, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Column, ForeignKey, Integer, PickleType, String, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
 DBBase = declarative_base()
 
 DB_VERSION = 1
-
-
-class DBCoordinate(DBBase):
-
-    __tablename__ = "coordinates"
-
-    id = Column(Integer, primary_key=True, index=True)
-    parent_id = Column(Integer, ForeignKey("conformers.id"), nullable=False)
-
-    x = Column(Float, nullable=False)
-    y = Column(Float, nullable=False)
-    z = Column(Float, nullable=False)
-
-
-class DBPartialCharge(DBBase):
-
-    __tablename__ = "partial_charges"
-
-    id = Column(Integer, primary_key=True, index=True)
-    parent_id = Column(Integer, ForeignKey("partial_charge_sets.id"), nullable=False)
-
-    value = Column(Float, nullable=False)
 
 
 class DBPartialChargeSet(DBBase):
@@ -37,25 +15,11 @@ class DBPartialChargeSet(DBBase):
     parent_id = Column(Integer, ForeignKey("conformers.id"), nullable=False)
 
     method = Column(String(10), nullable=False)
-
-    values = relationship("DBPartialCharge")
+    values = Column(PickleType, nullable=False)
 
     __table_args__ = (
         UniqueConstraint("parent_id", "method", name="_pc_parent_method_uc"),
     )
-
-
-class DBWibergBondOrder(DBBase):
-
-    __tablename__ = "wiberg_bond_orders"
-
-    id = Column(Integer, primary_key=True, index=True)
-    parent_id = Column(Integer, ForeignKey("wiberg_bond_order_sets.id"), nullable=False)
-
-    index_a = Column(Integer, nullable=False)
-    index_b = Column(Integer, nullable=False)
-
-    value = Column(Float, nullable=False)
 
 
 class DBWibergBondOrderSet(DBBase):
@@ -66,8 +30,7 @@ class DBWibergBondOrderSet(DBBase):
     parent_id = Column(Integer, ForeignKey("conformers.id"), nullable=False)
 
     method = Column(String(10), nullable=False)
-
-    values = relationship("DBWibergBondOrder")
+    values = Column(PickleType, nullable=False)
 
     __table_args__ = (
         UniqueConstraint("parent_id", "method", name="_wbo_parent_method_uc"),
@@ -81,7 +44,7 @@ class DBConformerRecord(DBBase):
     id = Column(Integer, primary_key=True, index=True)
     parent_id = Column(String, ForeignKey("molecules.id"), nullable=False)
 
-    coordinates = relationship("DBCoordinate")
+    coordinates = Column(PickleType, nullable=False)
 
     partial_charges = relationship("DBPartialChargeSet")
     bond_orders = relationship("DBWibergBondOrderSet")
@@ -93,7 +56,7 @@ class DBMoleculeRecord(DBBase):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    hill_formula = Column(String(20), nullable=False)
+    inchi_key = Column(String(20), nullable=False)
     smiles = Column(String, nullable=False)
 
     conformers = relationship("DBConformerRecord")
