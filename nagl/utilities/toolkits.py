@@ -2,20 +2,33 @@
 available in the OpenFF toolkit.
 """
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Generator
+from typing import TYPE_CHECKING, Generator, Literal, overload
 
 from openff.utilities import requires_package
 from openff.utilities.utilities import MissingOptionalDependency
 
 if TYPE_CHECKING:
+
     from openff.toolkit.topology import Molecule
+
+
+@overload
+def _oe_stream_from_file(
+    file_path: str, as_smiles: Literal[True] = True
+) -> Generator[str, None, None]:  # pragma: no cover
+    ...
+
+
+@overload
+def _oe_stream_from_file(
+    file_path: str, as_smiles: Literal[False] = False
+) -> Generator["Molecule", None, None]:  # pragma: no cover
+    ...
 
 
 @requires_package("openeye.oechem")
 @requires_package("openff.toolkit")
-def _oe_stream_from_file(
-    file_path: str,
-) -> Generator["Molecule", None, None]:  # pragma: no cover
+def _oe_stream_from_file(file_path: str, as_smiles=False):  # pragma: no cover
 
     from openeye import oechem
     from openff.toolkit.topology import Molecule
@@ -24,12 +37,28 @@ def _oe_stream_from_file(
     input_molecule_stream.open(file_path)
 
     for oe_molecule in input_molecule_stream.GetOEMols():
-        yield Molecule.from_openeye(oe_molecule, allow_undefined_stereo=True)
+        yield oechem.OEMolToSmiles(oe_molecule) if as_smiles else Molecule.from_openeye(
+            oe_molecule, allow_undefined_stereo=True
+        )
+
+
+@overload
+def _rdkit_stream_from_file(
+    file_path: str, as_smiles: Literal[True] = True
+) -> Generator[str, None, None]:  # pragma: no cover
+    ...
+
+
+@overload
+def _rdkit_stream_from_file(
+    file_path: str, as_smiles: Literal[False] = False
+) -> Generator["Molecule", None, None]:  # pragma: no cover
+    ...
 
 
 @requires_package("rdkit")
 @requires_package("openff.toolkit")
-def _rdkit_stream_from_file(file_path: str) -> Generator["Molecule", None, None]:
+def _rdkit_stream_from_file(file_path: str, as_smiles=False):
 
     from openff.toolkit.topology import Molecule
     from rdkit import Chem
@@ -43,16 +72,32 @@ def _rdkit_stream_from_file(file_path: str) -> Generator["Molecule", None, None]
 
         Chem.AddHs(rd_molecule)
 
-        yield Molecule.from_rdkit(rd_molecule, allow_undefined_stereo=True)
+        yield Chem.MolToSmiles(rd_molecule) if as_smiles else Molecule.from_rdkit(
+            rd_molecule, allow_undefined_stereo=True
+        )
 
 
-def stream_from_file(file_path: str) -> Generator["Molecule", None, None]:
+@overload
+def stream_from_file(
+    file_path: str, as_smiles: Literal[True] = True
+) -> Generator[str, None, None]:  # pragma: no cover
+    ...
+
+
+@overload
+def stream_from_file(
+    file_path: str, as_smiles: Literal[False] = False
+) -> Generator["Molecule", None, None]:  # pragma: no cover
+    ...
+
+
+def stream_from_file(file_path: str, as_smiles: bool = False):
 
     try:
-        for molecule in _oe_stream_from_file(file_path):
+        for molecule in _oe_stream_from_file(file_path, as_smiles):
             yield molecule
     except MissingOptionalDependency:
-        for molecule in _rdkit_stream_from_file(file_path):
+        for molecule in _rdkit_stream_from_file(file_path, as_smiles):
             yield molecule
 
 
@@ -134,7 +179,8 @@ def capture_toolkit_warnings():  # pragma: no cover
     logging.getLogger("openff.toolkit").setLevel(logging.ERROR)
 
     try:
-        yield _oe_capture_warnings()
+        with _oe_capture_warnings():
+            yield
     except MissingOptionalDependency:
         yield
 

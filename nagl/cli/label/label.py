@@ -1,11 +1,11 @@
+import functools
 import math
 import traceback
 from datetime import datetime
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import click
 from click_option_group import optgroup
-from openff.toolkit.utils import UndefinedStereochemistryError
 from openff.utilities import requires_package
 from tqdm import tqdm
 
@@ -21,16 +21,15 @@ from nagl.utilities.provenance import get_labelling_software_provenance
 from nagl.utilities.smiles import smiles_to_molecule
 from nagl.utilities.toolkits import capture_toolkit_warnings, stream_from_file
 
-if TYPE_CHECKING:
-    from openff.toolkit.topology import Molecule
-
 _OPENFF_CHARGE_METHODS = {"am1": "am1-mulliken", "am1bcc": "am1bcc"}
 
 
 @requires_package("openff.toolkit")
-def _label_molecule(molecule: "Molecule") -> MoleculeRecord:
+def _label_molecule(smiles: str, guess_stereochemistry: bool) -> MoleculeRecord:
 
     from simtk import unit
+
+    molecule = smiles_to_molecule(smiles, guess_stereochemistry=guess_stereochemistry)
 
     # Generate a diverse set of ELF10 conformers
     molecule.generate_conformers(n_conformers=500, rms_cutoff=0.05 * unit.angstrom)
@@ -89,7 +88,7 @@ def _label_molecule(molecule: "Molecule") -> MoleculeRecord:
 
 @requires_package("openff.toolkit")
 def label_molecule_batch(
-    molecules: List["Molecule"],
+    smiles: List[str], guess_stereochemistry: bool
 ) -> List[Tuple[Optional[MoleculeRecord], Optional[str]]]:
     """Labels a batch of molecules using ``compute_am1_charge_and_wbo``.
 
@@ -102,20 +101,23 @@ def label_molecule_batch(
 
     molecule_records = []
 
-    for molecule in molecules:
+    with capture_toolkit_warnings():
 
-        molecule_record = None
-        error = None
+        for pattern in smiles:
 
-        try:
-            molecule_record = _label_molecule(molecule)
-        except (BaseException, Exception) as e:
-            error = (
-                f"Failed to process {molecule.to_smiles(explicit_hydrogens=False)}: "
-                f"{traceback.format_exception(etype=type(e), value=e, tb=e.__traceback__)}"
-            )
+            molecule_record = None
+            error = None
 
-        molecule_records.append((molecule_record, error))
+            try:
+                molecule_record = _label_molecule(pattern, guess_stereochemistry)
+            except (BaseException, Exception) as e:
+
+                formatted_traceback = traceback.format_exception(
+                    etype=type(e), value=e, tb=e.__traceback__
+                )
+                error = f"Failed to process {pattern}: {formatted_traceback}"
+
+            molecule_records.append((molecule_record, error))
 
     return molecule_records
 
@@ -221,25 +223,16 @@ def label_cli(
 
     with capture_toolkit_warnings():
 
-        molecules = []
+        smiles = [
+            smiles
+            for smiles in tqdm(
+                stream_from_file(input_path, as_smiles=True),
+                desc="loading molecules",
+                ncols=80,
+            )
+        ]
 
-        for molecule in stream_from_file(input_path):
-
-            try:
-
-                molecule = smiles_to_molecule(
-                    molecule.to_smiles(), guess_stereochemistry=guess_stereo
-                )
-                molecules.append(molecule)
-
-            except UndefinedStereochemistryError:
-
-                print(
-                    f"Skipping {molecule.to_smiles()} due to unguessable "
-                    f"stereochemistry."
-                )
-
-    n_batches = int(math.ceil(len(molecules) / batch_size))
+    n_batches = int(math.ceil(len(smiles) / batch_size))
 
     if n_workers < 0:
         n_workers = n_batches
@@ -263,7 +256,7 @@ def label_cli(
         raise NotImplementedError()
 
     print(
-        f"   * {len(molecules)} molecules will labelled in {n_batches} batches across "
+        f"   * {len(smiles)} molecules will labelled in {n_batches} batches across "
         f"{n_workers} workers\n"
     )
 
@@ -277,8 +270,11 @@ def label_cli(
             yield iterable[i : min(i + batch_size, n_iterables)]
 
     futures = [
-        dask_client.submit(label_molecule_batch, batched_molecules)
-        for batched_molecules in batch(molecules)
+        dask_client.submit(
+            functools.partial(label_molecule_batch, guess_stereochemistry=guess_stereo),
+            batched_molecules,
+        )
+        for batched_molecules in batch(smiles)
     ]
 
     # Create a database to store the labelled molecules in and store general
@@ -298,7 +294,10 @@ def label_cli(
     with open(error_file_path, "w") as file:
 
         for future in tqdm(
-            distributed.as_completed(futures, raise_errors=False), total=n_batches
+            distributed.as_completed(futures, raise_errors=False),
+            total=n_batches,
+            desc="labelling molecules",
+            ncols=80,
         ):
 
             for molecule_record, error in future.result():
@@ -324,3 +323,7 @@ def label_cli(
 
     if worker_type == "lsf":
         dask_cluster.scale(n=0)
+
+
+if __name__ == "__main__":
+    label_cli()
