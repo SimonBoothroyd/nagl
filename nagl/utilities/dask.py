@@ -43,7 +43,11 @@ def setup_dask_lsf_cluster(
     Returns:
         The initialized cluster.
     """
+    import dask
     from dask_jobqueue import LSFCluster
+
+    env_extra = dask.config.get("jobqueue.lsf.env-extra", default=[])
+    env_extra.append(f"conda activate {environment_name}")
 
     cluster = LSFCluster(
         queue=queue,
@@ -52,7 +56,7 @@ def setup_dask_lsf_cluster(
         walltime=wall_time,
         local_directory="dask-worker-space",
         log_directory="dask-worker-logs",
-        env_extra=[f"conda activate {environment_name}"],
+        env_extra=env_extra,
     )
     cluster.scale(n=n_workers)
 

@@ -103,7 +103,7 @@ def label_molecule_batch(
 
     with capture_toolkit_warnings():
 
-        for pattern in smiles:
+        for pattern in tqdm(smiles):
 
             molecule_record = None
             error = None
