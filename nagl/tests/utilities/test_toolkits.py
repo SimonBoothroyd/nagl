@@ -1,7 +1,12 @@
+import pytest
 from openff.toolkit.topology import Molecule
 from openff.utilities import temporary_cd
 
-from nagl.utilities.toolkits import stream_from_file, stream_to_file
+from nagl.utilities.toolkits import (
+    smiles_to_inchi_key,
+    stream_from_file,
+    stream_to_file,
+)
 
 
 def test_read_write_streams():
@@ -21,3 +26,17 @@ def test_read_write_streams():
     assert {molecule.to_smiles() for molecule in molecules} == {
         molecule.to_smiles() for molecule in loaded_molecules
     }
+
+
+@pytest.mark.parametrize(
+    "smiles, expected",
+    [
+        ("Cl", "VEXZGXHMUGYJMC-UHFFFAOYNA-N"),
+        ("[H]Cl", "VEXZGXHMUGYJMC-UHFFFAOYNA-N"),
+        ("[Cl:2][H:1]", "VEXZGXHMUGYJMC-UHFFFAOYNA-N"),
+        ("C", "VNWKTOKETHGBQD-UHFFFAOYNA-N"),
+        ("[CH4]", "VNWKTOKETHGBQD-UHFFFAOYNA-N"),
+    ],
+)
+def test_smiles_to_inchi_key(smiles, expected):
+    assert smiles_to_inchi_key(smiles) == expected

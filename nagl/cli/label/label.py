@@ -1,4 +1,5 @@
 import functools
+import logging
 import math
 import traceback
 from datetime import datetime
@@ -22,6 +23,8 @@ from nagl.utilities.smiles import smiles_to_molecule
 from nagl.utilities.toolkits import capture_toolkit_warnings, stream_from_file
 
 _OPENFF_CHARGE_METHODS = {"am1": "am1-mulliken", "am1bcc": "am1bcc"}
+
+_logger = logging.getLogger(__name__)
 
 
 @requires_package("openff.toolkit")
@@ -103,7 +106,7 @@ def label_molecule_batch(
 
     with capture_toolkit_warnings():
 
-        for pattern in tqdm(smiles):
+        for pattern in tqdm(smiles, ncols=80, desc="labelling batch"):
 
             molecule_record = None
             error = None
@@ -219,7 +222,9 @@ def label_cli(
 
     from dask import distributed
 
-    print(" - Labeling molecules")
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+    _logger.info("Labeling molecules")
 
     with capture_toolkit_warnings():
 
@@ -236,9 +241,8 @@ def label_cli(
 
     if len(unique_smiles) != len(all_smiles):
 
-        print(
-            f"\n    [WARNING] {len(all_smiles) - len(unique_smiles)} duplicate "
-            f"molecules were ignored"
+        _logger.warning(
+            f"{len(all_smiles) - len(unique_smiles)} duplicate molecules were ignored"
         )
 
     n_batches = int(math.ceil(len(all_smiles) / batch_size))
@@ -247,9 +251,10 @@ def label_cli(
         n_workers = n_batches
 
     if n_workers > n_batches:
-        print(
-            f"\n    [WARNING] More workers were requested then there are batches to "
-            f"compute. Only {n_batches} workers will be requested.\n"
+
+        _logger.warning(
+            f"More workers were requested then there are batches to compute. Only "
+            f"{n_batches} workers will be requested."
         )
 
         n_workers = n_batches
@@ -264,9 +269,9 @@ def label_cli(
     else:
         raise NotImplementedError()
 
-    print(
-        f"   * {len(unique_smiles)} molecules will labelled in {n_batches} batches "
-        f"across {n_workers} workers\n"
+    _logger.info(
+        f"{len(unique_smiles)} molecules will labelled in {n_batches} batches across "
+        f"{n_workers} workers\n"
     )
 
     dask_client = distributed.Client(dask_cluster)
@@ -309,12 +314,20 @@ def label_cli(
             ncols=80,
         ):
 
-            for molecule_record, error in future.result():
+            for molecule_record, error in tqdm(
+                future.result(),
+                desc="storing batch",
+                ncols=80,
+            ):
 
                 try:
-                    if molecule_record is not None and error is None:
-                        storage.store(molecule_record)
-                except (BaseException, Exception) as e:
+
+                    with capture_toolkit_warnings():
+
+                        if molecule_record is not None and error is None:
+                            storage.store(molecule_record)
+
+                except BaseException as e:
 
                     formatted_traceback = traceback.format_exception(
                         etype=type(e), value=e, tb=e.__traceback__
@@ -325,6 +338,7 @@ def label_cli(
 
                     file.write("=".join(["="] * 40) + "\n")
                     file.write(error + "\n")
+                    file.flush()
 
                     continue
 

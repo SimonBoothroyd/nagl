@@ -1,7 +1,7 @@
 """This module contains classes to store labelled molecules within a compact database
 structure.
 """
-import functools
+import logging
 from collections import defaultdict
 from contextlib import contextmanager
 from typing import (
@@ -36,11 +36,14 @@ from nagl.storage.db import (
 from nagl.storage.exceptions import IncompatibleDBVersion
 from nagl.utilities.rmsd import are_conformers_identical
 from nagl.utilities.smiles import map_indexed_smiles
+from nagl.utilities.toolkits import smiles_to_inchi_key
 
 if TYPE_CHECKING:
     Array = numpy.ndarray
 else:
     from nagl.utilities.pydantic import Array
+
+_logger = logging.getLogger(__name__)
 
 
 ChargeMethod = Literal["am1", "am1bcc"]
@@ -392,49 +395,6 @@ class MoleculeStore:
             session.close()
 
     @classmethod
-    @functools.lru_cache(2048)
-    @requires_package("openff.toolkit")
-    def _to_canonical_smiles(cls, smiles: str) -> str:
-        """Converts a SMILES pattern which may contain atom indices into
-        a canonical SMILES pattern without indices.
-
-        Parameters
-        ----------
-        smiles
-            The smiles pattern to convert.
-
-        Returns
-        -------
-            The canonical smiles pattern.
-        """
-        from openff.toolkit.topology import Molecule
-
-        return Molecule.from_smiles(smiles, allow_undefined_stereo=True).to_smiles(
-            isomeric=False, explicit_hydrogens=False
-        )
-
-    @classmethod
-    @functools.lru_cache(2048)
-    @requires_package("openff.toolkit")
-    def _to_inchi_key(cls, smiles: str) -> str:
-        """Converts a SMILES pattern to a InChI key representation.
-
-        Parameters
-        ----------
-        smiles
-            The smiles pattern to convert.
-
-        Returns
-        -------
-            The InChI key representation.
-        """
-        from openff.toolkit.topology import Molecule
-
-        return Molecule.from_smiles(smiles, allow_undefined_stereo=True).to_inchikey(
-            fixed_hydrogens=True
-        )
-
-    @classmethod
     @requires_package("openff.toolkit")
     def _match_conformers(
         cls,
@@ -496,6 +456,13 @@ class MoleculeStore:
         cls, smiles: str, db_parent: DBMoleculeRecord, records: List[ConformerRecord]
     ):
         """Store a set of conformer records in an existing DB molecule record."""
+
+        if len(db_parent.conformers) > 0:
+
+            _logger.warning(
+                f"An entry for {smiles} is already present in the molecule store. "
+                f"Trying to find matching conformers."
+            )
 
         conformer_matches = cls._match_conformers(smiles, db_parent.conformers, records)
 
@@ -613,7 +580,7 @@ class MoleculeStore:
         records_by_inchi_key: Dict[str, List[MoleculeRecord]] = defaultdict(list)
 
         for record in records:
-            records_by_inchi_key[self._to_inchi_key(record.smiles)].append(record)
+            records_by_inchi_key[smiles_to_inchi_key(record.smiles)].append(record)
 
         with self._get_session() as db:
 

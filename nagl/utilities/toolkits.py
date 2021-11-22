@@ -37,8 +37,11 @@ def _oe_stream_from_file(file_path: str, as_smiles=False):  # pragma: no cover
     input_molecule_stream.open(file_path)
 
     for oe_molecule in input_molecule_stream.GetOEMols():
-        yield oechem.OEMolToSmiles(oe_molecule) if as_smiles else Molecule.from_openeye(
-            oe_molecule, allow_undefined_stereo=True
+
+        yield (
+            oechem.OEMolToSmiles(oe_molecule)
+            if as_smiles
+            else Molecule.from_openeye(oe_molecule, allow_undefined_stereo=True)
         )
 
 
@@ -185,3 +188,34 @@ def capture_toolkit_warnings():  # pragma: no cover
         yield
 
     logging.getLogger("openff.toolkit").setLevel(openff_logger_level)
+
+
+@requires_package("openeye.oechem")
+def _oe_smiles_to_inchi_key(smiles: str) -> str:  # pragma: no cover
+
+    from openeye import oechem
+
+    oe_molecule = oechem.OEMol()
+    oechem.OESmilesToMol(oe_molecule, smiles)
+
+    opts = oechem.OEInChIOptions()
+    opts.SetFixedHLayer(True)
+
+    return oechem.OEMolToInChIKey(oe_molecule)
+
+
+@requires_package("rdkit")
+def _rdkit_smiles_to_inchi_key(smiles: str) -> str:
+
+    from rdkit import Chem
+
+    rd_molecule = Chem.MolFromSmiles(smiles)
+    return Chem.MolToInchiKey(rd_molecule, options="-FixedH")
+
+
+def smiles_to_inchi_key(smiles: str) -> str:
+
+    try:
+        return _oe_smiles_to_inchi_key(smiles)
+    except MissingOptionalDependency:
+        return _rdkit_smiles_to_inchi_key(smiles)

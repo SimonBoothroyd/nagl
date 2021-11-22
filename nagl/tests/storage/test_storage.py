@@ -306,22 +306,6 @@ class TestMoleculeStore:
         assert error_info.value.found_version == DB_VERSION - 1
         assert error_info.value.expected_version == DB_VERSION
 
-    def test_to_canonical_smiles(self):
-        assert MoleculeStore._to_canonical_smiles("[Cl:2][H:1]") == "Cl"
-
-    @pytest.mark.parametrize(
-        "smiles, expected",
-        [
-            ("Cl", "VEXZGXHMUGYJMC-UHFFFAOYNA-N"),
-            ("[H]Cl", "VEXZGXHMUGYJMC-UHFFFAOYNA-N"),
-            ("[Cl:2][H:1]", "VEXZGXHMUGYJMC-UHFFFAOYNA-N"),
-            ("C", "VNWKTOKETHGBQD-UHFFFAOYNA-N"),
-            ("[CH4]", "VNWKTOKETHGBQD-UHFFFAOYNA-N"),
-        ],
-    )
-    def test_to_inchi_key(self, smiles, expected):
-        assert MoleculeStore._to_inchi_key(smiles) == expected
-
     def test_match_conformers(self):
 
         matches = MoleculeStore._match_conformers(
