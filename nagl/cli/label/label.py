@@ -223,7 +223,7 @@ def label_cli(
 
     with capture_toolkit_warnings():
 
-        smiles = [
+        all_smiles = [
             smiles
             for smiles in tqdm(
                 stream_from_file(input_path, as_smiles=True),
@@ -232,7 +232,16 @@ def label_cli(
             )
         ]
 
-    n_batches = int(math.ceil(len(smiles) / batch_size))
+    unique_smiles = sorted({*all_smiles})
+
+    if len(unique_smiles) != len(all_smiles):
+
+        print(
+            f"\n    [WARNING] {len(all_smiles) - len(unique_smiles)} duplicate "
+            f"molecules were ignored"
+        )
+
+    n_batches = int(math.ceil(len(all_smiles) / batch_size))
 
     if n_workers < 0:
         n_workers = n_batches
@@ -256,8 +265,8 @@ def label_cli(
         raise NotImplementedError()
 
     print(
-        f"   * {len(smiles)} molecules will labelled in {n_batches} batches across "
-        f"{n_workers} workers\n"
+        f"   * {len(unique_smiles)} molecules will labelled in {n_batches} batches "
+        f"across {n_workers} workers\n"
     )
 
     dask_client = distributed.Client(dask_cluster)
@@ -274,7 +283,7 @@ def label_cli(
             functools.partial(label_molecule_batch, guess_stereochemistry=guess_stereo),
             batched_molecules,
         )
-        for batched_molecules in batch(smiles)
+        for batched_molecules in batch(unique_smiles)
     ]
 
     # Create a database to store the labelled molecules in and store general
