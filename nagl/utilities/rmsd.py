@@ -1,107 +1,158 @@
 """A module containing utilities for computing the RMSD between a molecule
 in different conformers.
 """
+import itertools
 from collections import defaultdict
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 import numpy
 from openff.utilities import requires_package
+
+from nagl.utilities.toolkits import get_atom_symmetries
 
 if TYPE_CHECKING:
     from openff.toolkit.topology import Molecule
 
 
-def _compute_rmsd(
-    conformer_a: numpy.ndarray, conformer_b: numpy.ndarray, align: bool = True
-) -> Tuple[float, numpy.ndarray]:
+def align_conformers(
+    conformer_a: numpy.ndarray,
+    conformer_b: numpy.ndarray,
+    subset_indices_a: Optional[List[int]] = None,
+    subset_indices_b: Optional[List[int]] = None,
+) -> Tuple[numpy.ndarray, numpy.ndarray]:
+    """A method align two conformers using the Kabsch algorithm.
+
+    Args:
+        conformer_a: The first conformer with shape=(n_atoms, 3).
+        conformer_b: The second conformer with shape=(n_atoms, 3).
+        subset_indices_a: The (optional) subset of atom indices in the first conformer to
+            attempt to align using.
+        subset_indices_b: The (optional) subset of atom indices in the second conformer
+            to attempt to align using.
+    Returns:
+        The aligned conformers.
+    """
+
+    assert (subset_indices_a is None and subset_indices_b is None) or (
+        subset_indices_a is not None and subset_indices_b is not None
+    ), "either both or neither of the basis indices arguments need to be provided"
+
+    subset_indices_a = (
+        subset_indices_a
+        if subset_indices_a is not None
+        else list(range(conformer_a.shape[0]))
+    )
+    subset_indices_b = (
+        subset_indices_b
+        if subset_indices_b is not None
+        else list(range(conformer_b.shape[0]))
+    )
+
+    conformer_a = conformer_a - conformer_a[subset_indices_a, :].mean(axis=0)
+    conformer_b = conformer_b - conformer_b[subset_indices_b, :].mean(axis=0)
+
+    # From https://en.wikipedia.org/wiki/Kabsch_algorithm
+    h = numpy.dot(conformer_a[subset_indices_a, :].T, conformer_b[subset_indices_b, :])
+
+    u, s, v_transpose = numpy.linalg.svd(h)
+
+    v_u_transpose = v_transpose.T @ u.T
+
+    d = numpy.sign(numpy.linalg.det(v_u_transpose))
+
+    rotation_matrix = v_transpose.T @ numpy.diag([1.0, 1.0, d]) @ u.T
+
+    return conformer_a, conformer_b @ rotation_matrix
+
+
+def compute_rmsd(
+    conformer_a: numpy.ndarray,
+    conformer_b: numpy.ndarray,
+) -> float:
     """A method which will compute the RMSD between two conformers
 
     Args:
         conformer_a: The first conformer with shape=(n_atoms, 3).
         conformer_b: The second conformer with shape=(n_atoms, 3).
-        align: Whether to attempt to align the two conformers using the Kabsch algorithm
 
     Returns:
-        The RMSD and the rotation matrix used to align the two conformers. The
-        identity rotation matrix will always be returned if ``align`` is false.
+        The computed RMSD.
     """
-
-    conformer_a = conformer_a - conformer_a.mean(axis=0)
-    conformer_b = conformer_b - conformer_b.mean(axis=0)
-
-    if align:
-
-        # From https://en.wikipedia.org/wiki/Kabsch_algorithm
-        h = numpy.dot(conformer_a.T, conformer_b)
-
-        u, s, v_transpose = numpy.linalg.svd(h)
-
-        v_u_transpose = v_transpose.T @ u.T
-
-        d = numpy.sign(numpy.linalg.det(v_u_transpose))
-
-        rotation_matrix = v_transpose.T @ numpy.diag([1.0, 1.0, d]) @ u.T
-        conformer_b = conformer_b @ rotation_matrix
-    else:
-        rotation_matrix = numpy.eye(3)
 
     delta = numpy.array(conformer_a) - numpy.array(conformer_b)
     rmsd = numpy.sqrt((delta * delta).sum() / len(conformer_b))
 
-    return rmsd, rotation_matrix
+    return rmsd
 
 
-def compute_rmsd(conformer_a: numpy.ndarray, conformer_b: numpy.ndarray) -> float:
-    """A method which will compute the RMSD between two conformers after aligning them
-    using the Kabsch algorithm.
+def _is_conformer_linear(conformer: numpy.ndarray) -> bool:
+    """Checks if a conformer is linear"""
 
-    Args:
-        conformer_a: The first conformer with shape=(n_atoms, 3).
-        conformer_b: The second conformer with shape=(n_atoms, 3).
+    if len(conformer) < 3:
+        return True
 
-    Returns:
-        The RMSD between the two conformers.
-    """
-    return _compute_rmsd(conformer_a, conformer_b, align=True)[0]
+    v1 = conformer[-1, :] - conformer[0, :]
+    v1 = v1 / numpy.linalg.norm(v1)
+
+    for i in range(1, len(conformer) - 1):
+
+        v2 = conformer[i, :] - conformer[0, :]
+        v2 = v2 / numpy.linalg.norm(v2)
+
+        d = numpy.dot(v1, v2)
+
+        if not numpy.isclose(numpy.abs(d), 1.0):
+            return False
+
+    return True
 
 
-@requires_package("openff.toolkit")
-def compute_best_rmsd(
-    molecule: "Molecule", conformer_a: numpy.ndarray, conformer_b: numpy.ndarray
-) -> float:
-    """A method which attempts to compute the smallest RMSD between two conformers
-    by considering all permutations of topologically symmetric atoms and aligning each
-    permuted conformer using the Kabsch algorithm.
+def _find_alignment_atoms(
+    atom_symmetries: List[int], conformer: numpy.ndarray
+) -> List[List[int]]:
 
-    Args:
-        molecule: The molecule associated with the two conformers.
-        conformer_a: The first conformer with shape=(n_atoms, 3).
-        conformer_b: The second conformer with shape=(n_atoms, 3).
+    # Figure out which atoms are topologically symmetric.
+    atoms_per_symmetry_group: Dict[int, List[int]] = defaultdict(list)
 
-    Returns:
-        The RMSD between the two conformers.
-    """
+    for i, symmetry_group in enumerate(atom_symmetries):
+        atoms_per_symmetry_group[symmetry_group].append(i)
 
-    from openff.toolkit.utils import GLOBAL_TOOLKIT_REGISTRY
-
-    # Find all of the different permutations of the molecule.
-    indexed_smiles = molecule.to_smiles(isomeric=False, mapped=True)
-
-    matches = set(
-        GLOBAL_TOOLKIT_REGISTRY.call("find_smarts_matches", molecule, indexed_smiles)
+    symmetry_groups_by_length = sorted(
+        atoms_per_symmetry_group, key=lambda i: len(atoms_per_symmetry_group[i])
     )
-    assert len(matches) >= 1, "the SMILES should at minimum match itself"
 
-    smallest_rmsd = None
+    n_required_atoms = min(2 if _is_conformer_linear(conformer) else 3, len(conformer))
 
-    for match in matches:
+    # Attempt to select 3 (2 in the case of a linear conformer) atoms that are not
+    # linear to align the molecule using.
+    unselected_atoms = {
+        group: [*indices] for group, indices in atoms_per_symmetry_group.items()
+    }
+    selected_atoms = []
 
-        reordered_conformer_b = conformer_b[numpy.array(match)]
-        rmsd = compute_rmsd(conformer_a, reordered_conformer_b)
+    while (
+        len(selected_atoms) != n_required_atoms and len(symmetry_groups_by_length) > 0
+    ):
 
-        smallest_rmsd = rmsd if smallest_rmsd is None else min(smallest_rmsd, rmsd)
+        proposed_atom = unselected_atoms[symmetry_groups_by_length[0]].pop(0)
 
-    return smallest_rmsd
+        if len(unselected_atoms[symmetry_groups_by_length[0]]) == 0:
+            symmetry_groups_by_length.pop(0)
+
+        if len(selected_atoms) == 2 and _is_conformer_linear(
+            conformer[[*selected_atoms, proposed_atom]]
+        ):
+            continue
+
+        selected_atoms.append(proposed_atom)
+
+    assert len(selected_atoms) == n_required_atoms, (
+        f"a basis of {n_required_atoms} could not be formed "
+        f"when comparing if two conformers are the same"
+    )
+
+    # Return all of the 'equivalent' atoms that can be aligned using.
+    return [atoms_per_symmetry_group[atom_symmetries[i]] for i in selected_atoms]
 
 
 @requires_package("openff.toolkit")
@@ -111,7 +162,7 @@ def are_conformers_identical(
     conformer_b: numpy.ndarray,
     rtol: float = 1.0e-5,
     atol: float = 1.0e-3,
-) -> float:
+) -> bool:
     """A method which compares if two conformers are identical by computing the
     smallest RMSD between all permutations of topologically symmetric atoms.
 
@@ -128,73 +179,75 @@ def are_conformers_identical(
         The RMSD between the two conformers.
     """
 
-    from openff.toolkit.utils import GLOBAL_TOOLKIT_REGISTRY
-
-    # Find all of the different permutations of the atoms in a molecule.
-    indexed_smiles = molecule.to_smiles(isomeric=False, mapped=True)
-
-    matches = set(
-        GLOBAL_TOOLKIT_REGISTRY.call("find_smarts_matches", molecule, indexed_smiles)
-    )
-    assert len(matches) >= 1, "the SMILES should at minimum match itself"
-
-    matches_by_heavy = defaultdict(list)
-
-    for match in matches:
-
-        heavy_match = tuple(i for i in match if molecule.atoms[i].atomic_number != 1)
-        matches_by_heavy[heavy_match].append(match)
-
     conformer_a = conformer_a - conformer_a.mean(axis=0)
     conformer_b = conformer_b - conformer_b.mean(axis=0)
 
-    heavy_conformer_a = conformer_a[
-        [i for i in range(molecule.n_atoms) if molecule.atoms[i].atomic_number != 1], :
-    ]
+    is_linear_a = _is_conformer_linear(conformer_a)
+    is_linear_b = _is_conformer_linear(conformer_b)
 
-    for heavy_match, full_matches in matches_by_heavy.items():
+    if (is_linear_a and not is_linear_b) or (not is_linear_a and is_linear_b):
+        return False
 
-        # See if the heavy atoms align first.
-        heavy_rmsd, rotation_matrix = _compute_rmsd(
-            heavy_conformer_a, conformer_b[heavy_match, :]
+    # We need to try and find 3 atoms (2 in the case of linear molecules) to align the
+    # two conformers using. If any of those 3 atoms have symmetrically equivalent atoms,
+    # we need to try and align the conformers using these in place of the selected atoms
+    # to try and account for automorphism.
+    atom_symmetries = get_atom_symmetries(molecule)
+
+    atoms_per_symmetry_group: Dict[int, List[int]] = defaultdict(list)
+
+    for i, symmetry_group in enumerate(atom_symmetries):
+        atoms_per_symmetry_group[symmetry_group].append(i)
+
+    alignment_atom_indices = _find_alignment_atoms(atom_symmetries, conformer_a)
+
+    subset_indices_a = next(
+        iter(
+            indices
+            for indices in itertools.product(*alignment_atom_indices)
+            if len(indices) == len({*indices})
         )
+    )
 
-        if not numpy.isclose(heavy_rmsd, 0.0, rtol=rtol, atol=atol):
-            # If the heavy atoms don't align then including hydrogen, which may lead
-            # to an explosion of different conformer permutations, won't change things.
+    for subset_indices_b in itertools.product(*alignment_atom_indices):
+
+        if len(subset_indices_b) != len({*subset_indices_b}):
             continue
 
-        for match in full_matches:
+        aligned_conformer_a, aligned_conformer_b = align_conformers(
+            conformer_a, conformer_b, subset_indices_a, subset_indices_b
+        )
 
-            aligned_conformer = conformer_b @ rotation_matrix
+        # Skip conformers whose aligned atoms don't match perfectly.
+        aligned_rmsd = compute_rmsd(
+            aligned_conformer_a[subset_indices_a, :],
+            aligned_conformer_b[subset_indices_b, :],
+        )
 
-            is_linear = True
+        if not numpy.isclose(aligned_rmsd, 0.0, rtol=rtol, atol=atol):
+            continue
 
-            if len(heavy_match) >= 3:
-                # Check for molecules where all heavy atoms are linear.
-                # In these edge cases we will need to re-align the molecule
-                # based on the hydrogen atoms.
-                v1 = (
-                    aligned_conformer[heavy_match[1], :]
-                    - aligned_conformer[heavy_match[0], :]
-                )
-                v2 = (
-                    aligned_conformer[heavy_match[2], :]
-                    - aligned_conformer[heavy_match[0], :]
-                )
+        distance_matrix = numpy.linalg.norm(
+            aligned_conformer_a[:, None, :] - aligned_conformer_b[None, :, :], axis=-1
+        )
 
-                v1 = v1 / numpy.linalg.norm(v1)
-                v2 = v2 / numpy.linalg.norm(v2)
+        # The two conformers will be identical if there is a zero in every row. For
+        # all physical conformers there should *only* be one zero per row.
+        if not numpy.allclose(
+            numpy.min(distance_matrix, axis=-1), 0.0, rtol=rtol, atol=atol
+        ):
+            continue
 
-                d = numpy.dot(v1, v2)
+        minimum_distance_indices = numpy.argmin(distance_matrix, axis=-1)
 
-                is_linear = numpy.isclose(numpy.abs(d), 1.0)
+        # Perform a last sanity check that the atoms that are on top of each other have
+        # the same symmetry group.
+        symmetry_groups_match = all(
+            atom_symmetries[i] == atom_symmetries[index]
+            for i, index in enumerate(minimum_distance_indices)
+        )
 
-            rmsd, _ = _compute_rmsd(
-                conformer_a, aligned_conformer[match, :], align=is_linear
-            )
-
-            if numpy.isclose(rmsd, 0.0, rtol=rtol, atol=atol):
-                return True
+        if symmetry_groups_match:
+            return True
 
     return False
