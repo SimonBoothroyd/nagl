@@ -2,7 +2,7 @@
 available in the OpenFF toolkit.
 """
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Generator, Literal, overload
+from typing import TYPE_CHECKING, Generator, List, Literal, overload
 
 from openff.utilities import requires_package
 from openff.utilities.utilities import MissingOptionalDependency
@@ -219,3 +219,34 @@ def smiles_to_inchi_key(smiles: str) -> str:
         return _oe_smiles_to_inchi_key(smiles)
     except MissingOptionalDependency:
         return _rdkit_smiles_to_inchi_key(smiles)
+
+
+def _oe_get_atom_symmetries(molecule: "Molecule") -> List[int]:  # pragma: no cover
+
+    from openeye import oechem
+
+    oe_molecule = molecule.to_openeye()
+    oechem.OEPerceiveSymmetry(oe_molecule)
+
+    symmetry_classes_by_index = {
+        a.GetIdx(): a.GetSymmetryClass() for a in oe_molecule.GetAtoms()
+    }
+    return [symmetry_classes_by_index[i] for i in range(molecule.n_atoms)]
+
+
+def _rd_get_atom_symmetries(molecule: "Molecule") -> List[int]:
+
+    from rdkit import Chem
+
+    rd_mol = molecule.to_rdkit()
+    return list(Chem.CanonicalRankAtoms(rd_mol, breakTies=False))
+
+
+def get_atom_symmetries(molecule: "Molecule") -> List[int]:
+
+    from openff.toolkit.utils import ToolkitUnavailableException
+
+    try:
+        return _oe_get_atom_symmetries(molecule)
+    except (ImportError, ModuleNotFoundError, ToolkitUnavailableException):
+        return _rd_get_atom_symmetries(molecule)

@@ -84,7 +84,7 @@ def _label_molecule(smiles: str, guess_stereochemistry: bool) -> MoleculeRecord:
         )
 
     return MoleculeRecord(
-        smiles=molecule.to_smiles(isomeric=False, mapped=True),
+        smiles=molecule.to_smiles(isomeric=True, mapped=True),
         conformers=conformer_records,
     )
 
@@ -222,7 +222,11 @@ def label_cli(
 
     from dask import distributed
 
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    root_logger: logging.Logger = logging.getLogger("nagl")
+    root_logger.setLevel(logging.INFO)
+
+    root_handler = logging.StreamHandler()
+    root_handler.setFormatter(logging.Formatter("%(message)s"))
 
     _logger.info("Labeling molecules")
 
