@@ -185,7 +185,7 @@ def test_are_conformers_identical(smiles, conformer_a):
 def test_are_conformers_not_identical():
 
     molecule: Molecule = Molecule.from_mapped_smiles(
-        "[C:1]([H:4])([H:5])([H:6])[C:2]([H:7])([Cl:8])=[O:3]"
+        "[C:1]([H:4])([H:5])([H:6])[C:2]([Cl:7])=[O:3]"
     )
     molecule.generate_conformers(n_conformers=1)
 
