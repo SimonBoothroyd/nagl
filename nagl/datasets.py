@@ -203,7 +203,8 @@ class DGLMoleculeDataset(Dataset):
             record
             for molecule_store in molecule_stores
             for record in molecule_store.retrieve(
-                partial_charge_method, bond_order_method
+                [] if partial_charge_method is None else partial_charge_method,
+                [] if bond_order_method is None else bond_order_method,
             )
         )
 

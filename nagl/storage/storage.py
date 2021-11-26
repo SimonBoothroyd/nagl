@@ -23,7 +23,6 @@ from openff.utilities import requires_package
 from pydantic import BaseModel, Field, validator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
-from tqdm import tqdm
 
 from nagl.storage.db import (
     DB_VERSION,
@@ -673,12 +672,10 @@ class MoleculeStore:
             }
         )
 
-        for value_type, db_columns, model_type in tqdm(
-            [
-                ("partial_charges", db_partial_charge_columns, PartialChargeSet),
-                ("bond_orders", db_bond_order_columns, WibergBondOrderSet),
-            ]
-        ):
+        for value_type, db_columns, model_type in [
+            ("partial_charges", db_partial_charge_columns, PartialChargeSet),
+            ("bond_orders", db_bond_order_columns, WibergBondOrderSet),
+        ]:
 
             for (
                 db_molecule_id,
@@ -687,7 +684,7 @@ class MoleculeStore:
                 db_conformer_coordinates,
                 db_method,
                 db_values,
-            ) in tqdm(db_columns):
+            ) in db_columns:
 
                 raw_objects[db_molecule_id]["smiles"] = db_molecule_smiles
                 raw_objects[db_molecule_id]["conformers"][db_conformer_id][
