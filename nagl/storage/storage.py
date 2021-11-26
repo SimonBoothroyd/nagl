@@ -2,6 +2,7 @@
 structure.
 """
 import logging
+import time
 from collections import defaultdict
 from contextlib import contextmanager
 from typing import (
@@ -13,6 +14,7 @@ from typing import (
     Literal,
     Optional,
     Tuple,
+    Type,
     Union,
 )
 
@@ -48,6 +50,15 @@ _logger = logging.getLogger(__name__)
 
 ChargeMethod = Literal["am1", "am1bcc"]
 WBOMethod = Literal["am1"]
+
+DBQueryResult = Tuple[
+    int,  # DBMoleculeRecord.id
+    str,  # DBMoleculeRecord.smiles,
+    int,  # DBConformerRecord.id,
+    numpy.ndarray,  # DBConformerRecord.coordinates,
+    str,  # model_type.method,
+    numpy.ndarray,  # model_type.values,
+]
 
 
 class _BaseStoredModel(BaseModel):
@@ -588,86 +599,179 @@ class MoleculeStore:
                 self._store_records_with_inchi_key(db, inchi_key, inchi_records)
 
     @classmethod
-    def _db_records_to_model(
+    def _db_query_by_method(
         cls,
-        db_records: List[DBMoleculeRecord],
-        partial_charge_method: Optional[ChargeMethod] = None,
-        bond_order_method: Optional[WBOMethod] = None,
+        db: Session,
+        model_type: Union[Type[DBPartialChargeSet], Type[DBWibergBondOrderSet]],
+        allowed_methods: List[str],
+    ) -> List[DBQueryResult]:
+        """Returns the results of querying the DB for records associated with either a
+        set of partial charge or bond order methods
+
+        Returns:
+            A list of tuples of the form::
+
+                (
+                    DBMoleculeRecord.id,
+                    DBMoleculeRecord.smiles,
+                    DBConformerRecord.id,
+                    DBConformerRecord.coordinates,
+                    model_type.method,
+                    model_type.values
+                )
+        """
+
+        return (
+            db.query(
+                DBMoleculeRecord.id,
+                DBMoleculeRecord.smiles,
+                DBConformerRecord.id,
+                DBConformerRecord.coordinates,
+                model_type.method,
+                model_type.values,
+            )
+            .order_by(DBMoleculeRecord.id)
+            .join(
+                DBConformerRecord,
+                DBConformerRecord.parent_id == DBMoleculeRecord.id,
+            )
+            .join(
+                model_type,
+                model_type.parent_id == DBConformerRecord.id,
+            )
+            .filter(model_type.method.in_(allowed_methods))
+            .all()
+        )
+
+    @classmethod
+    def _db_columns_to_models(
+        cls,
+        db_partial_charge_columns: List[DBQueryResult],
+        db_bond_order_columns: List[DBQueryResult],
     ) -> List[MoleculeRecord]:
         """Maps a set of database records into their corresponding data models,
         optionally retaining only partial charge sets and WBO sets computed with a
         specified method.
 
-        Args
-            db_records: The records to map.
-            partial_charge_method: The (optional) partial charge method to filter by.
-            bond_order_method: The (optional) WBO method to filter by.
+        Args:
 
-        Returns
+        Returns:
             The mapped data models.
         """
 
-        # noinspection PyTypeChecker
-        return [
-            MoleculeRecord(
-                smiles=db_record.smiles,
+        raw_objects = defaultdict(
+            lambda: {
+                "smiles": None,
+                "conformers": defaultdict(
+                    lambda: {
+                        "coordinates": None,
+                        "partial_charges": {},
+                        "bond_orders": {},
+                    }
+                ),
+            }
+        )
+
+        for value_type, db_columns, model_type in [
+            ("partial_charges", db_partial_charge_columns, PartialChargeSet),
+            ("bond_orders", db_bond_order_columns, WibergBondOrderSet),
+        ]:
+
+            for (
+                db_molecule_id,
+                db_molecule_smiles,
+                db_conformer_id,
+                db_conformer_coordinates,
+                db_method,
+                db_values,
+            ) in db_columns:
+
+                raw_objects[db_molecule_id]["smiles"] = db_molecule_smiles
+                raw_objects[db_molecule_id]["conformers"][db_conformer_id][
+                    "coordinates"
+                ] = db_conformer_coordinates
+                raw_objects[db_molecule_id]["conformers"][db_conformer_id][value_type][
+                    db_method
+                ] = PartialChargeSet.construct(method=db_method, values=db_values)
+
+        records = [
+            MoleculeRecord.construct(
+                smiles=raw_molecule["smiles"],
                 conformers=[
-                    ConformerRecord(
-                        coordinates=db_conformer.coordinates,
-                        partial_charges=[
-                            PartialChargeSet(
-                                method=db_partial_charges.method,
-                                values=db_partial_charges.values,
-                            )
-                            for db_partial_charges in db_conformer.partial_charges
-                            if partial_charge_method is None
-                            or db_partial_charges.method == partial_charge_method
-                        ],
-                        bond_orders=[
-                            WibergBondOrderSet(
-                                method=db_bond_orders.method,
-                                values=db_bond_orders.values,
-                            )
-                            for db_bond_orders in db_conformer.bond_orders
-                            if bond_order_method is None
-                            or db_bond_orders.method == bond_order_method
-                        ],
+                    ConformerRecord.construct(
+                        coordinates=raw_conformer["coordinates"],
+                        partial_charges=[*raw_conformer["partial_charges"].values()],
+                        bond_orders=[*raw_conformer["bond_orders"].values()],
                     )
-                    for db_conformer in db_record.conformers
+                    for raw_conformer in raw_molecule["conformers"].values()
                 ],
             )
-            for db_record in db_records
+            for raw_molecule in raw_objects.values()
         ]
+
+        return records
 
     def retrieve(
         self,
-        partial_charge_method: Optional[ChargeMethod] = None,
-        bond_order_method: Optional[WBOMethod] = None,
+        partial_charge_methods: Optional[
+            Union[ChargeMethod, List[ChargeMethod]]
+        ] = None,
+        bond_order_methods: Optional[Union[WBOMethod, List[WBOMethod]]] = None,
     ) -> List[MoleculeRecord]:
-        """Retrieve records stored in this data store, optionally
-        according to a set of filters."""
+        """Retrieve records stored in this data store
+
+        Args:
+            partial_charge_methods: The (optional) list of charge methods to retrieve
+                from the store. By default (`None`) all charges will be returned.
+            bond_order_methods: The (optional) list of bond order methods to retrieve
+                from the store. By default (`None`) all bond orders will be returned.
+
+        Returns:
+            The retrieved records.
+        """
+
+        if isinstance(partial_charge_methods, str):
+            partial_charge_methods = [partial_charge_methods]
+        elif partial_charge_methods is None:
+            partial_charge_methods = self.charge_methods
+
+        if isinstance(bond_order_methods, str):
+            bond_order_methods = [bond_order_methods]
+        elif bond_order_methods is None:
+            bond_order_methods = self.wbo_methods
 
         with self._get_session() as db:
 
-            db_records = db.query(DBMoleculeRecord).join(DBConformerRecord)
+            db_partial_charge_columns = []
+            db_bond_order_columns = []
 
-            if partial_charge_method is not None:
-                db_records = db_records.join(DBPartialChargeSet)
-                db_records = db_records.filter(
-                    DBPartialChargeSet.method == partial_charge_method
+            _logger.debug("performing SQL queries")
+            start = time.perf_counter()
+
+            if len(partial_charge_methods) > 0:
+
+                db_partial_charge_columns = self._db_query_by_method(
+                    db, DBPartialChargeSet, partial_charge_methods
                 )
-            if bond_order_method is not None:
-                db_records = db_records.join(DBWibergBondOrderSet)
-                db_records = db_records.filter(
-                    DBWibergBondOrderSet.method == bond_order_method
+
+            if len(bond_order_methods) > 0:
+
+                db_bond_order_columns = self._db_query_by_method(
+                    db, DBWibergBondOrderSet, bond_order_methods
                 )
 
-            db_records = db_records.all()
+            _logger.debug(f"performed SQL query {time.perf_counter() - start}s")
 
-            records = self._db_records_to_model(
-                db_records, partial_charge_method, bond_order_method
+            _logger.debug("converting SQL columns to entries")
+            start = time.perf_counter()
+            records = self._db_columns_to_models(
+                db_partial_charge_columns, db_bond_order_columns
             )
-            return records
+            _logger.debug(
+                f"converted SQL columns to entries {time.perf_counter() - start}s"
+            )
+
+        return records
 
     def __len__(self):
 
