@@ -12,7 +12,7 @@ class DBPartialChargeSet(DBBase):
     __tablename__ = "partial_charge_sets"
 
     id = Column(Integer, primary_key=True, index=True)
-    parent_id = Column(Integer, ForeignKey("conformers.id"), nullable=False)
+    parent_id = Column(Integer, ForeignKey("conformers.id"), nullable=False, index=True)
 
     method = Column(String(10), nullable=False)
     values = Column(PickleType, nullable=False)
@@ -27,7 +27,7 @@ class DBWibergBondOrderSet(DBBase):
     __tablename__ = "wiberg_bond_order_sets"
 
     id = Column(Integer, primary_key=True, index=True)
-    parent_id = Column(Integer, ForeignKey("conformers.id"), nullable=False)
+    parent_id = Column(Integer, ForeignKey("conformers.id"), nullable=False, index=True)
 
     method = Column(String(10), nullable=False)
     values = Column(PickleType, nullable=False)
@@ -42,7 +42,7 @@ class DBConformerRecord(DBBase):
     __tablename__ = "conformers"
 
     id = Column(Integer, primary_key=True, index=True)
-    parent_id = Column(String, ForeignKey("molecules.id"), nullable=False)
+    parent_id = Column(Integer, ForeignKey("molecules.id"), nullable=False, index=True)
 
     coordinates = Column(PickleType, nullable=False)
 

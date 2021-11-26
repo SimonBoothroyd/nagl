@@ -465,7 +465,7 @@ class TestMoleculeStore:
             (None, None, 3),
             ("am1", None, 2),
             ("am1bcc", None, 2),
-            (None, "am1", 1),
+            ([], "am1", 1),
         ],
     )
     def test_retrieve_data(
@@ -473,8 +473,8 @@ class TestMoleculeStore:
     ):
 
         retrieved_records = tmp_molecule_store.retrieve(
-            partial_charge_method=partial_charge_method,
-            bond_order_method=bond_order_method,
+            partial_charge_methods=partial_charge_method,
+            bond_order_methods=bond_order_method,
         )
         assert len(retrieved_records) == n_expected
 

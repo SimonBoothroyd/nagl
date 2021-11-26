@@ -22,6 +22,7 @@ from tqdm import tqdm
 from nagl.features import AtomFeature, BondFeature
 from nagl.molecules import DGLMolecule, DGLMoleculeBatch
 from nagl.storage.storage import ChargeMethod, MoleculeStore, WBOMethod
+from nagl.utilities.toolkits import capture_toolkit_warnings
 
 if TYPE_CHECKING:
     from openff.toolkit.topology import Molecule
@@ -198,7 +199,7 @@ class DGLMoleculeDataset(Dataset):
         if isinstance(molecule_stores, MoleculeStore):
             molecule_stores = [molecule_stores]
 
-        stored_records = (
+        stored_records = list(
             record
             for molecule_store in molecule_stores
             for record in molecule_store.retrieve(
@@ -208,11 +209,13 @@ class DGLMoleculeDataset(Dataset):
 
         entries = []
 
-        for record in tqdm(stored_records):
+        for record in tqdm(stored_records, desc="featurizing molecules"):
 
-            molecule: Molecule = Molecule.from_mapped_smiles(
-                record.smiles, allow_undefined_stereo=True
-            )
+            with capture_toolkit_warnings():
+
+                molecule: Molecule = Molecule.from_mapped_smiles(
+                    record.smiles, allow_undefined_stereo=True
+                )
 
             if partial_charge_method is not None:
 
