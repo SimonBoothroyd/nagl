@@ -7,7 +7,7 @@ from nagl.molecules import DGLMolecule, DGLMoleculeBatch
 from nagl.nn import ActivationFunction, SequentialLayers
 from nagl.nn.gcn import GCNStack, SAGEConvStack
 from nagl.nn.pooling import PoolingLayer
-from nagl.nn.process import PostprocessLayer
+from nagl.nn.postprocess import PostprocessLayer
 
 GCNArchitecture = Literal["SAGEConv"]
 

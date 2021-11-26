@@ -1,4 +1,4 @@
-from nagl.storage.storage import (
+from nagl.storage._storage import (
     ChargeMethod,
     ConformerRecord,
     MoleculeRecord,

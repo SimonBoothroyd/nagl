@@ -2,7 +2,7 @@ from nagl.nn import SequentialLayers
 from nagl.nn.gcn import GCNStack
 from nagl.nn.modules import ConvolutionModule, ReadoutModule
 from nagl.nn.pooling import PoolAtomFeatures
-from nagl.nn.process import ComputePartialCharges
+from nagl.nn.postprocess import ComputePartialCharges
 
 
 class TestConvolutionModule:

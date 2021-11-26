@@ -3,7 +3,7 @@ import torch
 from openff.toolkit.topology import Molecule
 
 from nagl.molecules import DGLMolecule, DGLMoleculeBatch
-from nagl.nn.process import ComputePartialCharges
+from nagl.nn.postprocess import ComputePartialCharges
 
 
 def test_atomic_parameters_to_charges_neutral():

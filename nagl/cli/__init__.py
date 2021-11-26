@@ -1,3 +1,3 @@
-from nagl.cli.cli import cli
+from nagl.cli._cli import cli
 
 __all__ = [cli]
