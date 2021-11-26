@@ -4,7 +4,7 @@ import numpy
 from openff.toolkit.topology import Molecule
 
 from nagl.cli.label import label_cli
-from nagl.storage.storage import MoleculeStore
+from nagl.storage import MoleculeStore
 
 
 def test_label_cli(openff_methane: Molecule, runner):

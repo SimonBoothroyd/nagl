@@ -23,7 +23,7 @@ S = TypeVar("S", bound=torch.nn.Module)
 T = TypeVar("T", bound=str)
 
 
-class GCNStack(torch.nn.Module, Generic[S, T], abc.ABC):
+class GCNStack(torch.nn.ModuleList, Generic[S, T], abc.ABC):
     """A wrapper around a stack of GCN graph convolutional layers.
 
     Note:
@@ -81,11 +81,10 @@ class GCNStack(torch.nn.Module, Generic[S, T], abc.ABC):
             )
 
         self.hidden_feats = hidden_feats
-        self.gnn_layers = torch.nn.ModuleList()
 
         for i in range(n_layers):
 
-            self.gnn_layers.append(
+            self.append(
                 self._gcn_factory(
                     in_feats,
                     hidden_feats[i],
@@ -131,7 +130,7 @@ class GCNStack(torch.nn.Module, Generic[S, T], abc.ABC):
 
     def reset_parameters(self):
         """Reinitialize model parameters."""
-        for gnn in self.gnn_layers:
+        for gnn in self:
             gnn.reset_parameters()
 
     def forward(self, graph: dgl.DGLGraph, inputs: torch.Tensor) -> torch.Tensor:
@@ -144,7 +143,7 @@ class GCNStack(torch.nn.Module, Generic[S, T], abc.ABC):
         Returns
             The output hidden features with shape=(n_nodes, hidden_feats[-1]).
         """
-        for gnn in self.gnn_layers:
+        for gnn in self:
             inputs = gnn(graph, inputs)
 
         return inputs

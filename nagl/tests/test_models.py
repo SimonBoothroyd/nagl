@@ -1,60 +1,61 @@
-from nagl.models import ConvolutionConfig, MoleculeGCNModel, ReadoutConfig
-from nagl.nn import SequentialConfig, SequentialLayers
-from nagl.nn.gcn import SAGEConvStack
+from nagl.models import ConvolutionModule, MoleculeGCNModel, ReadoutModule
+from nagl.nn import SequentialLayers
+from nagl.nn.gcn import GCNStack
 from nagl.nn.pooling import PoolAtomFeatures, PoolBondFeatures
-from nagl.nn.process import ComputePartialCharges
+from nagl.nn.postprocess import ComputePartialCharges
 
 
-def test_init_mol_graph():
+class TestMoleculeGCNModel:
+    def test_init(self):
 
-    model = MoleculeGCNModel(
-        convolution_config=ConvolutionConfig(in_feats=1, hidden_feats=[2, 2]),
-        readout_configs={
-            "atom": ReadoutConfig(
-                pooling_layer=PoolAtomFeatures.Config(),
-                readout_layers=SequentialConfig(
-                    in_feats=2, hidden_feats=[2], activation=["Identity"]
+        model = MoleculeGCNModel(
+            convolution_module=ConvolutionModule(
+                "SAGEConv", in_feats=1, hidden_feats=[2, 2]
+            ),
+            readout_modules={
+                "atom": ReadoutModule(
+                    pooling_layer=PoolAtomFeatures(),
+                    readout_layers=SequentialLayers(
+                        in_feats=2, hidden_feats=[2], activation=["Identity"]
+                    ),
+                    postprocess_layer=ComputePartialCharges(),
                 ),
-                postprocess_layer=ComputePartialCharges.Config(),
-            ),
-            "bond": ReadoutConfig(
-                pooling_layer=PoolBondFeatures.Config(
-                    layers=SequentialConfig(in_feats=4, hidden_feats=[4])
+                "bond": ReadoutModule(
+                    pooling_layer=PoolBondFeatures(
+                        layers=SequentialLayers(in_feats=4, hidden_feats=[4])
+                    ),
+                    readout_layers=SequentialLayers(in_feats=4, hidden_feats=[8]),
                 ),
-                readout_layers=SequentialConfig(in_feats=4, hidden_feats=[8]),
+            },
+        )
+
+        assert model.convolution_module is not None
+        assert isinstance(model.convolution_module, ConvolutionModule)
+
+        assert isinstance(model.convolution_module.gcn_layers, GCNStack)
+        assert len(model.convolution_module.gcn_layers) == 2
+
+        assert all(x in model.readout_modules for x in ["atom", "bond"])
+
+        assert isinstance(model.readout_modules["atom"].pooling_layer, PoolAtomFeatures)
+        assert isinstance(model.readout_modules["bond"].pooling_layer, PoolBondFeatures)
+
+    def test_forward(self, dgl_methane):
+
+        model = MoleculeGCNModel(
+            convolution_module=ConvolutionModule(
+                "SAGEConv", in_feats=4, hidden_feats=[4]
             ),
-        },
-    )
+            readout_modules={
+                "atom": ReadoutModule(
+                    pooling_layer=PoolAtomFeatures(),
+                    readout_layers=SequentialLayers(in_feats=4, hidden_feats=[2]),
+                    postprocess_layer=ComputePartialCharges(),
+                ),
+            },
+        )
 
-    assert model._convolution is not None
-    assert isinstance(model._convolution, SAGEConvStack)
+        output = model.forward(dgl_methane)
+        assert "atom" in output
 
-    assert all(x in model._pooling_layers for x in ["atom", "bond"])
-
-    assert isinstance(model._pooling_layers["atom"], PoolAtomFeatures)
-    assert isinstance(model._pooling_layers["bond"], PoolBondFeatures)
-
-    assert all(x in model._readouts for x in ["atom", "bond"])
-    assert all(isinstance(x, SequentialLayers) for x in model._readouts.values())
-
-    assert "atom" in model._postprocess_layers
-    assert "bond" not in model._postprocess_layers
-
-
-def test_mol_graph_forward(dgl_methane):
-
-    model = MoleculeGCNModel(
-        convolution_config=ConvolutionConfig(in_feats=4, hidden_feats=[4]),
-        readout_configs={
-            "atom": ReadoutConfig(
-                pooling_layer=PoolAtomFeatures.Config(),
-                readout_layers=SequentialConfig(in_feats=4, hidden_feats=[2]),
-                postprocess_layer=ComputePartialCharges.Config(),
-            ),
-        },
-    )
-
-    output = model.forward(dgl_methane)
-    assert "atom" in output
-
-    assert output["atom"].shape == (5, 1)
+        assert output["atom"].shape == (5, 1)

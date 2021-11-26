@@ -4,15 +4,15 @@ import numpy
 import pytest
 from pydantic import ValidationError
 
-from nagl.storage.db import DB_VERSION, DBConformerRecord, DBInformation
-from nagl.storage.exceptions import IncompatibleDBVersion
-from nagl.storage.storage import (
+from nagl.storage import (
     ConformerRecord,
     MoleculeRecord,
     MoleculeStore,
     PartialChargeSet,
     WibergBondOrderSet,
 )
+from nagl.storage.db import DB_VERSION, DBConformerRecord, DBInformation
+from nagl.storage.exceptions import IncompatibleDBVersion
 from nagl.tests import does_not_raise
 
 

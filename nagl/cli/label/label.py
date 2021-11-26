@@ -10,7 +10,7 @@ from click_option_group import optgroup
 from openff.utilities import requires_package
 from tqdm import tqdm
 
-from nagl.storage.storage import (
+from nagl.storage import (
     ConformerRecord,
     MoleculeRecord,
     MoleculeStore,
