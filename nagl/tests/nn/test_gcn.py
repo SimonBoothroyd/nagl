@@ -13,17 +13,17 @@ def test_init_gcn_stack():
     conv_stack = SAGEConvStack(in_feats=1, hidden_feats=[2, 3])
     conv_stack.reset_parameters()
 
-    assert len(conv_stack.gnn_layers) == 2
+    assert len(conv_stack) == 2
 
-    assert all(isinstance(x, SAGEConv) for x in conv_stack.gnn_layers)
+    assert all(isinstance(x, SAGEConv) for x in conv_stack)
 
-    assert numpy.isclose(conv_stack.gnn_layers[0].feat_drop.p, 0.0)
-    assert conv_stack.gnn_layers[0].fc_self.in_features == 1
-    assert conv_stack.gnn_layers[0].fc_self.out_features == 2
+    assert numpy.isclose(conv_stack[0].feat_drop.p, 0.0)
+    assert conv_stack[0].fc_self.in_features == 1
+    assert conv_stack[0].fc_self.out_features == 2
 
-    assert numpy.isclose(conv_stack.gnn_layers[1].feat_drop.p, 0.0)
-    assert conv_stack.gnn_layers[1].fc_self.in_features == 2
-    assert conv_stack.gnn_layers[1].fc_self.out_features == 3
+    assert numpy.isclose(conv_stack[1].feat_drop.p, 0.0)
+    assert conv_stack[1].fc_self.in_features == 2
+    assert conv_stack[1].fc_self.out_features == 3
 
 
 def test_init_sequential_layers_inputs():
@@ -35,14 +35,14 @@ def test_init_sequential_layers_inputs():
         dropout=[0.5],
         aggregator_type=["lstm"],
     )
-    assert len(conv_stack.gnn_layers) == 1
-    assert all(isinstance(x, SAGEConv) for x in conv_stack.gnn_layers)
+    assert len(conv_stack) == 1
+    assert all(isinstance(x, SAGEConv) for x in conv_stack)
 
-    assert numpy.isclose(conv_stack.gnn_layers[0].feat_drop.p, 0.5)
-    assert conv_stack.gnn_layers[0].lstm.input_size == 2
-    assert conv_stack.gnn_layers[0].lstm.hidden_size == 2
-    assert conv_stack.gnn_layers[0].fc_neigh.out_features == 3
-    assert conv_stack.gnn_layers[0].activation == torch.nn.functional.leaky_relu
+    assert numpy.isclose(conv_stack[0].feat_drop.p, 0.5)
+    assert conv_stack[0].lstm.input_size == 2
+    assert conv_stack[0].lstm.hidden_size == 2
+    assert conv_stack[0].fc_neigh.out_features == 3
+    assert conv_stack[0].activation == torch.nn.functional.leaky_relu
 
 
 def test_init_sequential_layers_invalid():

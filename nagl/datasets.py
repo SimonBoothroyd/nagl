@@ -21,11 +21,12 @@ from tqdm import tqdm
 
 from nagl.features import AtomFeature, BondFeature
 from nagl.molecules import DGLMolecule, DGLMoleculeBatch
-from nagl.storage.storage import ChargeMethod, MoleculeStore, WBOMethod
 from nagl.utilities.toolkits import capture_toolkit_warnings
 
 if TYPE_CHECKING:
     from openff.toolkit.topology import Molecule
+
+    from nagl.storage import ChargeMethod, MoleculeStore, WBOMethod
 
 logger = logging.getLogger(__name__)
 
@@ -128,8 +129,8 @@ class DGLMoleculeDataset(Dataset):
     def _labelled_molecule_to_dict(
         cls,
         molecule: "Molecule",
-        partial_charge_method: Optional[ChargeMethod],
-        bond_order_method: Optional[WBOMethod],
+        partial_charge_method: Optional["ChargeMethod"],
+        bond_order_method: Optional["WBOMethod"],
     ) -> Dict[str, torch.Tensor]:
         """A convenience method for mapping a pre-labelled molecule to a dictionary
         of label tensors.
@@ -169,9 +170,9 @@ class DGLMoleculeDataset(Dataset):
     @classmethod
     def from_molecule_stores(
         cls: Type["DGLMoleculeDataset"],
-        molecule_stores: Union[MoleculeStore, Collection[MoleculeStore]],
-        partial_charge_method: Optional[ChargeMethod],
-        bond_order_method: Optional[WBOMethod],
+        molecule_stores: Union["MoleculeStore", Collection["MoleculeStore"]],
+        partial_charge_method: Optional["ChargeMethod"],
+        bond_order_method: Optional["WBOMethod"],
         atom_features: List[AtomFeature],
         bond_features: List[BondFeature],
     ) -> "DGLMoleculeDataset":
@@ -190,6 +191,8 @@ class DGLMoleculeDataset(Dataset):
 
         from openff.toolkit.topology import Molecule
         from simtk import unit
+
+        from nagl.storage import MoleculeStore
 
         assert partial_charge_method is not None or bond_order_method is not None, (
             "at least one of the ``partial_charge_method`` and  ``bond_order_method`` "

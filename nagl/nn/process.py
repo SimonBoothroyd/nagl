@@ -2,19 +2,12 @@ import abc
 from typing import Union
 
 import torch.nn
-from pydantic import BaseModel
-from typing_extensions import Literal
 
 from nagl.molecules import DGLMolecule, DGLMoleculeBatch
 
 
 class PostprocessLayer(torch.nn.Module, abc.ABC):
     """A layer to apply to the final readout of a neural network."""
-
-    @classmethod
-    @abc.abstractmethod
-    def from_config(cls, config):
-        """Create an instance of a post-process layer from its configuration."""
 
     @abc.abstractmethod
     def forward(
@@ -33,16 +26,6 @@ class ComputePartialCharges(PostprocessLayer):
             equalization method that accounts for alternate resonance forms." Journal of
             chemical information and computer sciences 43.6 (2003): 1982-1997.
     """
-
-    class Config(BaseModel):
-        """Configuration options for a ``ComputePartialCharges`` layer."""
-
-        type: Literal["ComputePartialCharges"] = "ComputePartialCharges"
-
-    @classmethod
-    def from_config(cls, config: "ComputePartialCharges.Config"):
-        """Create an instance of a post-process layer from its configuration."""
-        return cls()
 
     @classmethod
     def atomic_parameters_to_charges(

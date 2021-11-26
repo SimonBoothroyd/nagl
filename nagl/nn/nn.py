@@ -2,7 +2,6 @@ from typing import TYPE_CHECKING, List, Optional
 
 import torch.nn
 import torch.nn.functional
-from pydantic import BaseModel, Field
 from typing_extensions import Literal
 
 if TYPE_CHECKING:
@@ -11,29 +10,7 @@ else:
     ActivationFunction = Literal["Identity", "Tanh", "ReLU", "LeakyReLU", "ELU"]
 
 
-class SequentialConfig(BaseModel):
-    """Configuration options for a sequential set of dense NN layers."""
-
-    in_feats: int = Field(..., description="The number of input node features.")
-
-    hidden_feats: List[int] = Field(
-        ...,
-        description="``hidden_feats[i]`` gives the size of node representations after "
-        "the i-th layer. ``len(hidden_feats)`` equals the number of layers.",
-    )
-    activation: Optional[List[ActivationFunction]] = Field(
-        None,
-        description="If not None, ``activation[i]`` gives the activation function to "
-        "be used for the i-th layer. ``len(activation)`` equals the number of layers.",
-    )
-    dropout: Optional[List[float]] = Field(
-        None,
-        description="``dropout[i]`` decides the dropout probability on the output of "
-        "the i-th layer. ``len(dropout)`` equals the number of layers.",
-    )
-
-
-class SequentialLayers(torch.nn.Module):
+class SequentialLayers(torch.nn.Sequential):
     """A convenience class for constructing a MLP model with a specified number
     of linear and dropout layers combined with a specific activation function.
     """
@@ -42,7 +19,7 @@ class SequentialLayers(torch.nn.Module):
         self,
         in_feats: int,
         hidden_feats: List[int],
-        activation: Optional[List[torch.nn.Module]] = None,
+        activation: Optional[List[ActivationFunction]] = None,
         dropout: Optional[List[float]] = None,
     ):
         """
@@ -58,15 +35,15 @@ class SequentialLayers(torch.nn.Module):
                 are specified then do dropout will take place.
         """
 
-        super().__init__()
-
         n_layers = len(hidden_feats)
 
         # Initialize the default inputs.
-        if activation is None:
-            activation = [torch.nn.ReLU()] * n_layers
-        if dropout is None:
-            dropout = [0.0] * n_layers
+        activation = (
+            [torch.nn.ReLU()] * n_layers
+            if activation is None
+            else [getattr(torch.nn, name)() for name in activation]
+        )
+        dropout = [0.0] * n_layers if dropout is None else dropout
 
         # Validate that a consistent number of layers have been specified.
         lengths = [len(hidden_feats), len(activation), len(dropout)]
@@ -81,7 +58,7 @@ class SequentialLayers(torch.nn.Module):
         # Construct the sequential layer list.
         hidden_feats = [in_feats] + hidden_feats
 
-        self.layers = torch.nn.Sequential(
+        super().__init__(
             *(
                 layer
                 for i in range(n_layers)
@@ -90,24 +67,5 @@ class SequentialLayers(torch.nn.Module):
                     activation[i],
                     torch.nn.Dropout(dropout[i]),
                 ]
-            ),
+            )
         )
-
-    @classmethod
-    def from_config(cls, config: SequentialConfig) -> "SequentialLayers":
-
-        return cls(
-            in_feats=config.in_feats,
-            hidden_feats=config.hidden_feats,
-            activation=(
-                None
-                if config.activation is None
-                else [
-                    getattr(torch.nn, activation)() for activation in config.activation
-                ]
-            ),
-            dropout=config.dropout,
-        )
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        return self.layers(inputs)

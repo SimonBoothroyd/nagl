@@ -9,7 +9,7 @@ from simtk import unit
 from nagl.datasets import DGLMoleculeDataLoader, DGLMoleculeDataset
 from nagl.features import AtomConnectivity, BondIsInRing
 from nagl.molecules import DGLMolecule, DGLMoleculeBatch
-from nagl.storage.storage import (
+from nagl.storage import (
     ConformerRecord,
     MoleculeRecord,
     MoleculeStore,

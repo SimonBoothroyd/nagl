@@ -9,24 +9,27 @@ dependencies:
   - python
   - pip
 
-    # Core dependencies
+    ### Core dependencies.
+  - openff-utilities
+
   - click
   - click-option-group
 
-  - pydantic
-
   - pytorch
-  - pytorch-lightning
   - dgl >=0.7
 
   - tqdm
-  - rich
+
+    ### Optional dependencies
+
+    # Model training
+  - pytorch-lightning
 
     # Molecule loading and processing.
   - openff-toolkit >=0.9.1
-  - openff-utilities
 
     # SQL based molecule storage.
+  - pydantic
   - sqlalchemy
   - sqlite
 
