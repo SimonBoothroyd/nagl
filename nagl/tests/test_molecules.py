@@ -42,6 +42,15 @@ class TestBaseDGLModel:
     def test_atom_features_property(self, dgl_methane):
         assert dgl_methane.atom_features.shape == (5, 4)
 
+    def test_to(self, dgl_methane):
+
+        dgl_methane_to = dgl_methane.to("cpu")
+
+        assert dgl_methane_to != dgl_methane
+        assert dgl_methane_to._graph != dgl_methane._graph  # should be a copy.
+        assert dgl_methane_to.n_atoms == 5
+        assert dgl_methane_to.n_bonds == 4
+
 
 class TestDGLMolecule:
     def test_n_properties(self):

@@ -1,4 +1,5 @@
-from typing import TYPE_CHECKING, List, Tuple, Type
+import copy
+from typing import TYPE_CHECKING, List, Tuple, Type, TypeVar
 
 import dgl.function
 import torch
@@ -8,6 +9,8 @@ from nagl.utilities.resonance import enumerate_resonance_forms
 
 if TYPE_CHECKING:
     from openff.toolkit.topology import Molecule
+
+_T = TypeVar("_T")
 
 
 def _hetero_to_homo_graph(graph: dgl.DGLHeteroGraph) -> dgl.DGLGraph:
@@ -56,6 +59,13 @@ class _BaseDGLModel:
         """
 
         self._graph = graph
+
+    def to(self: _T, device: str) -> _T:
+
+        return_value = copy.copy(self)
+        return_value._graph = self._graph.to(device)
+
+        return return_value
 
 
 class DGLMolecule(_BaseDGLModel):
