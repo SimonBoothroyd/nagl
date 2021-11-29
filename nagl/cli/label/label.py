@@ -3,126 +3,19 @@ import logging
 import math
 import traceback
 from datetime import datetime
-from typing import List, Optional, Tuple
 
 import click
 from click_option_group import optgroup
 from openff.utilities import requires_package
 from tqdm import tqdm
 
-from nagl.storage import (
-    ConformerRecord,
-    MoleculeRecord,
-    MoleculeStore,
-    PartialChargeSet,
-    WibergBondOrderSet,
-)
+from nagl.labelling import label_molecules
+from nagl.storage import MoleculeStore
 from nagl.utilities.dask import setup_dask_local_cluster, setup_dask_lsf_cluster
 from nagl.utilities.provenance import get_labelling_software_provenance
-from nagl.utilities.smiles import smiles_to_molecule
 from nagl.utilities.toolkits import capture_toolkit_warnings, stream_from_file
 
-_OPENFF_CHARGE_METHODS = {"am1": "am1-mulliken", "am1bcc": "am1bcc"}
-
 _logger = logging.getLogger(__name__)
-
-
-@requires_package("openff.toolkit")
-def _label_molecule(smiles: str, guess_stereochemistry: bool) -> MoleculeRecord:
-
-    from simtk import unit
-
-    molecule = smiles_to_molecule(smiles, guess_stereochemistry=guess_stereochemistry)
-
-    # Generate a diverse set of ELF10 conformers
-    molecule.generate_conformers(n_conformers=500, rms_cutoff=0.05 * unit.angstrom)
-    molecule.apply_elf_conformer_selection()
-
-    conformer_records = []
-
-    for conformer in molecule.conformers:
-
-        charge_sets = []
-
-        # Compute partial charges.
-        for charge_method in ["am1", "am1bcc"]:
-            molecule.assign_partial_charges(
-                _OPENFF_CHARGE_METHODS[charge_method], use_conformers=[conformer]
-            )
-
-            charge_sets.append(
-                PartialChargeSet(
-                    method=charge_method,
-                    values=[
-                        atom.partial_charge.value_in_unit(unit.elementary_charge)
-                        for atom in molecule.atoms
-                    ],
-                )
-            )
-
-        # Compute WBOs.
-        molecule.assign_fractional_bond_orders("am1-wiberg", use_conformers=[conformer])
-
-        conformer_records.append(
-            ConformerRecord(
-                coordinates=conformer.value_in_unit(unit.angstrom),
-                partial_charges=charge_sets,
-                bond_orders=[
-                    WibergBondOrderSet(
-                        method="am1",
-                        values=[
-                            (
-                                bond.atom1_index,
-                                bond.atom2_index,
-                                bond.fractional_bond_order,
-                            )
-                            for bond in molecule.bonds
-                        ],
-                    )
-                ],
-            )
-        )
-
-    return MoleculeRecord(
-        smiles=molecule.to_smiles(isomeric=True, mapped=True),
-        conformers=conformer_records,
-    )
-
-
-@requires_package("openff.toolkit")
-def label_molecule_batch(
-    smiles: List[str], guess_stereochemistry: bool
-) -> List[Tuple[Optional[MoleculeRecord], Optional[str]]]:
-    """Labels a batch of molecules using ``compute_am1_charge_and_wbo``.
-
-    Returns
-    -------
-        A list of tuples. Each tuple will contain the processed molecule containing the
-        AM1 charges and WBO if no exceptions were raised (``None`` otherwise) and the
-        error string if an exception was raised (``None`` otherwise).
-    """
-
-    molecule_records = []
-
-    with capture_toolkit_warnings():
-
-        for pattern in tqdm(smiles, ncols=80, desc="labelling batch"):
-
-            molecule_record = None
-            error = None
-
-            try:
-                molecule_record = _label_molecule(pattern, guess_stereochemistry)
-            except (BaseException, Exception) as e:
-
-                formatted_traceback = traceback.format_exception(
-                    etype=type(e), value=e, tb=e.__traceback__
-                )
-                error = f"Failed to process {pattern}: {formatted_traceback}"
-
-            molecule_records.append((molecule_record, error))
-
-    return molecule_records
 
 
 @click.command(
@@ -289,7 +182,7 @@ def label_cli(
 
     futures = [
         dask_client.submit(
-            functools.partial(label_molecule_batch, guess_stereochemistry=guess_stereo),
+            functools.partial(label_molecules, guess_stereochemistry=guess_stereo),
             batched_molecules,
         )
         for batched_molecules in batch(unique_smiles)
