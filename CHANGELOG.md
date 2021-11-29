@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.0.1-rc.1](https://github.com/SimonBoothroyd/nagl/tree/0.0.1-rc.1) (2021-11-29)
+
+[Full Changelog](https://github.com/SimonBoothroyd/nagl/compare/0.0.1-alpha.4...0.0.1-rc.1)
+
+**Implemented enhancements:**
+
+- Split labelling into separate module [\#21](https://github.com/SimonBoothroyd/nagl/pull/21) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+- Add `DGLMolecule` to device [\#20](https://github.com/SimonBoothroyd/nagl/pull/20) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+- Remove superfluous configs and clean-up API [\#19](https://github.com/SimonBoothroyd/nagl/pull/19) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+- Improve performance of retrieving from SQL DB [\#18](https://github.com/SimonBoothroyd/nagl/pull/18) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+- Order of magnitudes speed up of conformer comparison [\#17](https://github.com/SimonBoothroyd/nagl/pull/17) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+- Improve label CLI performance [\#16](https://github.com/SimonBoothroyd/nagl/pull/16) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+- Simplify the molecule DB store [\#15](https://github.com/SimonBoothroyd/nagl/pull/15) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+- Add initial support for resonance structures [\#14](https://github.com/SimonBoothroyd/nagl/pull/14) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+- Adds data set from molecule store function [\#12](https://github.com/SimonBoothroyd/nagl/pull/12) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+- Make the label CLI more resilient and informative [\#11](https://github.com/SimonBoothroyd/nagl/pull/11) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+- Add Basic provenance to Labelled Molecule Store [\#7](https://github.com/SimonBoothroyd/nagl/pull/7) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+- Replace OE calls with OFF toolkit calls [\#6](https://github.com/SimonBoothroyd/nagl/pull/6) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+- SQL Based Storage of Annotated Molecules [\#5](https://github.com/SimonBoothroyd/nagl/pull/5) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+
+**Fixed bugs:**
+
+- Temporary fix guessing stereochemistry of pyramidal N [\#10](https://github.com/SimonBoothroyd/nagl/pull/10) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+
 ## [0.0.1-alpha.4](https://github.com/SimonBoothroyd/nagl/tree/0.0.1-alpha.4) (2021-01-03)
 
 [Full Changelog](https://github.com/SimonBoothroyd/nagl/compare/0.0.1-alpha.3...0.0.1-alpha.4)
