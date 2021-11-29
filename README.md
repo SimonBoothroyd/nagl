@@ -20,18 +20,6 @@ conda env create --name nagl --file devtools/conda-envs/test_env.yaml
 python setup.py develop
 ```
 
-***Note**: Currently the commercial OpenEye `oechem` and `oequacpac` packages are required as dependencies.*
-
-## Scripts
-
-* `scripts/data-set-generation/openff/run.py` - A script which will load a set of molecules from their SMILES 
-  representations, compute their AM1 partial charges and Wiberg bond orders (WBO) then pickle these ready for 
-  featurization.
-  
-* `scripts/training/run.py` - A script which loads a train and test set of pickled molecules, featurizes them, and
-   then attempts to train a generalizable NN model which is able to predict the AM1 partial charges and WBOs.
- 
-
 ## Copyright
 
 Copyright (c) 2020, Simon Boothroyd
