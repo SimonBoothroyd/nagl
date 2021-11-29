@@ -22,8 +22,7 @@ _logger = logging.getLogger(__name__)
     "label",
     short_help="Label molecules with AM1 charges and WBOs",
     help="Compute the AM1 partial charges and AM1 Wiberg bond orders (WBOs) for each "
-    "molecule in a given set and store each labelled molecule as a pickled OpenFF "
-    "``Molecule`` object.",
+    "molecule in a given set and store each labelled molecule in a SQLite record store.",
 )
 @click.option(
     "--input",
@@ -182,7 +181,12 @@ def label_cli(
 
     futures = [
         dask_client.submit(
-            functools.partial(label_molecules, guess_stereochemistry=guess_stereo),
+            functools.partial(
+                label_molecules,
+                guess_stereochemistry=guess_stereo,
+                partial_charge_methods=["am1", "am1bcc"],
+                bond_order_methods=["am1"],
+            ),
             batched_molecules,
         )
         for batched_molecules in batch(unique_smiles)
