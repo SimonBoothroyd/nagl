@@ -1,7 +1,6 @@
 import copy
 import traceback
-import typing
-from typing import TYPE_CHECKING, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, List, Optional, Tuple, Union, get_args
 
 from openff.utilities import requires_package
 from tqdm import tqdm
@@ -160,12 +159,10 @@ def label_molecules(
     partial_charge_methods = (
         partial_charge_methods
         if partial_charge_methods is not None
-        else typing.get_args(ChargeMethod)
+        else get_args(ChargeMethod)
     )
     bond_order_methods = (
-        bond_order_methods
-        if bond_order_methods is not None
-        else typing.get_args(WBOMethod)
+        bond_order_methods if bond_order_methods is not None else get_args(WBOMethod)
     )
 
     molecule_records = []
@@ -186,7 +183,7 @@ def label_molecules(
                     n_conformers,
                     rms_cutoff,
                 )
-            except (BaseException, Exception) as e:
+            except (BaseException, Exception) as e:  # lgtm [py/catch-base-exception]
 
                 formatted_traceback = traceback.format_exception(
                     etype=type(e), value=e, tb=e.__traceback__
