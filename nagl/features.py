@@ -37,13 +37,17 @@ class _Featurizer(Generic[T], abc.ABC):
 class AtomFeature(_Feature, abc.ABC):
     """The base class for atomic features."""
 
+    @abc.abstractmethod
+    def __len__(self):
+        raise NotImplementedError
+
 
 class AtomicElement(AtomFeature):
     """One-hot encodes the atomic element of each atom in a molecule."""
 
     _DEFAULT_ELEMENTS = ["H", "C", "N", "O", "F", "Cl", "Br", "S", "P"]
 
-    def __init__(self, elements: Optional[List[str]]):
+    def __init__(self, elements: Optional[List[str]] = None):
         """
         Parameters
         ----------
@@ -66,22 +70,41 @@ class AtomicElement(AtomFeature):
             ]
         )
 
+    def __len__(self):
+        return len(self.elements)
+
 
 class AtomConnectivity(AtomFeature):
     """One-hot encodes the connectivity (i.e. the number of bonds) of each atom in a
     molecule.
     """
 
-    _CONNECTIONS = [1, 2, 3, 4]
+    _CONNECTIVITIES = [1, 2, 3, 4]
+
+    def __init__(self, connectivities: Optional[List[int]] = None):
+        """
+        Parameters
+        ----------
+        connectivities
+            The connectivities (i.e. number of bonds to an atom) to include in the
+            one-hot encoding in the order in which they should be encoded. If none are
+            provided, the default set of [1, 2, 3, 4] will be used.
+        """
+        self.connectivities = (
+            connectivities if connectivities is not None else [*self._CONNECTIVITIES]
+        )
 
     def __call__(self, molecule: "Molecule") -> torch.Tensor:
 
         return torch.vstack(
             [
-                one_hot_encode(len(atom.bonds), self._CONNECTIONS)
+                one_hot_encode(len(atom.bonds), self.connectivities)
                 for atom in molecule.atoms
             ]
         )
+
+    def __len__(self):
+        return len(self.connectivities)
 
 
 class AtomIsAromatic(AtomFeature):
@@ -93,6 +116,9 @@ class AtomIsAromatic(AtomFeature):
             [one_hot_encode(int(atom.is_aromatic), [0, 1]) for atom in molecule.atoms]
         )
 
+    def __len__(self):
+        return 2
+
 
 class AtomIsInRing(AtomFeature):
     """One-hot encodes whether each atom in a molecule is in a ring of any size."""
@@ -103,13 +129,16 @@ class AtomIsInRing(AtomFeature):
             [one_hot_encode(int(atom.is_in_ring), [0, 1]) for atom in molecule.atoms]
         )
 
+    def __len__(self):
+        return 2
+
 
 class AtomFormalCharge(AtomFeature):
     """One-hot encodes the formal charge on each atom in a molecule."""
 
     _CHARGES = [-3, -2, -1, 0, 1, 2, 3]
 
-    def __init__(self, charges: Optional[List[int]]):
+    def __init__(self, charges: Optional[List[int]] = None):
         """
         Parameters
         ----------
@@ -118,7 +147,7 @@ class AtomFormalCharge(AtomFeature):
             should be encoded. If none are provided, the default set of
             [-3, -2, -1, 0, 1, 2, 3] will be used.
         """
-        self.charges = charges
+        self.charges = charges if charges is not None else [*self._CHARGES]
 
     def __call__(self, molecule: "Molecule") -> torch.Tensor:
 
@@ -133,6 +162,9 @@ class AtomFormalCharge(AtomFeature):
                 for atom in molecule.atoms
             ]
         )
+
+    def __len__(self):
+        return len(self.charges)
 
 
 class AtomFeaturizer(_Featurizer[AtomFeature]):
@@ -153,6 +185,9 @@ class BondIsAromatic(BondFeature):
             [one_hot_encode(int(bond.is_aromatic), [0, 1]) for bond in molecule.bonds]
         )
 
+    def __len__(self):
+        return 2
+
 
 class BondIsInRing(BondFeature):
     """One-hot encodes whether each bond in a molecule is in a ring of any size."""
@@ -162,6 +197,9 @@ class BondIsInRing(BondFeature):
         return torch.vstack(
             [one_hot_encode(int(bond.is_in_ring), [0, 1]) for bond in molecule.bonds]
         )
+
+    def __len__(self):
+        return 2
 
 
 class WibergBondOrder(BondFeature):
@@ -173,9 +211,12 @@ class WibergBondOrder(BondFeature):
             [bond.fractional_bond_order for bond in molecule.bonds]
         ).reshape(-1, 1)
 
+    def __len__(self):
+        return 1
+
 
 class BondOrder(BondFeature):
-    """Encodes the fractional Wiberg bond order of all of the bonds in a molecule."""
+    """Encodes the formal bond order of all of the bonds in a molecule."""
 
     @classmethod
     def __call__(cls, molecule: "Molecule") -> torch.Tensor:
@@ -184,6 +225,9 @@ class BondOrder(BondFeature):
             .reshape(-1, 1)
             .float()
         )
+
+    def __len__(self):
+        return 1
 
 
 class BondFeaturizer(_Featurizer[BondFeature]):

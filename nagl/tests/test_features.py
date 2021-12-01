@@ -24,7 +24,10 @@ def test_one_hot_encode():
 
 def test_atomic_element(openff_methane: Molecule):
 
-    encoding = AtomicElement(["H", "C"])(openff_methane).numpy()
+    feature = AtomicElement(["H", "C"])
+    assert len(feature) == 2
+
+    encoding = feature(openff_methane).numpy()
 
     assert encoding.shape == (5, 2)
 
@@ -37,7 +40,10 @@ def test_atomic_element(openff_methane: Molecule):
 
 def test_atom_connectivity(openff_methane: Molecule):
 
-    encoding = AtomConnectivity()(openff_methane).numpy()
+    feature = AtomConnectivity()
+    assert len(feature) == 4
+
+    encoding = feature(openff_methane).numpy()
 
     assert encoding.shape == (5, 4)
 
@@ -49,7 +55,10 @@ def test_atom_formal_charge():
 
     molecule = Molecule.from_smiles("[Cl-]")
 
-    encoding = AtomFormalCharge([0, -1])(molecule).numpy()
+    feature = AtomFormalCharge([0, -1])
+    assert len(feature) == 2
+
+    encoding = feature(molecule).numpy()
     assert encoding.shape == (1, 2)
 
     assert numpy.isclose(encoding[0, 0], 0.0)
@@ -61,7 +70,10 @@ def test_is_aromatic(feature_class):
 
     molecule = Molecule.from_smiles("c1ccccc1")
 
-    encoding = feature_class()(molecule).numpy()
+    feature = feature_class()
+    assert len(feature) == 2
+
+    encoding = feature(molecule).numpy()
     assert encoding.shape == (12, 2)
 
     assert numpy.allclose(encoding[:6, 0], 0.0)
@@ -76,7 +88,10 @@ def test_is_in_ring(feature_class):
 
     molecule = Molecule.from_smiles("c1ccccc1")
 
-    encoding = AtomIsInRing()(molecule).numpy()
+    feature = AtomIsInRing()
+    assert len(feature) == 2
+
+    encoding = feature(molecule).numpy()
     assert encoding.shape == (12, 2)
 
     assert numpy.allclose(encoding[:6, 0], 0.0)
@@ -88,7 +103,10 @@ def test_is_in_ring(feature_class):
 
 def test_bond_order():
 
-    encoding = BondOrder()(Molecule.from_smiles("C=O")).numpy()
+    feature = BondOrder()
+    assert len(feature) == 1
+
+    encoding = feature(Molecule.from_smiles("C=O")).numpy()
     assert encoding.shape == (3, 1)
 
     assert numpy.allclose(encoding, numpy.array([[2.0], [1.0], [1.0]]))
@@ -99,7 +117,10 @@ def test_wiberg_bond_order(openff_methane):
     for i, bond in enumerate(openff_methane.bonds):
         bond.fractional_bond_order = float(i)
 
-    encoding = WibergBondOrder()(openff_methane).numpy()
+    feature = WibergBondOrder()
+    assert len(feature) == 1
+
+    encoding = feature(openff_methane).numpy()
     assert encoding.shape == (4, 1)
 
     assert numpy.allclose(encoding, numpy.arange(4).reshape(-1, 1))
