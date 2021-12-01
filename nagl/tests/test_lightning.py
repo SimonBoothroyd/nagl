@@ -115,6 +115,7 @@ class TestDGLMoleculeDataModule:
             bond_features=[BondOrder()],
             partial_charge_method="am1bcc",
             bond_order_method="am1",
+            enumerate_resonance=True,
             train_set_path="train.sqlite",
             train_batch_size=1,
             val_set_path="val.sqlite",
@@ -159,6 +160,8 @@ class TestDGLMoleculeDataModule:
         assert mock_data_module._partial_charge_method == "am1bcc"
         assert mock_data_module._bond_order_method == "am1"
 
+        assert mock_data_module._enumerate_resonance is True
+
         assert mock_data_module._train_set_path == "train.sqlite"
         assert mock_data_module._train_batch_size == 1
 
@@ -198,6 +201,7 @@ class TestDGLMoleculeDataModule:
             bond_features=[BondOrder()],
             partial_charge_method="am1bcc",
             bond_order_method="am1",
+            enumerate_resonance=False,
             train_set_path=mock_data_store,
             train_batch_size=None,
             val_set_path=mock_data_store,
@@ -227,6 +231,7 @@ class TestDGLMoleculeDataModule:
             bond_features=[BondOrder()],
             partial_charge_method="am1bcc",
             bond_order_method="am1",
+            enumerate_resonance=False,
             train_set_path=mock_data_store,
             train_batch_size=None,
             output_path=os.path.join(tmpdir, "tmp.pkl"),
@@ -246,6 +251,7 @@ class TestDGLMoleculeDataModule:
             bond_features=[BondOrder()],
             partial_charge_method="am1bcc",
             bond_order_method="am1",
+            enumerate_resonance=False,
             train_set_path=mock_data_store,
             train_batch_size=None,
             output_path=os.path.join(tmpdir, "tmp.pkl"),

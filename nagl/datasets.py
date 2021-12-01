@@ -175,6 +175,7 @@ class DGLMoleculeDataset(Dataset):
         bond_order_method: Optional["WBOMethod"],
         atom_features: List[AtomFeature],
         bond_features: List[BondFeature],
+        enumerate_resonance: bool,
     ) -> "DGLMoleculeDataset":
         """Creates a data set from a specified set of labelled molecule stores.
 
@@ -187,6 +188,9 @@ class DGLMoleculeDataset(Dataset):
                 If ``None``, bonds won't be labelled with WBOs.
             atom_features: The atom features to compute for each molecule.
             bond_features: The bond features to compute for each molecule.
+            enumerate_resonance: Whether to enumerate the lowest energy resonance
+                structures of each molecule and store each within the DGL graph
+                representation.
         """
 
         from openff.toolkit.topology import Molecule
@@ -259,6 +263,7 @@ class DGLMoleculeDataset(Dataset):
                         partial_charge_method=partial_charge_method,
                         bond_order_method=bond_order_method,
                     ),
+                    enumerate_resonance,
                 )
             )
 
@@ -271,7 +276,7 @@ class DGLMoleculeDataset(Dataset):
         atom_features: List[AtomFeature],
         bond_features: List[BondFeature],
         label_function: Callable[["Molecule"], Dict[str, torch.Tensor]],
-        enumerate_resonance: bool = False,
+        enumerate_resonance: bool,
     ) -> DGLMoleculeDatasetEntry:
         """Maps a molecule into a labeled, featurized graph representation.
 
