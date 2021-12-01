@@ -21,6 +21,7 @@ from nagl.storage import (
     PartialChargeSet,
     WibergBondOrderSet,
 )
+from nagl.tests import does_not_raise
 
 
 @pytest.fixture()
@@ -213,7 +214,13 @@ class TestDGLMoleculeDataModule:
         assert all(isinstance(dataset, DGLMoleculeDataset) for dataset in datasets)
         assert all(dataset.n_features == 2 for dataset in datasets)
 
-    def test_prepare_error(self, tmpdir, mock_data_store):
+    @pytest.mark.parametrize(
+        "use_cached_data, expected_raises",
+        [(True, does_not_raise()), (False, pytest.raises(FileExistsError))],
+    )
+    def test_prepare_cache(
+        self, use_cached_data, expected_raises, tmpdir, mock_data_store
+    ):
 
         data_module = DGLMoleculeDataModule(
             atom_features=[AtomicElement(["Cl", "H"])],
@@ -223,13 +230,13 @@ class TestDGLMoleculeDataModule:
             train_set_path=mock_data_store,
             train_batch_size=None,
             output_path=os.path.join(tmpdir, "tmp.pkl"),
-            use_cached_data=False,
+            use_cached_data=use_cached_data,
         )
 
         with open(data_module._output_path, "wb") as file:
             pickle.dump((None, None, None), file)
 
-        with pytest.raises(FileExistsError):
+        with expected_raises:
             data_module.prepare_data()
 
     def test_setup(self, tmpdir, mock_data_store):

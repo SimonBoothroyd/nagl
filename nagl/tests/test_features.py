@@ -88,7 +88,7 @@ def test_is_in_ring(feature_class):
 
     molecule = Molecule.from_smiles("c1ccccc1")
 
-    feature = AtomIsInRing()
+    feature = feature_class()
     assert len(feature) == 2
 
     encoding = feature(molecule).numpy()
