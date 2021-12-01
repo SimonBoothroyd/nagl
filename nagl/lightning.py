@@ -95,6 +95,7 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
         bond_features: List[BondFeature],
         partial_charge_method: Optional[ChargeMethod],
         bond_order_method: Optional[WBOMethod],
+        enumerate_resonance: bool,
         train_set_path: str,
         train_batch_size: Optional[int],
         val_set_path: Optional[str] = None,
@@ -113,6 +114,9 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
                 in the training labels.
             bond_order_method: The (optional) type of bond orders to include
                 in the training labels.
+            enumerate_resonance: Whether to enumerate the lowest energy resonance
+                structures of each molecule and store each within the DGL graph
+                representation.
             train_set_path: The (optional) path to the training data stored in a
                 SQLite molecule store. If none is specified no training will
                 be performed.
@@ -143,6 +147,8 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
 
         self._partial_charge_method = partial_charge_method
         self._bond_order_method = bond_order_method
+
+        self._enumerate_resonance = enumerate_resonance
 
         self._train_set_path = train_set_path
         self._train_batch_size = train_batch_size
@@ -204,6 +210,7 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
                 bond_order_method=self._bond_order_method,
                 atom_features=self._atom_features,
                 bond_features=self._bond_features,
+                enumerate_resonance=self._enumerate_resonance,
             )
 
             return data
