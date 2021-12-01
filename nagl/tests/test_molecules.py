@@ -106,15 +106,11 @@ class TestDGLMolecule:
         reverse_features = dgl_graph.edges["reverse"].data["feat"].numpy()
 
         assert forward_features.shape == reverse_features.shape
-        assert forward_features.shape == (6, 2)
+        assert forward_features.shape == (6, 1)
 
         assert numpy.allclose(forward_features, reverse_features)
-
         assert numpy.allclose(
-            forward_features[:, 1], numpy.zeros_like(forward_features[:, 1])
-        )
-        assert numpy.allclose(
-            forward_features[:, 0], numpy.ones_like(forward_features[:, 0])
+            forward_features[:], numpy.zeros_like(forward_features[:])
         )
 
 
