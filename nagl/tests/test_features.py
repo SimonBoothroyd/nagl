@@ -71,16 +71,13 @@ def test_is_aromatic(feature_class):
     molecule = Molecule.from_smiles("c1ccccc1")
 
     feature = feature_class()
-    assert len(feature) == 2
+    assert len(feature) == 1
 
     encoding = feature(molecule).numpy()
-    assert encoding.shape == (12, 2)
+    assert encoding.shape == (12, 1)
 
-    assert numpy.allclose(encoding[:6, 0], 0.0)
-    assert numpy.allclose(encoding[:6, 1], 1.0)
-
-    assert numpy.allclose(encoding[6:, 0], 1.0)
-    assert numpy.allclose(encoding[6:, 1], 0.0)
+    assert numpy.allclose(encoding[:6], 1.0)
+    assert numpy.allclose(encoding[6:], 0.0)
 
 
 @pytest.mark.parametrize("feature_class", [AtomIsInRing, BondIsInRing])
@@ -89,27 +86,24 @@ def test_is_in_ring(feature_class):
     molecule = Molecule.from_smiles("c1ccccc1")
 
     feature = feature_class()
-    assert len(feature) == 2
+    assert len(feature) == 1
 
     encoding = feature(molecule).numpy()
-    assert encoding.shape == (12, 2)
+    assert encoding.shape == (12, 1)
 
-    assert numpy.allclose(encoding[:6, 0], 0.0)
-    assert numpy.allclose(encoding[:6, 1], 1.0)
-
-    assert numpy.allclose(encoding[6:, 0], 1.0)
-    assert numpy.allclose(encoding[6:, 1], 0.0)
+    assert numpy.allclose(encoding[:6], 1.0)
+    assert numpy.allclose(encoding[6:], 0.0)
 
 
 def test_bond_order():
 
-    feature = BondOrder()
-    assert len(feature) == 1
+    feature = BondOrder([2, 1])
+    assert len(feature) == 2
 
     encoding = feature(Molecule.from_smiles("C=O")).numpy()
-    assert encoding.shape == (3, 1)
+    assert encoding.shape == (3, 2)
 
-    assert numpy.allclose(encoding, numpy.array([[2.0], [1.0], [1.0]]))
+    assert numpy.allclose(encoding, numpy.array([[1, 0], [0, 1], [0, 1]]))
 
 
 def test_wiberg_bond_order(openff_methane):
