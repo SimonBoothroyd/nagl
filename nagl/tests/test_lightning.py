@@ -5,6 +5,7 @@ import numpy
 import pytest
 import torch
 import torch.optim
+from torch.utils.data import ConcatDataset
 
 from nagl.datasets import DGLMoleculeDataset
 from nagl.features import AtomFormalCharge, AtomicElement, BondOrder
@@ -162,13 +163,13 @@ class TestDGLMoleculeDataModule:
 
         assert mock_data_module._enumerate_resonance is True
 
-        assert mock_data_module._train_set_path == "train.sqlite"
+        assert mock_data_module._train_set_paths == ["train.sqlite"]
         assert mock_data_module._train_batch_size == 1
 
-        assert mock_data_module._val_set_path == "val.sqlite"
+        assert mock_data_module._val_set_paths == ["val.sqlite"]
         assert mock_data_module._val_batch_size == 2
 
-        assert mock_data_module._test_set_path == "test.sqlite"
+        assert mock_data_module._test_set_paths == ["test.sqlite"]
         assert mock_data_module._test_batch_size == 3
 
         assert mock_data_module._output_path == "tmp.pkl"
@@ -176,8 +177,10 @@ class TestDGLMoleculeDataModule:
 
     def test_prepare_data_from_path(self, mock_data_module, mock_data_store):
 
-        dataset = mock_data_module._prepare_data_from_path(mock_data_store)
+        dataset = mock_data_module._prepare_data_from_path([mock_data_store])
+        assert isinstance(dataset, ConcatDataset)
 
+        dataset = dataset.datasets[0]
         assert isinstance(dataset, DGLMoleculeDataset)
 
         assert dataset.n_features == 5
@@ -188,6 +191,14 @@ class TestDGLMoleculeDataModule:
         assert molecule.n_atoms == 2
         assert molecule.n_bonds == 1
         assert {*labels} == {"am1bcc-charges", "am1-wbo"}
+
+    def test_prepare_data_from_multiple_paths(self, mock_data_module, mock_data_store):
+
+        dataset = mock_data_module._prepare_data_from_path([mock_data_store] * 2)
+
+        assert isinstance(dataset, ConcatDataset)
+        assert len(dataset.datasets) == 2
+        assert len(dataset) == 2
 
     def test_prepare_data_from_path_error(self, mock_data_module):
 
@@ -215,8 +226,8 @@ class TestDGLMoleculeDataModule:
         with open(data_module._output_path, "rb") as file:
             datasets = pickle.load(file)
 
-        assert all(isinstance(dataset, DGLMoleculeDataset) for dataset in datasets)
-        assert all(dataset.n_features == 2 for dataset in datasets)
+        assert all(isinstance(dataset, ConcatDataset) for dataset in datasets)
+        assert all(dataset.datasets[0].n_features == 2 for dataset in datasets)
 
     @pytest.mark.parametrize(
         "use_cached_data, expected_raises",
@@ -260,6 +271,6 @@ class TestDGLMoleculeDataModule:
         data_module.prepare_data()
         data_module.setup()
 
-        assert isinstance(data_module._train_data, DGLMoleculeDataset)
+        assert isinstance(data_module._train_data.datasets[0], DGLMoleculeDataset)
         assert data_module._val_data is None
         assert data_module._test_data is None

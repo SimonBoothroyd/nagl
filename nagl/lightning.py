@@ -6,6 +6,7 @@ from typing import Dict, List, Literal, Optional, Tuple, Union
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional
+from torch.utils.data import ConcatDataset
 
 from nagl.datasets import DGLMoleculeDataLoader, DGLMoleculeDataset
 from nagl.features import AtomFeature, BondFeature
@@ -96,11 +97,11 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
         partial_charge_method: Optional[ChargeMethod],
         bond_order_method: Optional[WBOMethod],
         enumerate_resonance: bool,
-        train_set_path: str,
+        train_set_path: Union[str, List[str]],
         train_batch_size: Optional[int],
-        val_set_path: Optional[str] = None,
+        val_set_path: Optional[Union[str, List[str]]] = None,
         val_batch_size: Optional[int] = None,
-        test_set_path: Optional[str] = None,
+        test_set_path: Optional[Union[str, List[str]]] = None,
         test_batch_size: Optional[int] = None,
         output_path: str = "nagl-data-module.pkl",
         use_cached_data: bool = False,
@@ -117,17 +118,17 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
             enumerate_resonance: Whether to enumerate the lowest energy resonance
                 structures of each molecule and store each within the DGL graph
                 representation.
-            train_set_path: The (optional) path to the training data stored in a
+            train_set_path: The path(s) to the training data stored in a
                 SQLite molecule store. If none is specified no training will
                 be performed.
             train_batch_size: The training batch size. If none is specified, all the
                 data will be included in a single batch.
-            val_set_path: The (optional) path to the validation data stored in a
+            val_set_path: The (optional) path(s) to the validation data stored in a
                 SQLite molecule store. If none is specified no validation will
                 be performed.
             val_batch_size: The validation batch size. If none is specified, all the
                 data will be included in a single batch.
-            test_set_path: The (optional) path to the test data stored in a
+            test_set_path: The (optional) path(s) to the test data stored in a
                 SQLite molecule store. If none is specified no testing will
                 be performed.
             test_batch_size: The test batch size. If none is specified, all the
@@ -150,11 +151,13 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
 
         self._enumerate_resonance = enumerate_resonance
 
-        self._train_set_path = train_set_path
+        self._train_set_paths = (
+            [train_set_path] if isinstance(train_set_path, str) else train_set_path
+        )
         self._train_batch_size = train_batch_size
-        self._train_data: Optional[DGLMoleculeDataset] = None
+        self._train_data: Optional[ConcatDataset] = None
 
-        if self._train_set_path is not None:
+        if self._train_set_paths is not None:
 
             self.train_dataloader = lambda: DGLMoleculeDataLoader(
                 self._train_data,
@@ -165,11 +168,13 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
                 ),
             )
 
-        self._val_set_path = val_set_path
+        self._val_set_paths = (
+            [val_set_path] if isinstance(val_set_path, str) else val_set_path
+        )
         self._val_batch_size = val_batch_size
-        self._val_data: Optional[DGLMoleculeDataset] = None
+        self._val_data: Optional[ConcatDataset] = None
 
-        if self._val_set_path is not None:
+        if self._val_set_paths is not None:
 
             self.val_dataloader = lambda: DGLMoleculeDataLoader(
                 self._val_data,
@@ -180,11 +185,13 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
                 ),
             )
 
-        self._test_set_path = test_set_path
+        self._test_set_paths = (
+            [test_set_path] if isinstance(test_set_path, str) else test_set_path
+        )
         self._test_batch_size = test_batch_size
-        self._test_data: Optional[DGLMoleculeDataset] = None
+        self._test_data: Optional[ConcatDataset] = None
 
-        if self._test_set_path is not None:
+        if self._test_set_paths is not None:
 
             self.test_dataloader = lambda: DGLMoleculeDataLoader(
                 self._test_data,
@@ -198,27 +205,35 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
         self._output_path = output_path
         self._use_cached_data = use_cached_data
 
-    def _prepare_data_from_path(self, data_path: str) -> DGLMoleculeDataset:
+    def _prepare_data_from_path(self, data_paths: List[str]) -> ConcatDataset:
 
-        extension = os.path.splitext(data_path)[-1].lower()
+        datasets = []
 
-        if extension == ".sqlite":
+        for data_path in data_paths:
 
-            data = DGLMoleculeDataset.from_molecule_stores(
-                MoleculeStore(data_path),
-                partial_charge_method=self._partial_charge_method,
-                bond_order_method=self._bond_order_method,
-                atom_features=self._atom_features,
-                bond_features=self._bond_features,
-                enumerate_resonance=self._enumerate_resonance,
-            )
+            extension = os.path.splitext(data_path)[-1].lower()
 
-            return data
+            if extension == ".sqlite":
 
-        raise NotImplementedError(
-            f"Only paths to SQLite ``MoleculeStore`` databases are supported, and not "
-            f"'{extension}' files."
-        )
+                dataset = DGLMoleculeDataset.from_molecule_stores(
+                    MoleculeStore(data_path),
+                    partial_charge_method=self._partial_charge_method,
+                    bond_order_method=self._bond_order_method,
+                    atom_features=self._atom_features,
+                    bond_features=self._bond_features,
+                    enumerate_resonance=self._enumerate_resonance,
+                )
+
+            else:
+
+                raise NotImplementedError(
+                    f"Only paths to SQLite ``MoleculeStore`` databases are supported, and not "
+                    f"'{extension}' files."
+                )
+
+            datasets.append(dataset)
+
+        return ConcatDataset(datasets)
 
     def prepare_data(self):
 
@@ -234,14 +249,14 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
 
         train_data, val_data, test_data = None, None, None
 
-        if self._train_set_path is not None:
-            train_data = self._prepare_data_from_path(self._train_set_path)
+        if self._train_set_paths is not None:
+            train_data = self._prepare_data_from_path(self._train_set_paths)
 
-        if self._val_set_path is not None:
-            val_data = self._prepare_data_from_path(self._val_set_path)
+        if self._val_set_paths is not None:
+            val_data = self._prepare_data_from_path(self._val_set_paths)
 
-        if self._test_set_path is not None:
-            test_data = self._prepare_data_from_path(self._test_set_path)
+        if self._test_set_paths is not None:
+            test_data = self._prepare_data_from_path(self._test_set_paths)
 
         with open(self._output_path, "wb") as file:
             pickle.dump((train_data, val_data, test_data), file)
