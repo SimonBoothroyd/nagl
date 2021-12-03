@@ -20,6 +20,10 @@ conda env create --name nagl --file devtools/conda-envs/test_env.yaml
 python setup.py develop
 ```
 
+## Getting Started
+
+Examples for using this framework can be found in the [`examples`](examples) directory.
+
 ## Copyright
 
-Copyright (c) 2020, Simon Boothroyd
+Copyright (c) 2021, Simon Boothroyd
