@@ -16,7 +16,7 @@ from typing import (
 import dgl
 import numpy
 import torch
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import ConcatDataset, DataLoader, Dataset
 from tqdm import tqdm
 
 from nagl.features import AtomFeature, BondFeature
@@ -316,7 +316,7 @@ class DGLMoleculeDataLoader(DataLoader):
 
     def __init__(
         self,
-        dataset: DGLMoleculeDataset,
+        dataset: Union[DGLMoleculeDataset, ConcatDataset],
         batch_size: Optional[int] = 1,
         shuffle: bool = False,
         num_workers: int = 0,
