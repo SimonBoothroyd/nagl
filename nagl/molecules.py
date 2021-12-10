@@ -5,7 +5,7 @@ import dgl.function
 import torch
 
 from nagl.features import AtomFeature, AtomFeaturizer, BondFeature, BondFeaturizer
-from nagl.utilities.resonance import enumerate_resonance_forms
+from nagl.resonance import enumerate_resonance_forms
 
 if TYPE_CHECKING:
     from openff.toolkit.topology import Molecule
