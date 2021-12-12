@@ -381,6 +381,9 @@ def _enumerate_resonance_graphs(
                     )
                     flipped_key = _graph_to_hash(flipped_graph)
 
+                    if flipped_key in closed_list or flipped_key in open_list:
+                        continue
+
                     found_graphs[flipped_key] = flipped_graph
 
         open_list = found_graphs
