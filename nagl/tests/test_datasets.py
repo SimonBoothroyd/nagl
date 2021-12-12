@@ -103,7 +103,7 @@ def test_data_set_from_molecule_stores(tmpdir):
     )
 
     data_set = DGLMoleculeDataset.from_molecule_stores(
-        molecule_store, "am1", "am1", [AtomConnectivity()], [BondIsInRing()], False
+        molecule_store, "am1", "am1", [AtomConnectivity()], [BondIsInRing()]
     )
 
     assert len(data_set) == 1

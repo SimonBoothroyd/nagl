@@ -1,16 +1,19 @@
 import copy
-from typing import TYPE_CHECKING, List, Tuple, Type, TypeVar
+from typing import TYPE_CHECKING, Callable, List, Tuple, Type, TypeVar
 
 import dgl.function
 import torch
 
 from nagl.features import AtomFeature, AtomFeaturizer, BondFeature, BondFeaturizer
-from nagl.resonance import enumerate_resonance_forms
 
 if TYPE_CHECKING:
     from openff.toolkit.topology import Molecule
 
 _T = TypeVar("_T")
+
+MoleculeToDGLFunc = Callable[
+    ["Molecule", List[AtomFeature], List[BondFeature]], "DGLMolecule"
+]
 
 
 def _hetero_to_homo_graph(graph: dgl.DGLHeteroGraph) -> dgl.DGLGraph:
@@ -175,7 +178,6 @@ class DGLMolecule(_BaseDGLModel):
         molecule: "Molecule",
         atom_features: List[AtomFeature],
         bond_features: List[BondFeature],
-        enumerate_resonance: bool = False,
     ) -> "DGLMolecule":
         """Creates a new molecular graph representation from an OpenFF molecule object.
 
@@ -183,36 +185,12 @@ class DGLMolecule(_BaseDGLModel):
             molecule: The molecule to store in the graph.
             atom_features: The atom features to compute for the molecule.
             bond_features: The bond features to compute for the molecule.
-            enumerate_resonance: Whether to enumerate the lowest energy resonance
-                structures of each molecule and store each within the graph
-                representation.
 
         Returns:
             The constructed graph.
         """
 
-        resonance_forms = (
-            [molecule]
-            if not enumerate_resonance
-            else enumerate_resonance_forms(molecule, lowest_energy_only=True)
-        )
-
-        graphs = [
-            cls._molecule_to_dgl(resonance_form, atom_features, bond_features)
-            for resonance_form in resonance_forms
-        ]
-
-        graph = dgl.batch(graphs)
-
-        graph.set_batch_num_nodes(graph.batch_num_nodes().sum().reshape((-1,)))
-        graph.set_batch_num_edges(
-            {
-                e_type: graph.batch_num_edges(e_type).sum().reshape((-1,))
-                for e_type in graph.canonical_etypes
-            }
-        )
-
-        return cls(graph, len(graphs))
+        return cls(cls._molecule_to_dgl(molecule, atom_features, bond_features), 1)
 
     @classmethod
     def from_smiles(
@@ -220,7 +198,6 @@ class DGLMolecule(_BaseDGLModel):
         smiles: str,
         atom_features: List[AtomFeature],
         bond_features: List[BondFeature],
-        enumerate_resonance: bool = False,
     ) -> "DGLMolecule":
         """Creates a new molecular graph representation from a SMILES pattern.
 
@@ -228,9 +205,6 @@ class DGLMolecule(_BaseDGLModel):
             smiles: The SMILES representation of the molecule to store in the graph.
             atom_features: The atom features to compute for the molecule.
             bond_features: The bond features to compute for the molecule.
-            enumerate_resonance: Whether to enumerate the lowest energy resonance
-                structures of each molecule and store each within the graph
-                representation.
 
         Returns:
             The constructed graph.
@@ -242,7 +216,6 @@ class DGLMolecule(_BaseDGLModel):
             Molecule.from_smiles(smiles),
             atom_features,
             bond_features,
-            enumerate_resonance,
         )
 
 

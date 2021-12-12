@@ -1,5 +1,6 @@
 import os.path
 import pickle
+from typing import List
 
 import numpy
 import pytest
@@ -8,9 +9,16 @@ import torch.optim
 from torch.utils.data import ConcatDataset
 
 from nagl.datasets import DGLMoleculeDataset
-from nagl.features import AtomFormalCharge, AtomicElement, BondOrder
+from nagl.features import (
+    AtomFeature,
+    AtomFormalCharge,
+    AtomicElement,
+    BondFeature,
+    BondOrder,
+)
 from nagl.lightning import DGLMoleculeDataModule, DGLMoleculeLightningModel
 from nagl.models import ConvolutionModule, ReadoutModule
+from nagl.molecules import DGLMolecule
 from nagl.nn import SequentialLayers
 from nagl.nn.gcn import GCNStack
 from nagl.nn.pooling import PoolAtomFeatures, PoolBondFeatures
@@ -108,6 +116,15 @@ class TestDGLMoleculeLightningModel:
 
 
 class TestDGLMoleculeDataModule:
+    @classmethod
+    def mock_molecule_to_dgl(
+        cls,
+        molecule,
+        atom_features: List[AtomFeature],
+        bond_features: List[BondFeature],
+    ) -> "DGLMolecule":
+        return DGLMolecule.from_openff(molecule, atom_features, bond_features)
+
     @pytest.fixture()
     def mock_data_module(self) -> DGLMoleculeDataModule:
 
@@ -116,7 +133,6 @@ class TestDGLMoleculeDataModule:
             bond_features=[BondOrder()],
             partial_charge_method="am1bcc",
             bond_order_method="am1",
-            enumerate_resonance=True,
             train_set_path="train.sqlite",
             train_batch_size=1,
             val_set_path="val.sqlite",
@@ -125,6 +141,7 @@ class TestDGLMoleculeDataModule:
             test_batch_size=3,
             output_path="tmp.pkl",
             use_cached_data=True,
+            molecule_to_dgl=TestDGLMoleculeDataModule.mock_molecule_to_dgl,
         )
 
     @pytest.fixture()
@@ -161,7 +178,10 @@ class TestDGLMoleculeDataModule:
         assert mock_data_module._partial_charge_method == "am1bcc"
         assert mock_data_module._bond_order_method == "am1"
 
-        assert mock_data_module._enumerate_resonance is True
+        assert (
+            mock_data_module._molecule_to_dgl
+            == TestDGLMoleculeDataModule.mock_molecule_to_dgl
+        )
 
         assert mock_data_module._train_set_paths == ["train.sqlite"]
         assert mock_data_module._train_batch_size == 1
@@ -212,7 +232,6 @@ class TestDGLMoleculeDataModule:
             bond_features=[BondOrder()],
             partial_charge_method="am1bcc",
             bond_order_method="am1",
-            enumerate_resonance=False,
             train_set_path=mock_data_store,
             train_batch_size=None,
             val_set_path=mock_data_store,
@@ -242,7 +261,6 @@ class TestDGLMoleculeDataModule:
             bond_features=[BondOrder()],
             partial_charge_method="am1bcc",
             bond_order_method="am1",
-            enumerate_resonance=False,
             train_set_path=mock_data_store,
             train_batch_size=None,
             output_path=os.path.join(tmpdir, "tmp.pkl"),
@@ -262,7 +280,6 @@ class TestDGLMoleculeDataModule:
             bond_features=[BondOrder()],
             partial_charge_method="am1bcc",
             bond_order_method="am1",
-            enumerate_resonance=False,
             train_set_path=mock_data_store,
             train_batch_size=None,
             output_path=os.path.join(tmpdir, "tmp.pkl"),
