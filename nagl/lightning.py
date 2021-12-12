@@ -10,7 +10,7 @@ from torch.utils.data import ConcatDataset
 
 from nagl.datasets import DGLMoleculeDataLoader, DGLMoleculeDataset
 from nagl.features import AtomFeature, BondFeature
-from nagl.molecules import DGLMolecule, DGLMoleculeBatch
+from nagl.molecules import DGLMolecule, DGLMoleculeBatch, MoleculeToDGLFunc
 from nagl.nn.modules import ConvolutionModule, ReadoutModule
 from nagl.storage import ChargeMethod, MoleculeStore, WBOMethod
 
@@ -96,7 +96,6 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
         bond_features: List[BondFeature],
         partial_charge_method: Optional[ChargeMethod],
         bond_order_method: Optional[WBOMethod],
-        enumerate_resonance: bool,
         train_set_path: Union[str, List[str]],
         train_batch_size: Optional[int],
         val_set_path: Optional[Union[str, List[str]]] = None,
@@ -105,6 +104,7 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
         test_batch_size: Optional[int] = None,
         output_path: str = "nagl-data-module.pkl",
         use_cached_data: bool = False,
+        molecule_to_dgl: Optional[MoleculeToDGLFunc] = None,
     ):
         """
 
@@ -115,9 +115,6 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
                 in the training labels.
             bond_order_method: The (optional) type of bond orders to include
                 in the training labels.
-            enumerate_resonance: Whether to enumerate the lowest energy resonance
-                structures of each molecule and store each within the DGL graph
-                representation.
             train_set_path: The path(s) to the training data stored in a
                 SQLite molecule store. If none is specified no training will
                 be performed.
@@ -140,6 +137,9 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
                 the input arguments so be extra careful when using this option**.
                 If this is false and a file is found at ``output_path`` an exception
                 will be raised.
+            molecule_to_dgl: A (optional) callable to use when converting an OpenFF
+                ``Molecule`` object to a ``DGLMolecule`` object. By default, the
+                ``DGLMolecule.from_openff`` class method is used.
         """
         super().__init__()
 
@@ -149,7 +149,7 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
         self._partial_charge_method = partial_charge_method
         self._bond_order_method = bond_order_method
 
-        self._enumerate_resonance = enumerate_resonance
+        self._molecule_to_dgl = molecule_to_dgl
 
         self._train_set_paths = (
             [train_set_path] if isinstance(train_set_path, str) else train_set_path
@@ -221,7 +221,7 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
                     bond_order_method=self._bond_order_method,
                     atom_features=self._atom_features,
                     bond_features=self._bond_features,
-                    enumerate_resonance=self._enumerate_resonance,
+                    molecule_to_dgl=self._molecule_to_dgl,
                 )
 
             else:

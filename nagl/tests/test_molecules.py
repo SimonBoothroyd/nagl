@@ -57,13 +57,11 @@ class TestDGLMolecule:
         """Test that the number of atoms and bonds properties work correctly with
         multiple resonance structures"""
 
-        dgl_molecule = DGLMolecule.from_smiles(
-            "[H]C(=O)[O-]", [], [], enumerate_resonance=True
-        )
+        dgl_molecule = DGLMolecule.from_smiles("[H]C(=O)[O-]", [], [])
 
         assert dgl_molecule.n_atoms == 4
         assert dgl_molecule.n_bonds == 3
-        assert dgl_molecule.n_representations == 2
+        assert dgl_molecule.n_representations == 1
 
     @pytest.mark.parametrize(
         "from_function, input_object",
@@ -82,12 +80,11 @@ class TestDGLMolecule:
             input_object,
             [AtomConnectivity()],
             [BondIsInRing()],
-            enumerate_resonance=True,
         )
         dgl_graph = dgl_molecule.graph
 
         node_features = dgl_molecule.atom_features
-        assert node_features.shape == (8, 4)
+        assert node_features.shape == (4, 4)
 
         assert numpy.allclose(
             node_features,
@@ -98,7 +95,6 @@ class TestDGLMolecule:
                     [1.0, 0.0, 0.0, 0.0],
                     [1.0, 0.0, 0.0, 0.0],
                 ]
-                * 2
             ),
         )
 
@@ -106,7 +102,7 @@ class TestDGLMolecule:
         reverse_features = dgl_graph.edges["reverse"].data["feat"].numpy()
 
         assert forward_features.shape == reverse_features.shape
-        assert forward_features.shape == (6, 1)
+        assert forward_features.shape == (3, 1)
 
         assert numpy.allclose(forward_features, reverse_features)
         assert numpy.allclose(
@@ -120,10 +116,9 @@ class TestDGLMoleculeBatch:
         batch = DGLMoleculeBatch(
             DGLMolecule.from_smiles("C", [], []),
             DGLMolecule.from_smiles("CC", [], []),
-            DGLMolecule.from_smiles("[H]C(=O)[O-]", [], [], True),
         )
 
-        assert batch.graph.batch_size == 3
+        assert batch.graph.batch_size == 2
 
-        assert batch.n_atoms_per_molecule == (5, 8, 4)
-        assert batch.n_representations_per_molecule == (1, 1, 2)
+        assert batch.n_atoms_per_molecule == (5, 8)
+        assert batch.n_representations_per_molecule == (1, 1)

@@ -21,10 +21,7 @@ from nagl.resonance._conversion import (
         (
             dgl_molecule_to_networkx,
             DGLMolecule.from_openff(
-                Molecule.from_mapped_smiles("[C:1]([O-:2])(=[O:3])([H:4])"),
-                [],
-                [],
-                False,
+                Molecule.from_mapped_smiles("[C:1]([O-:2])(=[O:3])([H:4])"), [], []
             ),
         ),
     ],

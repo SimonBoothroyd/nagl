@@ -1,9 +1,39 @@
+import dgl
 import numpy
+import pytest
 import torch
 from openff.toolkit.topology import Molecule
 
 from nagl.molecules import DGLMolecule, DGLMoleculeBatch
 from nagl.nn.postprocess import ComputePartialCharges
+from nagl.resonance import enumerate_resonance_forms
+
+
+@pytest.fixture()
+def dgl_carboxylate():
+
+    molecule: Molecule = Molecule.from_mapped_smiles("[H:1][C:2](=[O:3])[O-:4]")
+
+    resonance_forms = enumerate_resonance_forms(
+        molecule, lowest_energy_only=True, as_dicts=False
+    )
+
+    graphs = [
+        DGLMolecule._molecule_to_dgl(resonance_form, [], [])
+        for resonance_form in resonance_forms
+    ]
+
+    graph = dgl.batch(graphs)
+
+    graph.set_batch_num_nodes(graph.batch_num_nodes().sum().reshape((-1,)))
+    graph.set_batch_num_edges(
+        {
+            e_type: graph.batch_num_edges(e_type).sum().reshape((-1,))
+            for e_type in graph.canonical_etypes
+        }
+    )
+
+    return DGLMolecule(graph, len(graphs))
 
 
 def test_atomic_parameters_to_charges_neutral():
@@ -47,17 +77,9 @@ def test_compute_charges_forward(dgl_methane):
     assert numpy.allclose(partial_charges[1:], partial_charges[1])
 
 
-def test_compute_charges_forward_batched():
+def test_compute_charges_forward_batched(dgl_carboxylate):
 
-    batch = DGLMoleculeBatch(
-        DGLMolecule.from_openff(
-            Molecule.from_mapped_smiles("[H:1][C:2](=[O:3])[O-:4]"),
-            [],
-            [],
-            enumerate_resonance=True,
-        ),
-        DGLMolecule.from_smiles("[H]Cl", [], []),
-    )
+    batch = DGLMoleculeBatch(dgl_carboxylate, DGLMolecule.from_smiles("[H]Cl", [], []))
 
     inputs = torch.tensor(
         [

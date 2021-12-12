@@ -20,7 +20,7 @@ from torch.utils.data import ConcatDataset, DataLoader, Dataset
 from tqdm import tqdm
 
 from nagl.features import AtomFeature, BondFeature
-from nagl.molecules import DGLMolecule, DGLMoleculeBatch
+from nagl.molecules import DGLMolecule, DGLMoleculeBatch, MoleculeToDGLFunc
 from nagl.utilities.toolkits import capture_toolkit_warnings
 
 if TYPE_CHECKING:
@@ -63,7 +63,7 @@ class DGLMoleculeDataset(Dataset):
         atom_features: List[AtomFeature],
         bond_features: List[BondFeature],
         label_function: Callable[["Molecule"], Dict[str, torch.Tensor]],
-        enumerate_resonance: bool = False,
+        molecule_to_dgl: Optional[MoleculeToDGLFunc] = None,
     ) -> "DGLMoleculeDataset":
         """Creates a data set from a specified list of molecule objects.
 
@@ -74,9 +74,9 @@ class DGLMoleculeDataset(Dataset):
             label_function: A function which will return a label for a given molecule.
                 The function should take a molecule as input, and return and tensor
                 with shape=(n_atoms,) containing the label of each atom.
-            enumerate_resonance: Whether to enumerate the lowest energy resonance
-                structures of each molecule and store each within the DGL graph
-                representation.
+            molecule_to_dgl: A (optional) callable to use when converting an OpenFF
+                ``Molecule`` object to a ``DGLMolecule`` object. By default, the
+                ``DGLMolecule.from_openff`` class method is used.
         """
 
         entries = [
@@ -85,7 +85,7 @@ class DGLMoleculeDataset(Dataset):
                 atom_features=atom_features,
                 bond_features=bond_features,
                 label_function=label_function,
-                enumerate_resonance=enumerate_resonance,
+                molecule_to_dgl=molecule_to_dgl,
             )
             for molecule in tqdm(molecules)
         ]
@@ -99,7 +99,7 @@ class DGLMoleculeDataset(Dataset):
         atom_features: List[AtomFeature],
         bond_features: List[BondFeature],
         label_function: Callable[["Molecule"], Dict[str, torch.Tensor]],
-        enumerate_resonance: bool = False,
+        molecule_to_dgl: Optional[MoleculeToDGLFunc] = None,
     ) -> "DGLMoleculeDataset":
         """Creates a data set from a specified list of SMILES patterns.
 
@@ -110,9 +110,9 @@ class DGLMoleculeDataset(Dataset):
             label_function: A function which will return a label for a given molecule.
                 The function should take a molecule as input, and return and tensor
                 with shape=(n_atoms,) containing the label of each atom.
-            enumerate_resonance: Whether to enumerate the lowest energy resonance
-                structures of each molecule and store each within the DGL graph
-                representation.
+            molecule_to_dgl: A (optional) callable to use when converting an OpenFF
+                ``Molecule`` object to a ``DGLMolecule`` object. By default, the
+                ``DGLMolecule.from_openff`` class method is used.
         """
 
         from openff.toolkit.topology import Molecule
@@ -122,7 +122,7 @@ class DGLMoleculeDataset(Dataset):
             atom_features,
             bond_features,
             label_function,
-            enumerate_resonance,
+            molecule_to_dgl,
         )
 
     @classmethod
@@ -175,7 +175,7 @@ class DGLMoleculeDataset(Dataset):
         bond_order_method: Optional["WBOMethod"],
         atom_features: List[AtomFeature],
         bond_features: List[BondFeature],
-        enumerate_resonance: bool,
+        molecule_to_dgl: Optional[MoleculeToDGLFunc] = None,
     ) -> "DGLMoleculeDataset":
         """Creates a data set from a specified set of labelled molecule stores.
 
@@ -188,9 +188,9 @@ class DGLMoleculeDataset(Dataset):
                 If ``None``, bonds won't be labelled with WBOs.
             atom_features: The atom features to compute for each molecule.
             bond_features: The bond features to compute for each molecule.
-            enumerate_resonance: Whether to enumerate the lowest energy resonance
-                structures of each molecule and store each within the DGL graph
-                representation.
+            molecule_to_dgl: A (optional) callable to use when converting an OpenFF
+                ``Molecule`` object to a ``DGLMolecule`` object. By default, the
+                ``DGLMolecule.from_openff`` class method is used.
         """
 
         from openff.toolkit.topology import Molecule
@@ -263,7 +263,7 @@ class DGLMoleculeDataset(Dataset):
                         partial_charge_method=partial_charge_method,
                         bond_order_method=bond_order_method,
                     ),
-                    enumerate_resonance,
+                    molecule_to_dgl,
                 )
             )
 
@@ -276,7 +276,7 @@ class DGLMoleculeDataset(Dataset):
         atom_features: List[AtomFeature],
         bond_features: List[BondFeature],
         label_function: Callable[["Molecule"], Dict[str, torch.Tensor]],
-        enumerate_resonance: bool,
+        molecule_to_dgl: Optional[MoleculeToDGLFunc] = None,
     ) -> DGLMoleculeDatasetEntry:
         """Maps a molecule into a labeled, featurized graph representation.
 
@@ -287,9 +287,9 @@ class DGLMoleculeDataset(Dataset):
             label_function: A function which will return a label for a given molecule.
                 The function should take a molecule as input, and return and tensor
                 with shape=(n_atoms,) containing the label of each atom.
-            enumerate_resonance: Whether to enumerate the lowest energy resonance
-                structures of each molecule and store each within the DGL graph
-                representation.
+            molecule_to_dgl: A (optional) callable to use when converting an OpenFF
+                ``Molecule`` object to a ``DGLMolecule`` object. By default, the
+                ``DGLMolecule.from_openff`` class method is used.
 
         Returns:
             A named tuple containing the featurized molecule graph, a tensor of the atom
@@ -298,9 +298,10 @@ class DGLMoleculeDataset(Dataset):
         label = label_function(molecule)
 
         # Map the molecule to a graph and assign features.
-        dgl_molecule = DGLMolecule.from_openff(
-            molecule, atom_features, bond_features, enumerate_resonance
+        molecule_to_dgl = (
+            DGLMolecule.from_openff if molecule_to_dgl is None else molecule_to_dgl
         )
+        dgl_molecule = molecule_to_dgl(molecule, atom_features, bond_features)
 
         return DGLMoleculeDatasetEntry(dgl_molecule, label)
 
