@@ -4,6 +4,7 @@ from openff.utilities import temporary_cd
 
 from nagl.utilities.toolkits import (
     get_atom_symmetries,
+    normalize_molecule,
     smiles_to_inchi_key,
     stream_from_file,
     stream_to_file,
@@ -51,3 +52,14 @@ def test_get_atom_symmetries():
 
     assert len({atom_symmetries[i] for i in (0, 2, 3)}) == 1
     assert len({atom_symmetries[i] for i in (1, 4, 5)}) == 3
+
+
+def test_normalize_molecule():
+
+    expected_molecule = Molecule.from_smiles("CS(=O)(=O)C")
+
+    molecule = Molecule.from_smiles("C[S+2]([O-])([O-])C")
+    assert not Molecule.are_isomorphic(molecule, expected_molecule)[0]
+
+    output_molecule = normalize_molecule(molecule)
+    assert Molecule.are_isomorphic(output_molecule, expected_molecule)[0]
