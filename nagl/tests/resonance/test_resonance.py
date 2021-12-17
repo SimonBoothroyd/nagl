@@ -19,8 +19,24 @@ from nagl.resonance._resonance import (
 
 
 @pytest.mark.parametrize(
-    "input_smiles, n_expected, expected_smiles, lowest_energy_only",
+    "input_smiles, "
+    "n_expected, "
+    "expected_smiles, "
+    "lowest_energy_only, "
+    "include_all_transfer_pathways",
     [
+        (
+            "[O-][N+](=O)Nc1cccc[n+]1[O-]",
+            6,
+            [
+                "[H]C1=C(C(=[N+]([H])N([O-])[O-])[N+](=O)C(=C1[H])[H])[H]",
+                "[H]C1=C(C(=[N+]([H])[N+](=O)[O-])N(C(=C1[H])[H])[O-])[H]",
+                "[H]c1c(c([n+](c(c1[H])N([H])[N+](=O)[O-])[O-])[H])[H]",
+                "[H]c1c(c([n+](c(c1[H])[N+](=[N+]([O-])[O-])[H])[O-])[H])[H]",
+            ],
+            False,
+            False,
+        ),
         (
             "[O-][N+](=O)Nc1cccc[n+]1[O-]",
             9,
@@ -30,6 +46,18 @@ from nagl.resonance._resonance import (
                 "[H]c1c(c([n+](c(c1[H])N([H])[N+](=O)[O-])[O-])[H])[H]",
                 "[H]c1c(c([n+](c(c1[H])[N+](=[N+]([O-])[O-])[H])[O-])[H])[H]",
             ],
+            False,
+            True,
+        ),
+        (
+            "[O-][N+](=O)Nc1cccc[n+]1[O-]",
+            5,
+            [
+                "[H]C1=C(C(=[N+]([H])N([O-])[O-])[N+](=O)C(=C1[H])[H])[H]",
+                "[H]C1=C(C(=[N+]([H])[N+](=O)[O-])N(C(=C1[H])[H])[O-])[H]",
+                "[H]c1c(c([n+](c(c1[H])N([H])[N+](=O)[O-])[O-])[H])[H]",
+            ],
+            True,
             False,
         ),
         (
@@ -41,19 +69,27 @@ from nagl.resonance._resonance import (
                 "[H]c1c(c([n+](c(c1[H])N([H])[N+](=O)[O-])[O-])[H])[H]",
             ],
             True,
+            True,
         ),
-        ("C", 1, ["C"], False),
-        ("C", 1, ["C"], True),
+        ("C", 1, ["C"], False, False),
+        ("C", 1, ["C"], True, False),
     ],
 )
 def test_enumerate_resonance_forms(
-    input_smiles, expected_smiles, n_expected, lowest_energy_only
+    input_smiles,
+    expected_smiles,
+    n_expected,
+    lowest_energy_only,
+    include_all_transfer_pathways,
 ):
 
     input_molecule: Molecule = Molecule.from_smiles(input_smiles)
 
     actual_molecules = enumerate_resonance_forms(
-        input_molecule, lowest_energy_only, as_dicts=False
+        input_molecule,
+        lowest_energy_only,
+        as_dicts=False,
+        include_all_transfer_pathways=include_all_transfer_pathways,
     )
     assert len(actual_molecules) == n_expected
 
@@ -77,7 +113,7 @@ def test_graphs_to_dicts():
         ]
     ]
     resonance_sub_graphs_by_hash = [
-        {_graph_to_hash(sub_graph): sub_graph for sub_graph in sub_graphs}
+        {_graph_to_hash(sub_graph, True): sub_graph for sub_graph in sub_graphs}
     ]
     dicts = _graphs_to_dicts(resonance_sub_graphs_by_hash)
 
