@@ -314,14 +314,22 @@ def _rd_normalize_molecule(
     return Molecule.from_rdkit(rd_molecule, allow_undefined_stereo=True)
 
 
-def normalize_molecule(molecule: "Molecule") -> "Molecule":
+def normalize_molecule(molecule: "Molecule", check_output: bool = True) -> "Molecule":
     """Applies a set of reaction SMARTS in sequence to an input molecule in order to
     attempt to 'normalize' its structure.
 
     This involves, for example, converting ``-N(=O)=O`` groups to ``-N(=O)[O-]`` and
     ``-[S+2]([O-])([O-])-`` to ``-S(=O)=O-``. See ``nagl/data/normalizations.json`` for
-    a full list of transforms."""
+    a full list of transforms.
 
+    Args:
+        molecule: The molecule to normalize.
+        check_output: Whether to make sure the normalized molecule is isomorphic with
+            the input molecule, ignoring aromaticity, bond order, formal charge, and
+            stereochemistry.
+    """
+
+    from openff.toolkit.topology import Molecule
     from openff.toolkit.utils import ToolkitUnavailableException
 
     reaction_smarts_path = data.get_file_path("normalizations.json")
@@ -330,6 +338,18 @@ def normalize_molecule(molecule: "Molecule") -> "Molecule":
         reaction_smarts = [entry["smarts"] for entry in json.load(file)]
 
     try:  # pragma: no cover
-        return _oe_normalize_molecule(molecule, reaction_smarts)
+        normal_molecule = _oe_normalize_molecule(molecule, reaction_smarts)
     except (ImportError, ModuleNotFoundError, ToolkitUnavailableException):
-        return _rd_normalize_molecule(molecule, reaction_smarts)
+        normal_molecule = _rd_normalize_molecule(molecule, reaction_smarts)
+
+    assert not check_output or Molecule.are_isomorphic(
+        molecule,
+        normal_molecule,
+        aromatic_matching=False,
+        formal_charge_matching=False,
+        bond_order_matching=False,
+        atom_stereochemistry_matching=False,
+        bond_stereochemistry_matching=False,
+    )[0], "normalization changed the molecule - this should not happen"
+
+    return normal_molecule
