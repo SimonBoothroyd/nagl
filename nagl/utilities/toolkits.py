@@ -1,11 +1,14 @@
 """A module for handling cheminformatics toolkit calls directly which are not yet
 available in the OpenFF toolkit.
 """
+import json
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Generator, List, Literal, overload
 
 from openff.utilities import requires_package
 from openff.utilities.utilities import MissingOptionalDependency
+
+from nagl import data
 
 if TYPE_CHECKING:
 
@@ -215,7 +218,7 @@ def _rdkit_smiles_to_inchi_key(smiles: str) -> str:
 
 def smiles_to_inchi_key(smiles: str) -> str:
 
-    try:
+    try:  # pragma: no cover
         return _oe_smiles_to_inchi_key(smiles)
     except MissingOptionalDependency:
         return _rdkit_smiles_to_inchi_key(smiles)
@@ -246,7 +249,107 @@ def get_atom_symmetries(molecule: "Molecule") -> List[int]:
 
     from openff.toolkit.utils import ToolkitUnavailableException
 
-    try:
+    try:  # pragma: no cover
         return _oe_get_atom_symmetries(molecule)
     except (ImportError, ModuleNotFoundError, ToolkitUnavailableException):
         return _rd_get_atom_symmetries(molecule)
+
+
+def _oe_normalize_molecule(
+    molecule: "Molecule", reaction_smarts: List[str]
+) -> "Molecule":  # pragma: no cover
+
+    from openeye import oechem
+    from openff.toolkit.topology import Molecule
+
+    oe_molecule: oechem.OEMol = molecule.to_openeye()
+
+    for pattern in reaction_smarts:
+
+        reaction = oechem.OEUniMolecularRxn(pattern)
+        reaction(oe_molecule)
+
+    return Molecule.from_openeye(oe_molecule, allow_undefined_stereo=True)
+
+
+def _rd_normalize_molecule(
+    molecule: "Molecule", reaction_smarts: List[str], max_iterations=10000
+) -> "Molecule":
+
+    from openff.toolkit.topology import Molecule
+    from rdkit import Chem
+    from rdkit.Chem import rdChemReactions
+
+    rd_molecule: Chem.Mol = molecule.to_rdkit()
+
+    original_smiles = Chem.MolToSmiles(rd_molecule)
+    old_smiles = original_smiles
+
+    for pattern in reaction_smarts:
+
+        reaction = rdChemReactions.ReactionFromSmarts(pattern)
+        n_iterations = 0
+
+        while True:
+
+            products = reaction.RunReactants((rd_molecule,), maxProducts=1)
+
+            if len(products) == 0:
+                break
+
+            ((rd_molecule,),) = products
+            new_smiles = Chem.MolToSmiles(rd_molecule)
+
+            has_changed = old_smiles != new_smiles
+            old_smiles = new_smiles
+
+            if not has_changed:
+                break
+
+            n_iterations += 1
+            assert (
+                n_iterations <= max_iterations
+            ), f"could not normalize {original_smiles}"
+
+    return Molecule.from_rdkit(rd_molecule, allow_undefined_stereo=True)
+
+
+def normalize_molecule(molecule: "Molecule", check_output: bool = True) -> "Molecule":
+    """Applies a set of reaction SMARTS in sequence to an input molecule in order to
+    attempt to 'normalize' its structure.
+
+    This involves, for example, converting ``-N(=O)=O`` groups to ``-N(=O)[O-]`` and
+    ``-[S+2]([O-])([O-])-`` to ``-S(=O)=O-``. See ``nagl/data/normalizations.json`` for
+    a full list of transforms.
+
+    Args:
+        molecule: The molecule to normalize.
+        check_output: Whether to make sure the normalized molecule is isomorphic with
+            the input molecule, ignoring aromaticity, bond order, formal charge, and
+            stereochemistry.
+    """
+
+    from openff.toolkit.topology import Molecule
+    from openff.toolkit.utils import ToolkitUnavailableException
+
+    reaction_smarts_path = data.get_file_path("normalizations.json")
+
+    with open(reaction_smarts_path) as file:
+        reaction_smarts = [entry["smarts"] for entry in json.load(file)]
+
+    try:  # pragma: no cover
+        normal_molecule = _oe_normalize_molecule(molecule, reaction_smarts)
+    except (ImportError, ModuleNotFoundError, ToolkitUnavailableException):
+        normal_molecule = _rd_normalize_molecule(molecule, reaction_smarts)
+
+    assert not check_output or Molecule.are_isomorphic(
+        molecule,
+        normal_molecule,
+        aromatic_matching=False,
+        formal_charge_matching=False,
+        bond_order_matching=False,
+        atom_stereochemistry_matching=False,
+        bond_stereochemistry_matching=False,
+    )[0], "normalization changed the molecule - this should not happen"
+
+    return normal_molecule

@@ -24,6 +24,11 @@ python setup.py develop
 
 Examples for using this framework can be found in the [`examples`](examples) directory.
 
+## License
+
+The main package is release under the [MIT license](LICENSE). Parts of the package are inspired by / modified from a 
+number of third party packages whose licenses are included in the [3rd party license file](LICENSE-3RD-PARTY).
+
 ## Copyright
 
 Copyright (c) 2021, Simon Boothroyd
