@@ -107,7 +107,7 @@ def _enumerate_tautomers(
     "--protomers/--no-protomers",
     "enumerate_protomers",
     help="Whether to enumerate the possible protontation states or not. "
-    "(required oequacpac)",
+    "(requires oequacpac)",
     default=False,
     show_default=True,
 )
