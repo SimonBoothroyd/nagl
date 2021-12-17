@@ -83,6 +83,7 @@ def enumerate_resonance_forms(
     lowest_energy_only: bool = True,
     max_path_length: Optional[int] = None,
     as_dicts: Literal[False] = False,
+    include_all_transfer_pathways: bool = False,
 ) -> List[Molecule]:
     ...
 
@@ -93,6 +94,7 @@ def enumerate_resonance_forms(
     lowest_energy_only: bool = True,
     max_path_length: Optional[int] = None,
     as_dicts: Literal[False] = False,
+    include_all_transfer_pathways: bool = False,
 ) -> List["DGLMolecule"]:
     ...
 
@@ -103,6 +105,7 @@ def enumerate_resonance_forms(
     lowest_energy_only: bool = True,
     max_path_length: Optional[int] = None,
     as_dicts: Literal[True] = True,
+    include_all_transfer_pathways: bool = False,
 ) -> List[dict]:
     ...
 
@@ -112,17 +115,18 @@ def enumerate_resonance_forms(
     lowest_energy_only: bool = True,
     max_path_length: Optional[int] = None,
     as_dicts: bool = False,
+    include_all_transfer_pathways: bool = False,
 ):
     """Recursively attempts to find all resonance structures of an input molecule
     according to a modified version of the algorithm proposed by Gilson et al [1].
 
     Enumeration proceeds by:
 
-    1) The molecule is turned into a ``networkx`` graph object.
-    2) All hydrogen's and uncharged sp3 carbons are removed from the graph as these
+    1. The molecule is turned into a ``networkx`` graph object.
+    2. All hydrogen's and uncharged sp3 carbons are removed from the graph as these
        will not be involved in electron transfer.
-    3) Disjoint sub-graphs are detected and separated out.
-    4) Sub-graphs that don't contain at least 1 donor and 1 acceptor are discarded
+    3. Disjoint sub-graphs are detected and separated out.
+    4. Sub-graphs that don't contain at least 1 donor and 1 acceptor are discarded
     5. For each disjoint subgraph:
         a) The original v-charge algorithm is applied to yield the resonance structures
            of that subgraph.
@@ -135,8 +139,12 @@ def enumerate_resonance_forms(
     enumerated and return as molecule objects matching the input molecule type.
 
     Notes:
-        This method will strip all stereochemistry and aromaticity information from the
-        input molecule.
+        * This method will strip all stereochemistry and aromaticity information from
+          the input molecule.
+        * The method only attempts to enumerate resonance forms that occur when a
+          pair of electrons can be transferred along a conjugated path from a donor to
+          an acceptor. Other types of resonance, e.g. different Kekule structures, are
+          not enumerated.
 
     Args:
         molecule: The input molecule.
@@ -148,6 +156,10 @@ def enumerate_resonance_forms(
             compatible with producing feature vectors. If false, all combinatorial
             resonance forms will be returned which may be significantly slow if the
             molecule is very heavily conjugated and has many donor / acceptor pairs.
+        include_all_transfer_pathways: Whether to include resonance forms that have
+            the same formal charges but have different arrangements of bond orders. Such
+            cases occur when there exists multiple electron transfer pathways between
+            electron donor-acceptor pairs e.g. in cyclic systems.
 
     References:
         [1] Gilson, Michael K., Hillary SR Gilson, and Michael J. Potter. "Fast
@@ -176,7 +188,12 @@ def enumerate_resonance_forms(
 
     # Find all the resonance forms for each of the sub-graphs.
     resonance_sub_graphs = [
-        _enumerate_resonance_graphs(sub_graph, lowest_energy_only, max_path_length)
+        _enumerate_resonance_graphs(
+            sub_graph,
+            lowest_energy_only,
+            max_path_length,
+            include_all_transfer_pathways,
+        )
         for sub_graph in sub_graphs
     ]
 
@@ -189,7 +206,7 @@ def enumerate_resonance_forms(
     return _graphs_to_dicts(resonance_sub_graphs)
 
 
-def _graph_to_hash(nx_graph: networkx.Graph) -> bytes:
+def _graph_to_hash(nx_graph: networkx.Graph, include_bonds: bool) -> bytes:
     """Attempts to hash a ``networkx`` graph by JSON serializing a dictionary containing
     the resonance atom types and all bond orders, and encoding the resulting string
     in a SHA1 hash.
@@ -197,15 +214,18 @@ def _graph_to_hash(nx_graph: networkx.Graph) -> bytes:
 
     atom_resonance_types = _find_donor_acceptors(nx_graph)
 
+    hash_dict = {"a": atom_resonance_types}
+
+    if include_bonds:
+
+        hash_dict["b"] = {
+            i: nx_graph[index_a][index_b]["bond_order"]
+            for i, (index_a, index_b) in enumerate(nx_graph.edges)
+        }
+
     return hashlib.sha1(
         json.dumps(
-            {
-                "a": atom_resonance_types,
-                "b": {
-                    i: nx_graph[index_a][index_b]["bond_order"]
-                    for i, (index_a, index_b) in enumerate(nx_graph.edges)
-                },
-            },
+            hash_dict,
             sort_keys=True,
         ).encode(),
         usedforsecurity=False,
@@ -314,8 +334,9 @@ def _graphs_to_dicts(
 
 def _enumerate_resonance_graphs(
     nx_graph: networkx.Graph,
-    lowest_energy_only: bool = True,
-    max_path_length: Optional[int] = None,
+    lowest_energy_only: bool,
+    max_path_length: Optional[int],
+    include_all_transfer_pathways: bool,
 ) -> Dict[bytes, networkx.Graph]:
     """Attempts to find all resonance structures of an input molecule stored
     in a graph representation according to the v-charge algorithm proposed by Gilson et
@@ -339,7 +360,7 @@ def _enumerate_resonance_graphs(
     # create a cache to speed up finding all paths from D->A and vice-versa
     path_cache = PathCache(nx_graph, max_path_length)
 
-    open_list = {_graph_to_hash(nx_graph): nx_graph}
+    open_list = {_graph_to_hash(nx_graph, True): nx_graph}
     closed_list: Dict[bytes, networkx.Graph] = {}
 
     while len(open_list) > 0:
@@ -379,7 +400,7 @@ def _enumerate_resonance_graphs(
                     flipped_graph = _perform_electron_transfer(
                         current_graph, transfer_path
                     )
-                    flipped_key = _graph_to_hash(flipped_graph)
+                    flipped_key = _graph_to_hash(flipped_graph, True)
 
                     if flipped_key in closed_list or flipped_key in open_list:
                         continue
@@ -387,6 +408,13 @@ def _enumerate_resonance_graphs(
                     found_graphs[flipped_key] = flipped_graph
 
         open_list = found_graphs
+
+    if not include_all_transfer_pathways:
+        # Drop resonance forms that only differ due to bond order re-arrangements as we
+        # aren't interested in e.g. ring resonance structures.
+        closed_list = {
+            _graph_to_hash(graph, False): graph for graph in closed_list.values()
+        }
 
     if lowest_energy_only:
         closed_list = _select_lowest_energy_forms(closed_list)
