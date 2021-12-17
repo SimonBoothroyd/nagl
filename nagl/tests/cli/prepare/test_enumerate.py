@@ -17,7 +17,7 @@ def test_enumerate_cli(openff_methane: Molecule, runner):
         writer(buteneol)
         writer(buteneol)
 
-    arguments = ["--input", "molecules.sdf", "--output", "tautomers.sdf"]
+    arguments = ["--input", "molecules.sdf", "--output", "tautomers.sdf", "--tautomers"]
 
     result = runner.invoke(enumerate_cli, arguments)
 
