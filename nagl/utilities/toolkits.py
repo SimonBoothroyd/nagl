@@ -338,8 +338,14 @@ def normalize_molecule(molecule: "Molecule", check_output: bool = True) -> "Mole
         reaction_smarts = [entry["smarts"] for entry in json.load(file)]
 
     try:  # pragma: no cover
-        normal_molecule = _oe_normalize_molecule(molecule, reaction_smarts)
-    except (ImportError, ModuleNotFoundError, ToolkitUnavailableException):
+        # normal_molecule = _oe_normalize_molecule(molecule, reaction_smarts)
+        raise NotImplementedError()
+    except (
+        ImportError,
+        ModuleNotFoundError,
+        ToolkitUnavailableException,
+        NotImplementedError,
+    ):
         normal_molecule = _rd_normalize_molecule(molecule, reaction_smarts)
 
     assert not check_output or Molecule.are_isomorphic(
