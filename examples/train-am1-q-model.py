@@ -14,6 +14,7 @@ from nagl.nn.modules import ConvolutionModule, ReadoutModule
 from nagl.nn.pooling import PoolAtomFeatures
 from nagl.nn.postprocess import ComputePartialCharges
 from nagl.resonance import enumerate_resonance_forms
+from nagl.utilities.toolkits import normalize_molecule
 
 
 class AtomAverageFormalCharge(AtomFeature):
@@ -21,6 +22,8 @@ class AtomAverageFormalCharge(AtomFeature):
     structures."""
 
     def __call__(self, molecule: Molecule) -> torch.Tensor:
+
+        molecule = normalize_molecule(molecule)
 
         resonance_forms = enumerate_resonance_forms(
             molecule,
