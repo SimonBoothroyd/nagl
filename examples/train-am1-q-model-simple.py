@@ -6,7 +6,7 @@ import torch
 from openff.toolkit.topology import Molecule
 
 from nagl.datasets import DGLMoleculeDataLoader, DGLMoleculeDataset
-from nagl.features import AtomConnectivity, AtomFormalCharge, AtomicElement, BondOrder
+from nagl.features import AtomConnectivity, AtomicElement, BondOrder
 from nagl.lightning import DGLMoleculeLightningModel
 from nagl.nn import SequentialLayers
 from nagl.nn.modules import ConvolutionModule, ReadoutModule
@@ -45,7 +45,6 @@ def main():
     atom_features = [
         AtomicElement(["C", "O", "H"]),
         AtomConnectivity(),
-        AtomFormalCharge([-1, 0, 1]),
     ]
     bond_features = [
         BondOrder(),
@@ -61,7 +60,6 @@ def main():
         atom_features,
         bond_features,
         label_function,
-        enumerate_resonance=True,
     )
     training_loader = DGLMoleculeDataLoader(
         training_data, batch_size=len(training_smiles), shuffle=False
@@ -76,7 +74,6 @@ def main():
             atom_features,
             bond_features,
             label_function,
-            enumerate_resonance=True,
         ),
         batch_size=len(test_smiles),
         shuffle=False,

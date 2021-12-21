@@ -4,14 +4,59 @@ import click
 import pytorch_lightning as pl
 import torch
 from click_option_group import optgroup
+from openff.toolkit.topology import Molecule
 from pytorch_lightning.loggers import TensorBoardLogger
 
-from nagl.features import AtomConnectivity, AtomFormalCharge, AtomicElement
+from nagl.features import AtomConnectivity, AtomFeature, AtomicElement
 from nagl.lightning import DGLMoleculeDataModule, DGLMoleculeLightningModel
 from nagl.nn import SequentialLayers
 from nagl.nn.modules import ConvolutionModule, ReadoutModule
 from nagl.nn.pooling import PoolAtomFeatures
 from nagl.nn.postprocess import ComputePartialCharges
+from nagl.resonance import enumerate_resonance_forms
+
+
+class AtomAverageFormalCharge(AtomFeature):
+    """Computes the average formal charge on each atom in a molecule across resonance
+    structures."""
+
+    def __call__(self, molecule: Molecule) -> torch.Tensor:
+
+        resonance_forms = enumerate_resonance_forms(
+            molecule,
+            as_dicts=True,
+            # exclude for e.g. the charged resonance form of an amide
+            lowest_energy_only=True,
+            # exclude resonance structures that only differ in things like kekule
+            # form
+            include_all_transfer_pathways=False,
+        )
+
+        formal_charges = [
+            [
+                atom["formal_charge"]
+                for resonance_form in resonance_forms
+                if i in resonance_form["atoms"]
+                for atom in resonance_form["atoms"][i]
+            ]
+            for i in range(molecule.n_atoms)
+        ]
+
+        feature_tensor = torch.tensor(
+            [
+                [
+                    sum(formal_charges[i]) / len(formal_charges[i])
+                    if len(formal_charges[i]) > 0
+                    else 0.0
+                ]
+                for i in range(molecule.n_atoms)
+            ]
+        )
+
+        return feature_tensor
+
+    def __len__(self):
+        return 1
 
 
 @optgroup.group("Training set")
@@ -111,8 +156,7 @@ def main(
     atom_features = [
         AtomicElement(["C", "O", "H", "N", "S", "F", "Br", "Cl", "I", "P"]),
         AtomConnectivity(),
-        AtomFormalCharge([-3, -2, -1, 0, 1, 2, 3]),
-        # AtomIsInRing(),
+        AtomAverageFormalCharge(),
     ]
     bond_features = [
         # BondIsInRing(),
@@ -126,7 +170,6 @@ def main(
         bond_features,
         partial_charge_method="am1",
         bond_order_method=None,
-        enumerate_resonance=True,
         train_set_path=train_set_path,
         train_batch_size=train_batch_size,
         val_set_path=val_set_path,
