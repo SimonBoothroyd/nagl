@@ -34,7 +34,9 @@ def apply_filter(molecule: "Molecule", retain_largest: bool) -> Tuple["Molecule"
             if retain_largest and n_sub_molecules > 1:
 
                 largest_smiles = max(split_smiles, key=len)
-                molecule = Molecule.from_smiles(largest_smiles, allow_undefined_stereo=True)
+                molecule = Molecule.from_smiles(
+                    largest_smiles, allow_undefined_stereo=True
+                )
 
             # Retain H, C, N, O, F, P, S, Cl, Br, I
             allowed_elements = [1, 6, 7, 8, 9, 15, 16, 17, 35, 53]
@@ -47,13 +49,16 @@ def apply_filter(molecule: "Molecule", retain_largest: bool) -> Tuple["Molecule"
             return (
                 molecule,
                 (
-                    all(atom.atomic_number in allowed_elements for atom in molecule.atoms)
+                    all(
+                        atom.atomic_number in allowed_elements
+                        for atom in molecule.atoms
+                    )
                     and (250.0 < mass < 350.0)
                     and (len(molecule.find_rotatable_bonds()) <= 7)
                 ),
             )
 
-        except BaseException:  # lgtm [py/catch-base-exception]
+        except BaseException:
             _logger.exception("failed to apply filter")
             return molecule, False
 

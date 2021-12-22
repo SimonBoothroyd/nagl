@@ -10,3 +10,5 @@ path_classifiers:
     - devtools/*
   generated:
     - nagl/_version.py
+queries:
+  - exclude: py/catch-base-exception

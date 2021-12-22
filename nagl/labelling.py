@@ -183,7 +183,7 @@ def label_molecules(
                     n_conformers,
                     rms_cutoff,
                 )
-            except (BaseException, Exception) as e:  # lgtm [py/catch-base-exception]
+            except (BaseException, Exception) as e:
 
                 formatted_traceback = traceback.format_exception(
                     etype=type(e), value=e, tb=e.__traceback__
