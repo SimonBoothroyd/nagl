@@ -53,7 +53,7 @@ def apply_filter(molecule: "Molecule", retain_largest: bool) -> Tuple["Molecule"
                 ),
             )
 
-        except BaseException:
+        except BaseException:  # lgtm [py/catch-base-exception]
             _logger.exception("failed to apply filter")
             return molecule, False
 
