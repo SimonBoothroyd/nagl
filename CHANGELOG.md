@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.0.3](https://github.com/SimonBoothroyd/nagl/tree/0.0.3) (2021-12-22)
+
+[Full Changelog](https://github.com/SimonBoothroyd/nagl/compare/0.0.2...0.0.3)
+
+**Merged pull requests:**
+
+- Handle uncaught exceptions when filtering [\#32](https://github.com/SimonBoothroyd/nagl/pull/32) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+
+## [0.0.2](https://github.com/SimonBoothroyd/nagl/tree/0.0.2) (2021-12-21)
+
+[Full Changelog](https://github.com/SimonBoothroyd/nagl/compare/0.0.1...0.0.2)
+
+**Implemented enhancements:**
+
+- Add initial protomer enumeration support [\#30](https://github.com/SimonBoothroyd/nagl/pull/30) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+- Expose option to include all resonance transfer pathways [\#29](https://github.com/SimonBoothroyd/nagl/pull/29) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+- Add `normalize\_molecule` utility [\#28](https://github.com/SimonBoothroyd/nagl/pull/28) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+- Replace enumerate resonance arg with callable [\#27](https://github.com/SimonBoothroyd/nagl/pull/27) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+- Significantly optimize resonance enumeration [\#26](https://github.com/SimonBoothroyd/nagl/pull/26) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+
+## [0.0.1](https://github.com/SimonBoothroyd/nagl/tree/0.0.1) (2021-12-03)
+
+[Full Changelog](https://github.com/SimonBoothroyd/nagl/compare/0.0.1-rc.2...0.0.1)
+
+**Implemented enhancements:**
+
+- Support loading multiple datasets in data module [\#25](https://github.com/SimonBoothroyd/nagl/pull/25) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+
+## [0.0.1-rc.2](https://github.com/SimonBoothroyd/nagl/tree/0.0.1-rc.2) (2021-12-01)
+
+[Full Changelog](https://github.com/SimonBoothroyd/nagl/compare/0.0.1-rc.1...0.0.1-rc.2)
+
+**Implemented enhancements:**
+
+- Don't one-hot encode booleans [\#23](https://github.com/SimonBoothroyd/nagl/pull/23) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+- Add a general lightning data module [\#22](https://github.com/SimonBoothroyd/nagl/pull/22) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+
 ## [0.0.1-rc.1](https://github.com/SimonBoothroyd/nagl/tree/0.0.1-rc.1) (2021-11-29)
 
 [Full Changelog](https://github.com/SimonBoothroyd/nagl/compare/0.0.1-alpha.4...0.0.1-rc.1)
