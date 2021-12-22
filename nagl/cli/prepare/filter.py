@@ -1,4 +1,5 @@
 import functools
+import logging
 from multiprocessing import Pool
 from typing import TYPE_CHECKING, Tuple
 
@@ -16,38 +17,50 @@ from nagl.utilities.toolkits import (
 if TYPE_CHECKING:
     from openff.toolkit.topology import Molecule
 
+_logger = logging.getLogger(__name__)
+
 
 def apply_filter(molecule: "Molecule", retain_largest: bool) -> Tuple["Molecule", bool]:
 
     with capture_toolkit_warnings():
 
-        from openff.toolkit.topology import Molecule
-        from simtk import unit as simtk_unit
+        try:
+            from openff.toolkit.topology import Molecule
+            from simtk import unit as simtk_unit
 
-        split_smiles = molecule.to_smiles().split(".")
-        n_sub_molecules = len(split_smiles)
+            split_smiles = molecule.to_smiles().split(".")
+            n_sub_molecules = len(split_smiles)
 
-        if retain_largest and n_sub_molecules > 1:
+            if retain_largest and n_sub_molecules > 1:
 
-            largest_smiles = max(split_smiles, key=len)
-            molecule = Molecule.from_smiles(largest_smiles, allow_undefined_stereo=True)
+                largest_smiles = max(split_smiles, key=len)
+                molecule = Molecule.from_smiles(
+                    largest_smiles, allow_undefined_stereo=True
+                )
 
-        # Retain H, C, N, O, F, P, S, Cl, Br, I
-        allowed_elements = [1, 6, 7, 8, 9, 15, 16, 17, 35, 53]
+            # Retain H, C, N, O, F, P, S, Cl, Br, I
+            allowed_elements = [1, 6, 7, 8, 9, 15, 16, 17, 35, 53]
 
-        mass = sum(
-            atom.mass.value_in_unit(simtk_unit.gram / simtk_unit.mole)
-            for atom in molecule.atoms
-        )
+            mass = sum(
+                atom.mass.value_in_unit(simtk_unit.gram / simtk_unit.mole)
+                for atom in molecule.atoms
+            )
 
-        return (
-            molecule,
-            (
-                all(atom.atomic_number in allowed_elements for atom in molecule.atoms)
-                and (250.0 < mass < 350.0)
-                and (len(molecule.find_rotatable_bonds()) <= 7)
-            ),
-        )
+            return (
+                molecule,
+                (
+                    all(
+                        atom.atomic_number in allowed_elements
+                        for atom in molecule.atoms
+                    )
+                    and (250.0 < mass < 350.0)
+                    and (len(molecule.find_rotatable_bonds()) <= 7)
+                ),
+            )
+
+        except BaseException:
+            _logger.exception("failed to apply filter")
+            return molecule, False
 
 
 @click.command(
