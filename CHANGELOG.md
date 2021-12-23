@@ -4,7 +4,7 @@
 
 [Full Changelog](https://github.com/SimonBoothroyd/nagl/compare/0.0.2...0.0.3)
 
-**Merged pull requests:**
+**Fixed bugs:**
 
 - Handle uncaught exceptions when filtering [\#32](https://github.com/SimonBoothroyd/nagl/pull/32) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
 

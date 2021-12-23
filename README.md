@@ -11,18 +11,42 @@ embeddings and from these classical molecule force field parameters.
 This framework is mostly based upon the [*End-to-End Differentiable Molecular Mechanics Force Field Construction*](https://arxiv.org/abs/2010.01196) 
 preprint by Wang, Fass and Chodera.
 
+## Getting Started
+
+Examples for using this framework can be found in the [`examples`](examples) directory.
+
 ## Installation
 
 The required dependencies for this framework can be installed using `conda`:
 
 ```
-conda env create --name nagl --file devtools/conda-envs/test_env.yaml
-python setup.py develop
+conda install -c conda-forge -c dglteam nagl "dgl >=0.7"
 ```
 
-## Getting Started
+### Optional dependencies
 
-Examples for using this framework can be found in the [`examples`](examples) directory.
+To make the full use of the framework, it is recommended to install the following 
+
+#### [OpenFF Toolkit](https://github.com/openforcefield/openff-toolkit):
+
+```
+# Molecule loading and featurization
+conda install -c conda-forge openff-toolkit
+```
+
+#### [PyTorch Lightning](https://github.com/PyTorchLightning/pytorch-lightning):
+
+```
+# Cleaner, distributed model training
+conda install -c conda-forge pytorch-lightning
+```
+
+#### [Dask](https://github.com/dask/distributed):
+
+```
+# Distributed molecule processing / labelling.
+conda install -c conda-forge distributed dask-jobqueue
+```
 
 ## License
 
