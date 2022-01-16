@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.4](https://github.com/SimonBoothroyd/nagl/tree/0.0.4) (2022-01-16)
+
+[Full Changelog](https://github.com/SimonBoothroyd/nagl/compare/0.0.3...0.0.4)
+
+**Implemented enhancements:**
+
+- Expose conformer RMS through label CLI [\#33](https://github.com/SimonBoothroyd/nagl/pull/33) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+
 ## [0.0.3](https://github.com/SimonBoothroyd/nagl/tree/0.0.3) (2021-12-22)
 
 [Full Changelog](https://github.com/SimonBoothroyd/nagl/compare/0.0.2...0.0.3)
