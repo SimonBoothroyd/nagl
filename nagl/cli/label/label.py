@@ -47,6 +47,16 @@ _logger = logging.getLogger(__name__)
     default=True,
     show_default=True,
 )
+@optgroup.group("Charging configuration")
+@optgroup.option(
+    "--conf-rms",
+    "rms_cutoff",
+    help="The RMS cutoff [Å] to use when generating the conformers used for charge "
+    "generation.",
+    type=float,
+    default=0.5,
+    show_default=True,
+)
 @optgroup.group("Parallelization configuration")
 @optgroup.option(
     "--n-workers",
@@ -103,6 +113,7 @@ def label_cli(
     input_path: str,
     output_path: str,
     guess_stereo: bool,
+    rms_cutoff: float,
     worker_type: str,
     n_workers: int,
     batch_size: int,
@@ -186,6 +197,7 @@ def label_cli(
                 guess_stereochemistry=guess_stereo,
                 partial_charge_methods=["am1", "am1bcc"],
                 bond_order_methods=["am1"],
+                rms_cutoff=rms_cutoff
             ),
             batched_molecules,
         )
