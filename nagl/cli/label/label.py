@@ -197,7 +197,7 @@ def label_cli(
                 guess_stereochemistry=guess_stereo,
                 partial_charge_methods=["am1", "am1bcc"],
                 bond_order_methods=["am1"],
-                rms_cutoff=rms_cutoff
+                rms_cutoff=rms_cutoff,
             ),
             batched_molecules,
         )
