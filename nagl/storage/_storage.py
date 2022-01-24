@@ -48,8 +48,8 @@ else:
 _logger = logging.getLogger(__name__)
 
 
-ChargeMethod = Literal["am1", "am1bcc"]
-WBOMethod = Literal["am1"]
+ChargeMethod = Union[Literal["am1", "am1bcc"], str]
+WBOMethod = Union[Literal["am1"], str]
 
 DBQueryResult = Tuple[
     int,  # DBMoleculeRecord.id
