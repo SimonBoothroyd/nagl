@@ -125,7 +125,10 @@ class AtomIsInRing(AtomFeature):
 
     def __call__(self, molecule: "Molecule") -> torch.Tensor:
 
-        return torch.tensor([int(atom.is_in_ring) for atom in molecule.atoms]).reshape(
+        ring_atoms = {
+            index for index, in molecule.chemical_environment_matches("[*r:1]")
+        }
+        return torch.tensor([i in ring_atoms for i in range(molecule.n_atoms)]).reshape(
             -1, 1
         )
 
@@ -194,9 +197,16 @@ class BondIsInRing(BondFeature):
 
     def __call__(self, molecule: "Molecule") -> torch.Tensor:
 
-        return torch.tensor([int(bond.is_in_ring) for bond in molecule.bonds]).reshape(
-            -1, 1
-        )
+        ring_bonds = {
+            tuple(sorted(match))
+            for match in molecule.chemical_environment_matches("[*:1]@[*:2]")
+        }
+        return torch.tensor(
+            [
+                tuple(sorted((bond.atom1_index, bond.atom2_index))) in ring_bonds
+                for bond in molecule.bonds
+            ]
+        ).reshape(-1, 1)
 
     def __len__(self):
         return 1
