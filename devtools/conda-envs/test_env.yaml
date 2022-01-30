@@ -42,3 +42,4 @@ dependencies:
   - pytest
   - pytest-cov
   - codecov
+  - coverage <6.3  # fix hangs on GH, see coveragepy/issues/1310
