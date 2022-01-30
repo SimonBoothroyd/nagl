@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.0.6](https://github.com/SimonBoothroyd/nagl/tree/0.0.6) (2022-01-30)
+
+[Full Changelog](https://github.com/SimonBoothroyd/nagl/compare/0.0.5...0.0.6)
+
+**Implemented enhancements:**
+
+- Use SMARTS to find ring atoms / bonds [\#36](https://github.com/SimonBoothroyd/nagl/pull/36) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+- Delete orphaned DB rows on record deletion [\#35](https://github.com/SimonBoothroyd/nagl/pull/35) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+
+## [0.0.5](https://github.com/SimonBoothroyd/nagl/tree/0.0.5) (2022-01-24)
+
+[Full Changelog](https://github.com/SimonBoothroyd/nagl/compare/0.0.4...0.0.5)
+
+**Implemented enhancements:**
+
+- Allow custom charge / WBO methods [\#34](https://github.com/SimonBoothroyd/nagl/pull/34) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+
 ## [0.0.4](https://github.com/SimonBoothroyd/nagl/tree/0.0.4) (2022-01-16)
 
 [Full Changelog](https://github.com/SimonBoothroyd/nagl/compare/0.0.3...0.0.4)
@@ -24,7 +41,7 @@
 
 - Add initial protomer enumeration support [\#30](https://github.com/SimonBoothroyd/nagl/pull/30) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
 - Expose option to include all resonance transfer pathways [\#29](https://github.com/SimonBoothroyd/nagl/pull/29) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
-- Add `normalize\_molecule` utility [\#28](https://github.com/SimonBoothroyd/nagl/pull/28) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+- Add `normalize_molecule` utility [\#28](https://github.com/SimonBoothroyd/nagl/pull/28) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
 - Replace enumerate resonance arg with callable [\#27](https://github.com/SimonBoothroyd/nagl/pull/27) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
 - Significantly optimize resonance enumeration [\#26](https://github.com/SimonBoothroyd/nagl/pull/26) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
 
