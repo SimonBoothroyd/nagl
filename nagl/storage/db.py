@@ -46,8 +46,8 @@ class DBConformerRecord(DBBase):
 
     coordinates = Column(PickleType, nullable=False)
 
-    partial_charges = relationship("DBPartialChargeSet")
-    bond_orders = relationship("DBWibergBondOrderSet")
+    partial_charges = relationship("DBPartialChargeSet", cascade="all, delete-orphan")
+    bond_orders = relationship("DBWibergBondOrderSet", cascade="all, delete-orphan")
 
 
 class DBMoleculeRecord(DBBase):
@@ -59,7 +59,7 @@ class DBMoleculeRecord(DBBase):
     inchi_key = Column(String(20), nullable=False)
     smiles = Column(String, nullable=False)
 
-    conformers = relationship("DBConformerRecord")
+    conformers = relationship("DBConformerRecord", cascade="all, delete-orphan")
 
 
 class DBGeneralProvenance(DBBase):
