@@ -56,7 +56,7 @@ class DBMoleculeRecord(DBBase):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    inchi_key = Column(String(20), nullable=False)
+    inchi_key = Column(String(20), nullable=False, index=True)
     smiles = Column(String, nullable=False)
 
     conformers = relationship("DBConformerRecord", cascade="all, delete-orphan")
