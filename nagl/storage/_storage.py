@@ -23,6 +23,7 @@ from openff.utilities import requires_package
 from pydantic import BaseModel, Field, validator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+from tqdm import tqdm
 
 from nagl.storage.db import (
     DB_VERSION,
@@ -38,7 +39,7 @@ from nagl.storage.db import (
 from nagl.storage.exceptions import IncompatibleDBVersion
 from nagl.utilities.rmsd import are_conformers_identical
 from nagl.utilities.smiles import map_indexed_smiles
-from nagl.utilities.toolkits import smiles_to_inchi_key
+from nagl.utilities.toolkits import capture_toolkit_warnings, smiles_to_inchi_key
 
 if TYPE_CHECKING:
     Array = numpy.ndarray
@@ -527,16 +528,15 @@ class MoleculeStore:
                 )
 
     @classmethod
-    def _store_records_with_inchi_key(
-        cls, db: Session, inchi_key: str, records: List[MoleculeRecord]
+    def _store_records_with_smiles(
+        cls,
+        db: Session,
+        inchi_key: str,
+        records: List[MoleculeRecord],
+        existing_db_record: Optional[DBMoleculeRecord],
     ):
         """Stores a set of records which all store information for molecules with the
-        same hill formula.
-
-        Notes
-        -----
-        * We split by the hill formula to speed up finding molecules that already exist
-        in the data
+        same SMILES representation AND the same fixed hydrogen InChI key.
 
         Parameters
         ----------
@@ -549,20 +549,10 @@ class MoleculeStore:
             The records to store.
         """
 
-        existing_db_records: Collection[DBMoleculeRecord] = (
-            db.query(DBMoleculeRecord)
-            .filter(DBMoleculeRecord.inchi_key == inchi_key)
-            .all()
-        )
-
-        if len(existing_db_records) > 1:
-            # Sanity check that no two DB records have the same InChI key
-            raise RuntimeError("The database is not self consistent.")
-
         db_record = (
             DBMoleculeRecord(inchi_key=inchi_key, smiles=records[0].smiles)
-            if len(existing_db_records) == 0
-            else next(iter(existing_db_records))
+            if existing_db_record is None
+            else existing_db_record
         )
 
         # Retrieve the DB indexed SMILES that defines the ordering the atoms in each
@@ -579,6 +569,66 @@ class MoleculeStore:
 
         db.add(db_record)
 
+    @classmethod
+    def _store_records_with_inchi_key(
+        cls, db: Session, inchi_key: str, records: List[MoleculeRecord]
+    ):
+        """Stores a set of records which all store information for molecules with the
+        same fixed hydrogen InChI key.
+
+        Parameters
+        ----------
+        db
+            The current database session.
+        inchi_key
+            The **fixed hydrogen** InChI key representation of the molecule stored in
+            the records.
+        records
+            The records to store.
+        """
+
+        from openff.toolkit.topology import Molecule
+
+        existing_db_records: Collection[DBMoleculeRecord] = (
+            db.query(DBMoleculeRecord)
+            .filter(DBMoleculeRecord.inchi_key == inchi_key)
+            .all()
+        )
+
+        existing_db_records_by_smiles = {}
+
+        for existing_db_record in existing_db_records:
+
+            molecule: Molecule = Molecule.from_smiles(
+                existing_db_record.smiles, allow_undefined_stereo=True
+            )
+            smiles = molecule.to_smiles(mapped=False)
+
+            if smiles in existing_db_records_by_smiles:
+                # Sanity check that no two DB records have the same InChI key AND the
+                # same canonical SMILES pattern.
+                raise RuntimeError("The database is not self consistent.")
+
+            existing_db_records_by_smiles[smiles] = existing_db_record
+
+        records_by_smiles = defaultdict(list)
+
+        for record in records:
+
+            molecule: Molecule = Molecule.from_smiles(
+                record.smiles, allow_undefined_stereo=True
+            )
+            records_by_smiles[molecule.to_smiles(mapped=False)].append(record)
+
+        for smiles, smiles_records in records_by_smiles.items():
+
+            cls._store_records_with_smiles(
+                db,
+                inchi_key,
+                smiles_records,
+                existing_db_records_by_smiles.get(smiles, None),
+            )
+
     def store(self, *records: MoleculeRecord):
         """Store the molecules and their computed properties in the data store.
 
@@ -588,15 +638,19 @@ class MoleculeStore:
             The records to store.
         """
 
-        records_by_inchi_key: Dict[str, List[MoleculeRecord]] = defaultdict(list)
+        with capture_toolkit_warnings():
 
-        for record in records:
-            records_by_inchi_key[smiles_to_inchi_key(record.smiles)].append(record)
+            records_by_inchi_key: Dict[str, List[MoleculeRecord]] = defaultdict(list)
 
-        with self._get_session() as db:
+            for record in tqdm(records, desc="grouping records to store by InChI key"):
+                records_by_inchi_key[smiles_to_inchi_key(record.smiles)].append(record)
 
-            for inchi_key, inchi_records in records_by_inchi_key.items():
-                self._store_records_with_inchi_key(db, inchi_key, inchi_records)
+            with self._get_session() as db:
+
+                for inchi_key, inchi_records in tqdm(
+                    records_by_inchi_key.items(), desc="storing grouped records"
+                ):
+                    self._store_records_with_inchi_key(db, inchi_key, inchi_records)
 
     @classmethod
     def _db_query_by_method(
