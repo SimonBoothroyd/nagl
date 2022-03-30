@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.7](https://github.com/SimonBoothroyd/nagl/tree/0.0.7) (2022-03-30)
+
+[Full Changelog](https://github.com/SimonBoothroyd/nagl/compare/0.0.6...0.0.7)
+
+**Fixed bugs:**
+
+- Fix store molecules with same InChI but different SMILES [\#39](https://github.com/SimonBoothroyd/nagl/pull/39) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+
 ## [0.0.6](https://github.com/SimonBoothroyd/nagl/tree/0.0.6) (2022-01-30)
 
 [Full Changelog](https://github.com/SimonBoothroyd/nagl/compare/0.0.5...0.0.6)
