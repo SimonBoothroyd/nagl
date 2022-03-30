@@ -348,14 +348,17 @@ def normalize_molecule(molecule: "Molecule", check_output: bool = True) -> "Mole
     ):
         normal_molecule = _rd_normalize_molecule(molecule, reaction_smarts)
 
-    assert not check_output or Molecule.are_isomorphic(
-        molecule,
-        normal_molecule,
-        aromatic_matching=False,
-        formal_charge_matching=False,
-        bond_order_matching=False,
-        atom_stereochemistry_matching=False,
-        bond_stereochemistry_matching=False,
-    )[0], "normalization changed the molecule - this should not happen"
+    assert (
+        not check_output
+        or Molecule.are_isomorphic(
+            molecule,
+            normal_molecule,
+            aromatic_matching=False,
+            formal_charge_matching=False,
+            bond_order_matching=False,
+            atom_stereochemistry_matching=False,
+            bond_stereochemistry_matching=False,
+        )[0]
+    ), "normalization changed the molecule - this should not happen"
 
     return normal_molecule
