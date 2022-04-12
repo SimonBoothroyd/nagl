@@ -282,8 +282,13 @@ def _rd_normalize_molecule(
 
     rd_molecule: Chem.Mol = molecule.to_rdkit()
 
+    for atom in rd_molecule.GetAtoms():
+        atom.SetAtomMapNum(atom.GetIdx() + 1)
+
     original_smiles = Chem.MolToSmiles(rd_molecule)
+
     old_smiles = original_smiles
+    new_smiles = old_smiles
 
     for pattern in reaction_smarts:
 
@@ -298,7 +303,11 @@ def _rd_normalize_molecule(
                 break
 
             ((rd_molecule,),) = products
-            new_smiles = Chem.MolToSmiles(rd_molecule)
+
+            for atom in rd_molecule.GetAtoms():
+                atom.SetAtomMapNum(atom.GetIntProp("react_atom_idx") + 1)
+
+            new_smiles = Chem.MolToSmiles(Chem.AddHs(rd_molecule))
 
             has_changed = old_smiles != new_smiles
             old_smiles = new_smiles
@@ -311,7 +320,7 @@ def _rd_normalize_molecule(
                 n_iterations <= max_iterations
             ), f"could not normalize {original_smiles}"
 
-    return Molecule.from_rdkit(rd_molecule, allow_undefined_stereo=True)
+    return Molecule.from_mapped_smiles(new_smiles, allow_undefined_stereo=True)
 
 
 def normalize_molecule(molecule: "Molecule", check_output: bool = True) -> "Molecule":
