@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Generator, List, Literal, overload
 
 from openff.utilities import requires_package
-from openff.utilities.utilities import MissingOptionalDependencyError
+from openff.utilities.exceptions import MissingOptionalDependencyError
 
 from nagl import data
 
