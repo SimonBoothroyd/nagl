@@ -10,7 +10,7 @@ dependencies:
   - pip
 
     ### Core dependencies.
-  - openff-utilities
+  - openff-utilities >=0.1.5
   - pydantic
 
   - click
