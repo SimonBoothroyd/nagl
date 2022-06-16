@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Generator, List, Literal, overload
 
 from openff.utilities import requires_package
-from openff.utilities.utilities import MissingOptionalDependency
+from openff.utilities.exceptions import MissingOptionalDependencyError
 
 from nagl import data
 
@@ -102,7 +102,7 @@ def stream_from_file(file_path: str, as_smiles: bool = False):
     try:
         for molecule in _oe_stream_from_file(file_path, as_smiles):
             yield molecule
-    except MissingOptionalDependency:
+    except MissingOptionalDependencyError:
         for molecule in _rdkit_stream_from_file(file_path, as_smiles):
             yield molecule
 
@@ -148,7 +148,7 @@ def stream_to_file(file_path: str):
     try:
         with _oe_stream_to_file(file_path) as writer:
             yield writer
-    except MissingOptionalDependency:
+    except MissingOptionalDependencyError:
         with _rdkit_stream_to_file(file_path) as writer:
             yield writer
 
@@ -187,7 +187,7 @@ def capture_toolkit_warnings():  # pragma: no cover
     try:
         with _oe_capture_warnings():
             yield
-    except MissingOptionalDependency:
+    except MissingOptionalDependencyError:
         yield
 
     logging.getLogger("openff.toolkit").setLevel(openff_logger_level)
@@ -220,7 +220,7 @@ def smiles_to_inchi_key(smiles: str) -> str:
 
     try:  # pragma: no cover
         return _oe_smiles_to_inchi_key(smiles)
-    except MissingOptionalDependency:
+    except MissingOptionalDependencyError:
         return _rdkit_smiles_to_inchi_key(smiles)
 
 
