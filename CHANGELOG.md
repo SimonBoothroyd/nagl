@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.0.9](https://github.com/SimonBoothroyd/nagl/tree/0.0.9) (2022-06-16)
+
+[Full Changelog](https://github.com/SimonBoothroyd/nagl/compare/0.0.8...0.0.9)
+
+**Closed issues:**
+
+- openff-utilities 1.4 incompatibility [\#41](https://github.com/SimonBoothroyd/nagl/issues/41)
+
+**Fixed bugs:**
+
+- Fix \#41 [\#42](https://github.com/SimonBoothroyd/nagl/pull/42) ([mattwthompson](https://github.com/mattwthompson))
+
+## [0.0.8](https://github.com/SimonBoothroyd/nagl/tree/0.0.8) (2022-04-12)
+
+[Full Changelog](https://github.com/SimonBoothroyd/nagl/compare/0.0.7...0.0.8)
+
+**Fixed bugs:**
+
+- Fix RDKit stereo changed from E/Z to cis/trans [\#40](https://github.com/SimonBoothroyd/nagl/pull/40) ([SimonBoothroyd](https://github.com/SimonBoothroyd))
+
 ## [0.0.7](https://github.com/SimonBoothroyd/nagl/tree/0.0.7) (2022-03-30)
 
 [Full Changelog](https://github.com/SimonBoothroyd/nagl/compare/0.0.6...0.0.7)
