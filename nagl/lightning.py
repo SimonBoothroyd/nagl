@@ -38,7 +38,7 @@ class DGLMoleculeLightningModel(pl.LightningModule):
 
         self.convolution_module = convolution_module
         self.readout_modules = torch.nn.ModuleDict(readout_modules)
-        self.loss_function = loss_function
+        self._loss_function = loss_function
 
         self.learning_rate = learning_rate
 
@@ -67,7 +67,7 @@ class DGLMoleculeLightningModel(pl.LightningModule):
         loss = torch.zeros(1).type_as(next(iter(y_pred.values())))
 
         for label_name, label in labels.items():
-            loss += self.loss_function(y_pred[label_name], label)
+            loss += self._loss_function(y_pred[label_name], label)
 
         self.log(f"{step_type}_loss", loss)
         return loss
