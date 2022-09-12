@@ -22,7 +22,7 @@ def openff_molecule_to_networkx(molecule: Molecule) -> networkx.Graph:
         The graph representation.
     """
 
-    from simtk import unit as simtk_unit
+    from openff.units import unit as openff_unit
 
     nx_graph = networkx.Graph()
     nx_graph.add_nodes_from(
@@ -30,9 +30,9 @@ def openff_molecule_to_networkx(molecule: Molecule) -> networkx.Graph:
             (
                 atom_index,
                 {
-                    "element": atom.element.symbol,
-                    "formal_charge": atom.formal_charge.value_in_unit(
-                        simtk_unit.elementary_charge
+                    "element": atom.symbol,
+                    "formal_charge": atom.formal_charge.m_as(
+                        openff_unit.elementary_charge
                     ),
                     "bond_orders": tuple(
                         sorted(bond.bond_order for bond in atom.bonds)

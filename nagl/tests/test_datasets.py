@@ -4,7 +4,7 @@ import numpy
 import pytest
 import torch
 from openff.toolkit.topology import Molecule
-from simtk import unit
+from openff.units import unit
 
 from nagl.datasets import DGLMoleculeDataLoader, DGLMoleculeDataset
 from nagl.features import AtomConnectivity, BondIsInRing
@@ -22,7 +22,7 @@ def label_function(molecule: Molecule):
     return {
         "formal_charges": torch.tensor(
             [
-                atom.formal_charge.value_in_unit(unit.elementary_charge)
+                atom.formal_charge.m_as(unit.elementary_charge)
                 for atom in molecule.atoms
             ],
             dtype=torch.float,

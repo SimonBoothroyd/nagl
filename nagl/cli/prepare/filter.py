@@ -26,7 +26,7 @@ def apply_filter(molecule: "Molecule", retain_largest: bool) -> Tuple["Molecule"
 
         try:
             from openff.toolkit.topology import Molecule
-            from simtk import unit as simtk_unit
+            from openff.units import unit as openff_unit
 
             split_smiles = molecule.to_smiles().split(".")
             n_sub_molecules = len(split_smiles)
@@ -41,10 +41,7 @@ def apply_filter(molecule: "Molecule", retain_largest: bool) -> Tuple["Molecule"
             # Retain H, C, N, O, F, P, S, Cl, Br, I
             allowed_elements = [1, 6, 7, 8, 9, 15, 16, 17, 35, 53]
 
-            mass = sum(
-                atom.mass.value_in_unit(simtk_unit.gram / simtk_unit.mole)
-                for atom in molecule.atoms
-            )
+            mass = sum(atom.mass.m_as(openff_unit.dalton) for atom in molecule.atoms)
 
             return (
                 molecule,

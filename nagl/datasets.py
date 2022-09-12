@@ -145,14 +145,14 @@ class DGLMoleculeDataset(Dataset):
         Returns:
             A dictionary of the tensor labels.
         """
-        from simtk import unit
+        from openff.units import unit
 
         labels = {}
 
         if partial_charge_method is not None:
             labels[f"{partial_charge_method}-charges"] = torch.tensor(
                 [
-                    atom.partial_charge.value_in_unit(unit.elementary_charge)
+                    atom.partial_charge.m_as(unit.elementary_charge)
                     for atom in molecule.atoms
                 ],
                 dtype=torch.float,
