@@ -26,7 +26,7 @@ jobs:
     - name: Setup Conda Environment
       uses: conda-incubator/setup-miniconda@v2
       with:
-        python-version: ${{ matrix.cfg.python-version }}
+        python-version: ${{ matrix.python-version }}
         environment-file: devtools/conda-envs/test_env.yaml
 
         channels: dglteam,conda-forge,defaults

@@ -1,13 +1,6 @@
-from typing import TYPE_CHECKING, List, Optional
+from typing import List, Optional
 
 import torch.nn
-import torch.nn.functional
-from typing_extensions import Literal
-
-if TYPE_CHECKING:
-    ActivationFunction = str
-else:
-    ActivationFunction = Literal["Identity", "Tanh", "ReLU", "LeakyReLU", "ELU"]
 
 
 class SequentialLayers(torch.nn.Sequential):
@@ -19,7 +12,7 @@ class SequentialLayers(torch.nn.Sequential):
         self,
         in_feats: int,
         hidden_feats: List[int],
-        activation: Optional[List[ActivationFunction]] = None,
+        activation: Optional[List[torch.nn.Module]] = None,
         dropout: Optional[List[float]] = None,
     ):
         """
@@ -38,12 +31,9 @@ class SequentialLayers(torch.nn.Sequential):
         n_layers = len(hidden_feats)
 
         # Initialize the default inputs.
-        activation = (
-            [torch.nn.ReLU()] * n_layers
-            if activation is None
-            else [getattr(torch.nn, name)() for name in activation]
-        )
-        dropout = [0.0] * n_layers if dropout is None else dropout
+        activation = activation or [torch.nn.ReLU()] * n_layers
+
+        dropout = dropout or [0.0] * n_layers
 
         # Validate that a consistent number of layers have been specified.
         lengths = [len(hidden_feats), len(activation), len(dropout)]

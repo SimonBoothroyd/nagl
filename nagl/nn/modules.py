@@ -4,7 +4,7 @@ import torch
 from typing_extensions import Literal
 
 from nagl.molecules import DGLMolecule, DGLMoleculeBatch
-from nagl.nn import ActivationFunction, SequentialLayers
+from nagl.nn import SequentialLayers
 from nagl.nn.gcn import GCNStack, SAGEConvStack
 from nagl.nn.pooling import PoolingLayer
 from nagl.nn.postprocess import PostprocessLayer
@@ -25,7 +25,7 @@ class ConvolutionModule(torch.nn.Module):
         architecture: GCNArchitecture,
         in_feats: int,
         hidden_feats: List[int],
-        activation: Optional[List[ActivationFunction]] = None,
+        activation: Optional[torch.nn.Module] = None,
         dropout: Optional[List[float]] = None,
     ):
 
