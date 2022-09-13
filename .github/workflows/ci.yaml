@@ -18,15 +18,15 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        python-version: [3.8, 3.9]
+        python-version: [3.9]
 
     steps:
     - uses: actions/checkout@v2
 
     - name: Setup Conda Environment
-      uses: conda-incubator/setup-miniconda@v2
+      uses: conda-incubator/setup-miniconda@v2.1.1
       with:
-        python-version: ${{ matrix.cfg.python-version }}
+        python-version: ${{ matrix.python-version }}
         environment-file: devtools/conda-envs/test_env.yaml
 
         channels: dglteam,conda-forge,defaults
@@ -35,6 +35,10 @@ jobs:
         auto-update-conda: true
         auto-activate-base: false
         show-channel-urls: true
+        mamba-version: "*"
+        miniforge-version: latest
+        miniforge-variant: Mambaforge
+        use-mamba: true
 
     - name: Install Package
       shell: bash -l {0}
