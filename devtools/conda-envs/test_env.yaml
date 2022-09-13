@@ -27,15 +27,15 @@ dependencies:
   - pytorch-lightning
 
     # Molecule loading and processing.
-  - openff-toolkit >=0.9.1
+  - openff-toolkit >=0.10.6, <0.11.0
 
     # SQL based molecule storage.
   - sqlalchemy
   - sqlite
 
     # Distributed molecule processing / labelling.
-  - dask <=2.30.1
-  - distributed <=2.30.1
+  - dask =2.30.0
+  - distributed =2.30.0
   - dask-jobqueue
 
     # Testing
