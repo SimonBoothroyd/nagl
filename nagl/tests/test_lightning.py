@@ -60,7 +60,7 @@ class TestDGLMoleculeLightningModel:
                 "atom": ReadoutModule(
                     pooling_layer=PoolAtomFeatures(),
                     readout_layers=SequentialLayers(
-                        in_feats=2, hidden_feats=[2], activation=["Identity"]
+                        in_feats=2, hidden_feats=[2], activation=[torch.nn.Identity()]
                     ),
                     postprocess_layer=ComputePartialCharges(),
                 ),

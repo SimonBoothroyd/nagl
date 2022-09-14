@@ -1,3 +1,3 @@
-from nagl.nn._nn import ActivationFunction, SequentialLayers
+from nagl.nn._nn import SequentialLayers
 
-__all__ = [ActivationFunction, SequentialLayers]
+__all__ = [SequentialLayers]

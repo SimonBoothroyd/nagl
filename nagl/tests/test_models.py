@@ -1,3 +1,5 @@
+import torch.nn
+
 from nagl.models import ConvolutionModule, MoleculeGCNModel, ReadoutModule
 from nagl.nn import SequentialLayers
 from nagl.nn.gcn import GCNStack
@@ -16,7 +18,7 @@ class TestMoleculeGCNModel:
                 "atom": ReadoutModule(
                     pooling_layer=PoolAtomFeatures(),
                     readout_layers=SequentialLayers(
-                        in_feats=2, hidden_feats=[2], activation=["Identity"]
+                        in_feats=2, hidden_feats=[2], activation=[torch.nn.Identity()]
                     ),
                     postprocess_layer=ComputePartialCharges(),
                 ),

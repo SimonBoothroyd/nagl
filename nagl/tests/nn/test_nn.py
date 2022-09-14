@@ -23,7 +23,7 @@ def test_init_sequential_layers_inputs():
     sequential_layers = SequentialLayers(
         in_feats=1,
         hidden_feats=[2, 1],
-        activation=["ReLU", "LeakyReLU"],
+        activation=[torch.nn.ReLU(), torch.nn.LeakyReLU()],
         dropout=[0.0, 0.5],
     )
 
@@ -47,7 +47,7 @@ def test_init_sequential_layers_invalid():
         SequentialLayers(
             in_feats=1,
             hidden_feats=[2],
-            activation=["ReLU", "LeakyReLU"],
+            activation=[torch.nn.ReLU(), torch.nn.LeakyReLU()],
             dropout=[0.0, 0.5],
         )
 
