@@ -25,7 +25,7 @@ class ConvolutionModule(torch.nn.Module):
         architecture: GCNArchitecture,
         in_feats: int,
         hidden_feats: List[int],
-        activation: Optional[torch.nn.Module] = None,
+        activation: Optional[List[torch.nn.Module]] = None,
         dropout: Optional[List[float]] = None,
     ):
 

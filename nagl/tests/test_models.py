@@ -39,6 +39,13 @@ class TestMoleculeGCNModel:
 
         assert all(x in model.readout_modules for x in ["atom", "bond"])
 
+        # check the activation function in the readout layer
+        assert isinstance(
+            model.readout_modules["atom"].readout_layers[1], torch.nn.Identity
+        )
+        assert isinstance(
+            model.readout_modules["bond"].readout_layers[1], torch.nn.ReLU
+        )
         assert isinstance(model.readout_modules["atom"].pooling_layer, PoolAtomFeatures)
         assert isinstance(model.readout_modules["bond"].pooling_layer, PoolBondFeatures)
 
