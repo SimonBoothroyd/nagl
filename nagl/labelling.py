@@ -52,7 +52,7 @@ def label_molecule(
         The labelled molecule stored in a record object
     """
 
-    from simtk import unit
+    from openff.units import unit
 
     if isinstance(molecule, str):
 
@@ -85,7 +85,7 @@ def label_molecule(
                 PartialChargeSet(
                     method=charge_method,
                     values=[
-                        atom.partial_charge.value_in_unit(unit.elementary_charge)
+                        atom.partial_charge.m_as(unit.elementary_charge)
                         for atom in molecule.atoms
                     ],
                 )
@@ -115,7 +115,7 @@ def label_molecule(
 
         conformer_records.append(
             ConformerRecord(
-                coordinates=conformer.value_in_unit(unit.angstrom),
+                coordinates=conformer.m_as(unit.angstrom),
                 partial_charges=charge_sets,
                 bond_orders=bond_order_sets,
             )

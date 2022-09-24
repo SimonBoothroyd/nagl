@@ -4,7 +4,7 @@ import numpy
 import pytest
 from openff.toolkit.topology import Molecule
 from openff.toolkit.utils import GLOBAL_TOOLKIT_REGISTRY
-from simtk import unit
+from openff.units import unit
 
 from nagl.utilities.rmsd import (
     _is_conformer_linear,
@@ -19,7 +19,6 @@ def rdkit_compute_best_rmsd(
 ) -> float:
 
     from rdkit.Chem import AllChem
-    from simtk import unit
 
     molecule_a = copy.deepcopy(molecule)
     molecule_a._conformers = [conformer_a * unit.angstrom]
@@ -111,7 +110,7 @@ def test_compute_rmsd(scale):
     molecule.generate_conformers(n_conformers=1)
 
     # Generate a random rotation matrix.
-    conformer_a = molecule.conformers[0].value_in_unit(unit.angstrom)
+    conformer_a = molecule.conformers[0].m_as(unit.angstrom)
     conformer_b = perturb_conformer(conformer_a, scale=scale)
 
     conformer_a, conformer_b = align_conformers(conformer_a, conformer_b)
@@ -163,7 +162,7 @@ def test_are_conformers_identical(smiles, conformer_a):
     if conformer_a is None:
 
         molecule.generate_conformers(n_conformers=1)
-        conformer_a = molecule.conformers[0].value_in_unit(unit.angstrom)
+        conformer_a = molecule.conformers[0].m_as(unit.angstrom)
 
     # Create a permuted version of the conformer, permuting only topology symmetric
     # atoms.
@@ -189,7 +188,7 @@ def test_are_conformers_not_identical():
     )
     molecule.generate_conformers(n_conformers=1)
 
-    conformer_a = molecule.conformers[0].value_in_unit(unit.angstrom)
+    conformer_a = molecule.conformers[0].m_as(unit.angstrom)
 
     # Swap and perturb the hydrogen positions.
     hydrogen_coordinates = conformer_a[3, :]

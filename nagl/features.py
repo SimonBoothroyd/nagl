@@ -64,10 +64,7 @@ class AtomicElement(AtomFeature):
         """
 
         return torch.vstack(
-            [
-                one_hot_encode(atom.element.symbol, self.elements)
-                for atom in molecule.atoms
-            ]
+            [one_hot_encode(atom.symbol, self.elements) for atom in molecule.atoms]
         )
 
     def __len__(self):
@@ -154,12 +151,12 @@ class AtomFormalCharge(AtomFeature):
 
     def __call__(self, molecule: "Molecule") -> torch.Tensor:
 
-        from simtk import unit
+        from openff.units import unit
 
         return torch.vstack(
             [
                 one_hot_encode(
-                    atom.formal_charge.value_in_unit(unit.elementary_charges),
+                    atom.formal_charge.m_as(unit.elementary_charges),
                     self.charges,
                 )
                 for atom in molecule.atoms

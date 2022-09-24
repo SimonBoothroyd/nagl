@@ -28,9 +28,8 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
         environment-file: devtools/conda-envs/test_env.yaml
-
+        python-version: ${{ matrix.python-version }}
         channels: dglteam,conda-forge,defaults
-
         activate-environment: test
         auto-update-conda: true
         auto-activate-base: false

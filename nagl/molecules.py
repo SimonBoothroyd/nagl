@@ -111,7 +111,7 @@ class DGLMolecule(_BaseDGLModel):
         and bond (edge) features.
         """
 
-        from simtk import unit
+        from openff.units import unit
 
         # Create the bond tensors.
         indices_a = []
@@ -144,7 +144,7 @@ class DGLMolecule(_BaseDGLModel):
         )
         molecule_graph.ndata["formal_charge"] = torch.tensor(
             [
-                atom.formal_charge.value_in_unit(unit.elementary_charge)
+                atom.formal_charge.m_as(unit.elementary_charge)
                 for atom in molecule.atoms
             ],
             dtype=torch.int8,

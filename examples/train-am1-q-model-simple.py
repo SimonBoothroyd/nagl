@@ -16,7 +16,7 @@ from nagl.nn.postprocess import ComputePartialCharges
 
 def label_function(molecule: Molecule) -> Dict[str, torch.Tensor]:
     """Generates a set of train / val / test labels for a given molecule."""
-    from simtk import unit
+    from openff.units import unit
 
     # Generate a set of ELF10 conformers.
     molecule.generate_conformers(n_conformers=800, rms_cutoff=0.05 * unit.angstrom)
@@ -29,7 +29,7 @@ def label_function(molecule: Molecule) -> Dict[str, torch.Tensor]:
         molecule.assign_partial_charges("am1-mulliken", use_conformers=[conformer])
 
         partial_charges.append(
-            molecule.partial_charges.value_in_unit(unit.elementary_charge)
+            molecule.partial_charges.m_as(unit.elementary_charge)
         )
 
     return {
