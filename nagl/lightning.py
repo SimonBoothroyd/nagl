@@ -1,7 +1,7 @@
 import errno
 import os.path
 import pickle
-from typing import Dict, List, Literal, Optional, Tuple, Union
+from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
 
 import pytorch_lightning as pl
 import torch
@@ -14,8 +14,10 @@ from nagl.molecules import DGLMolecule, DGLMoleculeBatch, MoleculeToDGLFunc
 from nagl.nn.modules import ConvolutionModule, ReadoutModule
 from nagl.storage import ChargeMethod, MoleculeStore, WBOMethod
 
+LossFunction = Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
 
-def _rmse_loss(y_pred: torch.Tensor, label: torch.Tensor):
+
+def rmse_loss(y_pred: torch.Tensor, label: torch.Tensor):
     return torch.sqrt(torch.nn.functional.mse_loss(y_pred, label))
 
 
@@ -29,12 +31,14 @@ class DGLMoleculeLightningModel(pl.LightningModule):
         convolution_module: ConvolutionModule,
         readout_modules: Dict[str, ReadoutModule],
         learning_rate: float,
+        loss_function: LossFunction = rmse_loss,
     ):
 
         super().__init__()
 
         self.convolution_module = convolution_module
         self.readout_modules = torch.nn.ModuleDict(readout_modules)
+        self._loss_function = loss_function
 
         self.learning_rate = learning_rate
 
@@ -63,7 +67,7 @@ class DGLMoleculeLightningModel(pl.LightningModule):
         loss = torch.zeros(1).type_as(next(iter(y_pred.values())))
 
         for label_name, label in labels.items():
-            loss += _rmse_loss(y_pred[label_name], label)
+            loss += self._loss_function(y_pred[label_name], label)
 
         self.log(f"{step_type}_loss", loss)
         return loss
