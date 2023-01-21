@@ -1,6 +1,6 @@
 # NAGL
 
-[![tests](https://github.com/SimonBoothroyd/nagl/workflows/CI/badge.svg?branch=main)](https://github.com/SimonBoothroyd/nagl/actions?query=workflow%3ACI)
+[![test](https://github.com/SimonBoothroyd/nagl/actions/workflows/ci.yaml/badge.svg?branch=main)](https://github.com/SimonBoothroyd/nagl/actions/workflows/ci.yaml/badge.svg?branch=main)
 [![codecov](https://codecov.io/gh/SimonBoothroyd/nagl/branch/main/graph/badge.svg?token=Aa8STE8WBZ)](https://codecov.io/gh/SimonBoothroyd/nagl)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
