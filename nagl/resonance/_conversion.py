@@ -114,9 +114,12 @@ def dgl_molecule_to_networkx(molecule: "DGLMolecule") -> networkx.Graph:
 
     per_atom_bond_orders = defaultdict(list)
 
+    indices_a, indices_b = dgl_graph.all_edges()
+
     for index_a, index_b, bond_order in zip(
-        *dgl_graph.all_edges(etype="forward"),
-        dgl_graph.edges["forward"].data["bond_order"],
+        indices_a[dgl_graph.edata["mask"]],
+        indices_b[dgl_graph.edata["mask"]],
+        dgl_graph.edata["bond_order"][dgl_graph.edata["mask"]],
     ):
 
         per_atom_bond_orders[int(index_a)].append(bond_order)
@@ -144,8 +147,9 @@ def dgl_molecule_to_networkx(molecule: "DGLMolecule") -> networkx.Graph:
     )
 
     for index_a, index_b, bond_order in zip(
-        *dgl_graph.all_edges(etype="forward"),
-        dgl_graph.edges["forward"].data["bond_order"],
+        indices_a[dgl_graph.edata["mask"]],
+        indices_b[dgl_graph.edata["mask"]],
+        dgl_graph.edata["bond_order"][dgl_graph.edata["mask"]],
     ):
 
         nx_graph.add_edge(int(index_a), int(index_b), bond_order=int(bond_order))
@@ -177,12 +181,10 @@ def dgl_molecule_from_networkx(nx_graph: networkx.Graph) -> "DGLMolecule":
     indices_a = torch.tensor(indices_a, dtype=torch.int32)
     indices_b = torch.tensor(indices_b, dtype=torch.int32)
 
-    dgl_graph: dgl.DGLHeteroGraph = dgl.heterograph(
-        {
-            ("atom", "forward", "atom"): (indices_a, indices_b),
-            ("atom", "reverse", "atom"): (indices_b, indices_a),
-        }
-    )
+    undirected_indices_a = torch.cat([indices_a, indices_b])
+    undirected_indices_b = torch.cat([indices_b, indices_a])
+
+    dgl_graph: dgl.DGLGraph = dgl.graph((undirected_indices_a, undirected_indices_b))
     dgl_graph.ndata["formal_charge"] = torch.tensor(
         [nx_graph.nodes[node_index]["formal_charge"] for node_index in nx_graph.nodes],
         dtype=torch.int8,
@@ -195,6 +197,11 @@ def dgl_molecule_from_networkx(nx_graph: networkx.Graph) -> "DGLMolecule":
         dtype=torch.uint8,
     )
 
+    bond_mask = torch.tensor(
+        [True] * len(indices_a) + [False] * len(indices_a), dtype=torch.bool
+    )
+    dgl_graph.edata["mask"] = bond_mask
+
     bond_orders = torch.tensor(
         [
             nx_graph[index_a][index_b]["bond_order"]
@@ -202,8 +209,6 @@ def dgl_molecule_from_networkx(nx_graph: networkx.Graph) -> "DGLMolecule":
         ],
         dtype=torch.uint8,
     )
-
-    for direction in ("forward", "reverse"):
-        dgl_graph.edges[direction].data["bond_order"] = bond_orders
+    dgl_graph.edata["bond_order"] = torch.cat([bond_orders, bond_orders])
 
     return DGLMolecule(dgl_graph, 1)

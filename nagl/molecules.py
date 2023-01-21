@@ -16,37 +16,11 @@ MoleculeToDGLFunc = Callable[
 ]
 
 
-def _hetero_to_homo_graph(graph: dgl.DGLHeteroGraph) -> dgl.DGLGraph:
-
-    try:
-        homo_graph = dgl.to_homogeneous(graph, ndata=["feat"], edata=["feat"])
-    except KeyError:
-
-        # A nasty workaround to check when we don't have any atom / bond features as
-        # DGL doesn't allow easy querying of features dicts for hetereographs with
-        # multiple edge / node types.
-        try:
-            homo_graph = dgl.to_homogeneous(graph, ndata=["feat"], edata=[])
-        except KeyError:
-            try:
-                homo_graph = dgl.to_homogeneous(graph, ndata=[], edata=["feat"])
-            except KeyError:
-                homo_graph = dgl.to_homogeneous(graph, ndata=[], edata=[])
-
-    return homo_graph
-
-
 class _BaseDGLModel:
     @property
-    def graph(self) -> dgl.DGLHeteroGraph:
+    def graph(self) -> dgl.DGLGraph:
         """Returns the DGL graph representation of the molecule."""
         return self._graph
-
-    @property
-    def homograph(self) -> dgl.DGLGraph:
-        """Returns the homogeneous (i.e. only one node and edge type) graph
-        representation of the molecule."""
-        return _hetero_to_homo_graph(self._graph)
 
     @property
     def atom_features(self) -> torch.Tensor:
@@ -54,14 +28,14 @@ class _BaseDGLModel:
         shape=(n_atoms, n_atom_features)."""
         return self._graph.ndata["feat"].float()
 
-    def __init__(self, graph: dgl.DGLHeteroGraph):
+    def __init__(self, graph: dgl.DGLGraph):
         """
 
         Args:
             graph: The DGL graph representation of the molecule.
         """
 
-        self._graph = graph
+        self._graph: dgl.DGLGraph = graph
 
     def to(self: _T, device: str) -> _T:
 
@@ -78,17 +52,22 @@ class DGLMolecule(_BaseDGLModel):
 
     @property
     def n_atoms(self) -> int:
+        """The number of atoms in the stored molecule."""
         return int(self._graph.number_of_nodes() / self._n_representations)
 
     @property
     def n_bonds(self) -> int:
-        return int(self._graph.number_of_edges("forward") / self._n_representations)
+        """The number of bonds in the stored molecule."""
+        return int(self._graph.number_of_edges() / 2 / self._n_representations)
 
     @property
     def n_representations(self) -> int:
+        """Returns the number of different 'representations' (e.g. resonance structures)
+        this molecule object contains
+        """
         return self._n_representations
 
-    def __init__(self, graph: dgl.DGLHeteroGraph, n_representations: int):
+    def __init__(self, graph: dgl.DGLGraph, n_representations: int):
         """
 
         Args:
@@ -104,8 +83,8 @@ class DGLMolecule(_BaseDGLModel):
     def _molecule_to_dgl(
         cls,
         molecule: "Molecule",
-        atom_features: List[AtomFeature],
-        bond_features: List[BondFeature],
+        atom_featurizers: List[AtomFeature],
+        bond_featurizers: List[BondFeature],
     ) -> dgl.DGLGraph:
         """Maps an OpenFF molecule object into a ``dgl`` graph complete with atom (node)
         and bond (edge) features.
@@ -124,24 +103,35 @@ class DGLMolecule(_BaseDGLModel):
         indices_a = torch.tensor(indices_a, dtype=torch.int32)
         indices_b = torch.tensor(indices_b, dtype=torch.int32)
 
+        undirected_indices_a = torch.cat([indices_a, indices_b])
+        undirected_indices_b = torch.cat([indices_b, indices_a])
+
         # Map the bond indices to a molecule graph, making sure to make the graph
         # undirected.
-        molecule_graph: dgl.DGLHeteroGraph = dgl.heterograph(
-            {
-                ("atom", "forward", "atom"): (indices_a, indices_b),
-                ("atom", "reverse", "atom"): (indices_b, indices_a),
-            }
+        molecule_graph: dgl.DGLGraph = dgl.graph(
+            (undirected_indices_a, undirected_indices_b)
         )
+
+        # Track which edges correspond to an original bond and which were added to
+        # make the graph undirected.
+        bond_mask = torch.tensor(
+            [True] * molecule.n_bonds + [False] * molecule.n_bonds, dtype=torch.bool
+        )
+        molecule_graph.edata["mask"] = bond_mask
 
         # Assign the atom (node) features.
-        if len(atom_features) > 0:
+        if len(atom_featurizers) > 0:
+
             molecule_graph.ndata["feat"] = AtomFeaturizer.featurize(
-                molecule, atom_features
+                molecule, atom_featurizers
             )
 
-        molecule_graph.ndata["idx"] = torch.tensor(
-            [i for i in range(molecule.n_atoms)], dtype=torch.int32
-        )
+        if len(bond_featurizers) > 0:
+
+            bond_features = BondFeaturizer.featurize(molecule, bond_featurizers)
+            # We need to 'double stack' the features as the graph is bidirectional
+            molecule_graph.edata["feat"] = torch.cat([bond_features, bond_features])
+
         molecule_graph.ndata["formal_charge"] = torch.tensor(
             [
                 atom.formal_charge.m_as(unit.elementary_charge)
@@ -153,22 +143,10 @@ class DGLMolecule(_BaseDGLModel):
             [atom.atomic_number for atom in molecule.atoms], dtype=torch.uint8
         )
 
-        # Assign the bond (edge) features.
-        feature_tensor = (
-            BondFeaturizer.featurize(molecule, bond_features)
-            if len(bond_features) > 0
-            else None
-        )
         bond_orders = torch.tensor(
             [bond.bond_order for bond in molecule.bonds], dtype=torch.uint8
         )
-
-        for direction in ("forward", "reverse"):
-
-            if feature_tensor is not None:
-                molecule_graph.edges[direction].data["feat"] = feature_tensor
-
-            molecule_graph.edges[direction].data["bond_order"] = bond_orders
+        molecule_graph.edata["bond_order"] = torch.cat([bond_orders, bond_orders])
 
         return molecule_graph
 

@@ -62,14 +62,9 @@ class PoolBondFeatures(PoolingLayer):
 
         graph = molecule.graph
 
-        with graph.local_scope():
+        graph.apply_edges(self._apply_edges)
 
-            graph.apply_edges(self._apply_edges, etype="forward")
-            h_forward = graph.edges["forward"].data["h"]
-
-        with graph.local_scope():
-
-            graph.apply_edges(self._apply_edges, etype="reverse")
-            h_reverse = graph.edges["reverse"].data["h"]
+        h_forward = graph.edata["h"][graph.edata["mask"]]
+        h_reverse = graph.edata["h"][~graph.edata["mask"]]
 
         return self.layers(h_forward) + self.layers(h_reverse)

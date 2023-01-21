@@ -57,9 +57,7 @@ def test_init_sequential_layers_invalid():
 
 def test_gcn_stack_forward(dgl_methane):
 
-    homograph = dgl_methane.homograph
-
     conv_stack = SAGEConvStack(in_feats=4, hidden_feats=[2])
-    h = conv_stack.forward(homograph, dgl_methane.atom_features)
+    h = conv_stack.forward(dgl_methane.graph, dgl_methane.atom_features)
 
     assert h.detach().numpy().shape == (5, 2)
