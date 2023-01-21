@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel", "versioneer"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nagl"
+author = "Simon Boothroyd"
+description = "A playground for applying graph convolutional networks to molecules."
+dynamic = ["version"]
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.8"
+classifiers = ["Programming Language :: Python :: 3"]
+
+[project.scripts]
+bfe = "nagl=nagl.cli:cli"
+
+[tool.setuptools]
+zip-safe = false
+include-package-data = true
+
+[tool.setuptools.packages.find]
+namespaces = true
+where = ["."]
+
+[tool.setuptools.package-data]
+"nagl" = ["data/**/*"]

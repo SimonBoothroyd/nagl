@@ -194,7 +194,7 @@ class DGLMoleculeDataset(Dataset):
         """
 
         from openff.toolkit.topology import Molecule
-        from simtk import unit
+        from openff.units import unit
 
         from nagl.storage import MoleculeStore
 

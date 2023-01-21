@@ -1,11 +1,6 @@
-"""
-nagl
-A playground for applying graph convolutional networks to molecules.
-"""
+"""A playground for applying graph convolutional networks to molecules."""
 
-from ._version import get_versions
+from . import _version
 
-versions = get_versions()
-__version__ = versions["version"]
-__git_revision__ = versions["full-revisionid"]
-del get_versions, versions
+__version__ = _version.get_versions()['version']
+__all__ = ["__version__"]

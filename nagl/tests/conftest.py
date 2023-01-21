@@ -1,7 +1,7 @@
 import numpy
 import pytest
 from openff.toolkit.topology import Molecule
-from simtk import unit
+from openff.units import unit
 
 from nagl.features import AtomConnectivity, BondIsInRing
 from nagl.molecules import DGLMolecule
