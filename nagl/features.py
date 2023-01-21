@@ -3,6 +3,9 @@ from typing import TYPE_CHECKING, Generic, List, Optional, TypeVar
 
 import torch
 
+from nagl.resonance import enumerate_resonance_forms
+from nagl.utilities.toolkits import normalize_molecule
+
 if TYPE_CHECKING:
     from openff.toolkit.topology import Molecule
 
@@ -165,6 +168,69 @@ class AtomFormalCharge(AtomFeature):
 
     def __len__(self):
         return len(self.charges)
+
+
+class AtomAverageFormalCharge(AtomFeature):
+    """Computes the average formal charge on each atom in a molecule across resonance
+    structures."""
+
+    def __init__(
+        self,
+        lowest_energy_only: bool = True,
+        max_path_length: Optional[int] = None,
+        include_all_transfer_pathways: bool = False,
+    ):
+        """
+        Parameters
+        ----------
+        lowest_energy_only: Whether to only return the resonance forms with the lowest
+            'energy'. See ``nagl.resonance.enumerate_resonance_forms`` for details.
+        max_path_length: The maximum number of bonds between a donor and acceptor to
+            consider.
+        include_all_transfer_pathways: Whether to include resonance forms that have
+            the same formal charges but have different arrangements of bond orders.
+        """
+        self.lowest_energy_only = lowest_energy_only
+        self.max_path_length = max_path_length
+        self.include_all_transfer_pathways = include_all_transfer_pathways
+
+    def __call__(self, molecule: "Molecule") -> torch.Tensor:
+
+        molecule = normalize_molecule(molecule)
+
+        resonance_forms = enumerate_resonance_forms(
+            molecule,
+            as_dicts=True,
+            lowest_energy_only=self.lowest_energy_only,
+            include_all_transfer_pathways=self.include_all_transfer_pathways,
+            max_path_length=self.max_path_length,
+        )
+
+        formal_charges = [
+            [
+                atom["formal_charge"]
+                for resonance_form in resonance_forms
+                if i in resonance_form["atoms"]
+                for atom in resonance_form["atoms"][i]
+            ]
+            for i in range(molecule.n_atoms)
+        ]
+
+        feature_tensor = torch.tensor(
+            [
+                [
+                    sum(formal_charges[i]) / len(formal_charges[i])
+                    if len(formal_charges[i]) > 0
+                    else 0.0
+                ]
+                for i in range(molecule.n_atoms)
+            ]
+        )
+
+        return feature_tensor
+
+    def __len__(self):
+        return 1
 
 
 class AtomFeaturizer(_Featurizer[AtomFeature]):

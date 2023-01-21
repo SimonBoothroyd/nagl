@@ -3,6 +3,7 @@ import pytest
 from openff.toolkit.topology import Molecule
 
 from nagl.features import (
+    AtomAverageFormalCharge,
     AtomConnectivity,
     AtomFormalCharge,
     AtomicElement,
@@ -63,6 +64,20 @@ def test_atom_formal_charge():
 
     assert numpy.isclose(encoding[0, 0], 0.0)
     assert numpy.isclose(encoding[0, 1], 1.0)
+
+
+def test_atom_average_formal_charge():
+
+    molecule = Molecule.from_mapped_smiles("[H:1][C:2](=[O:3])[O-:4]")
+
+    feature = AtomAverageFormalCharge()
+    assert len(feature) == 1
+
+    encoding = feature(molecule).numpy()
+    assert encoding.shape == (4, 1)
+
+    expected_encoding = numpy.array([[0], [0], [-0.5], [-0.5]])
+    assert numpy.allclose(encoding, expected_encoding)
 
 
 @pytest.mark.parametrize("feature_class", [AtomIsAromatic, BondIsAromatic])
