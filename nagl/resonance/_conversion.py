@@ -5,7 +5,6 @@ import dgl
 import networkx
 import torch
 from openff.toolkit.topology import Molecule
-from openmm.app import Element
 
 if TYPE_CHECKING:
     from nagl.molecules import DGLMolecule
@@ -65,13 +64,17 @@ def openff_molecule_from_networkx(nx_graph: networkx.Graph) -> Molecule:
         The OpenFF molecule object.
     """
 
+    from openff.units.elements import SYMBOLS
+
     molecule = Molecule()
+
+    symbol_to_num = {v: k for k, v in SYMBOLS.items()}
 
     for node_index in nx_graph.nodes:
         node = nx_graph.nodes[node_index]
 
         molecule.add_atom(
-            Element.getBySymbol(node["element"]).atomic_number,
+            symbol_to_num[node["element"]],
             node["formal_charge"],
             False,
         )
@@ -99,10 +102,12 @@ def dgl_molecule_to_networkx(molecule: "DGLMolecule") -> networkx.Graph:
         The graph representation.
     """
 
+    from openff.units.elements import SYMBOLS
+
     dgl_graph = molecule.graph
 
     elements = [
-        Element.getByAtomicNumber(int(atomic_number)).symbol
+        SYMBOLS[int(atomic_number)]
         for atomic_number in dgl_graph.ndata["atomic_number"]
     ]
     formal_charges = dgl_graph.ndata["formal_charge"]
@@ -161,7 +166,11 @@ def dgl_molecule_from_networkx(nx_graph: networkx.Graph) -> "DGLMolecule":
         The DGL heterograph object.
     """
 
+    from openff.units.elements import SYMBOLS
+
     from nagl.molecules import DGLMolecule
+
+    symbol_to_num = {v: k for k, v in SYMBOLS.items()}
 
     indices_a, indices_b = zip(*nx_graph.edges)
 
@@ -180,7 +189,7 @@ def dgl_molecule_from_networkx(nx_graph: networkx.Graph) -> "DGLMolecule":
     )
     dgl_graph.ndata["atomic_number"] = torch.tensor(
         [
-            Element.getBySymbol(nx_graph.nodes[node_index]["element"]).atomic_number
+            symbol_to_num[nx_graph.nodes[node_index]["element"]]
             for node_index in nx_graph.nodes
         ],
         dtype=torch.uint8,

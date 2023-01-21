@@ -186,7 +186,7 @@ def label_molecules(
             except (BaseException, Exception) as e:
 
                 formatted_traceback = traceback.format_exception(
-                    etype=type(e), value=e, tb=e.__traceback__
+                    type(e), e, e.__traceback__
                 )
                 error = f"Failed to process {str(molecule)}: {formatted_traceback}"
 

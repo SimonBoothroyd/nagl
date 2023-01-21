@@ -2,11 +2,10 @@ name: test
 channels:
   - dglteam
   - conda-forge
-  - defaults
 
 dependencies:
-    # Base depends
-  - python
+
+  - python >3.8
   - pip
 
     ### Core dependencies.
@@ -15,6 +14,9 @@ dependencies:
 
   - click
   - click-option-group
+
+  - rdkit
+  - ambertools
 
   - pytorch
   - dgl >=0.7
@@ -27,19 +29,24 @@ dependencies:
   - pytorch-lightning
 
     # Molecule loading and processing.
-  - openff-toolkit >=0.11.0
+  - openff-toolkit-base >=0.11.0
 
     # SQL based molecule storage.
   - sqlalchemy
   - sqlite
 
     # Distributed molecule processing / labelling.
-  - dask =2.30.0
-  - distributed =2.30.0
+  - dask
+  - distributed
   - dask-jobqueue
 
-    # Testing
+    # Dev / Testing
+  - pre-commit
+  - isort
+  - black
+  - flake8
+
   - pytest
   - pytest-cov
   - codecov
-  - coverage <6.3  # fix hangs on GH, see coveragepy/issues/1310
+  - coverage >6.4

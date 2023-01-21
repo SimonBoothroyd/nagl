@@ -4,3 +4,4 @@ coverage:
     project:
       default:
         threshold: 87.5%
+comment: false

@@ -28,9 +28,7 @@ def label_function(molecule: Molecule) -> Dict[str, torch.Tensor]:
 
         molecule.assign_partial_charges("am1-mulliken", use_conformers=[conformer])
 
-        partial_charges.append(
-            molecule.partial_charges.m_as(unit.elementary_charge)
-        )
+        partial_charges.append(molecule.partial_charges.m_as(unit.elementary_charge))
 
     return {
         "am1-charges": torch.from_numpy(numpy.mean(partial_charges, axis=0)).float()

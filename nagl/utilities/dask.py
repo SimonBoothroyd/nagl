@@ -46,7 +46,9 @@ def setup_dask_lsf_cluster(
     import dask
     from dask_jobqueue import LSFCluster
 
-    env_extra = dask.config.get("jobqueue.lsf.env-extra", default=[])
+    env_extra = dask.config.get("jobqueue.lsf.env-extra", default=None)
+    env_extra = [] if env_extra is None else env_extra
+
     env_extra.append(f"conda activate {environment_name}")
 
     cluster = LSFCluster(
