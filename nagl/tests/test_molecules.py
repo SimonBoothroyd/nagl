@@ -1,43 +1,15 @@
 import dgl
 import numpy
 import pytest
-import torch
 from openff.toolkit.topology import Molecule
 
-from nagl.features import AtomConnectivity, BondIsInRing
-from nagl.molecules import DGLMolecule, DGLMoleculeBatch, _hetero_to_homo_graph
-
-
-@pytest.mark.parametrize(
-    "dgl_molecule",
-    [
-        DGLMolecule.from_smiles("C", [], []),
-        DGLMolecule.from_smiles("C", [AtomConnectivity()], []),
-        DGLMolecule.from_smiles("C", [], [BondIsInRing()]),
-        DGLMolecule.from_smiles("C", [AtomConnectivity()], [BondIsInRing()]),
-    ],
-)
-def test_hetero_to_homo_graph(dgl_molecule):
-
-    heterograph: dgl.DGLHeteroGraph = dgl_molecule.graph
-    homograph: dgl.DGLHeteroGraph = _hetero_to_homo_graph(heterograph)
-
-    assert homograph.number_of_nodes() == 5
-    assert homograph.number_of_edges() == 8  # 4 forward + 4 reverse
-
-    indices_a, indices_b = homograph.edges()
-
-    assert torch.allclose(indices_a[:4], indices_b[4:])
-    assert torch.allclose(indices_b[4:], indices_a[:4])
+from nagl.features import AtomConnectivity, BondOrder
+from nagl.molecules import DGLMolecule, DGLMoleculeBatch
 
 
 class TestBaseDGLModel:
     def test_graph_property(self, dgl_methane):
-        assert isinstance(dgl_methane.graph, dgl.DGLHeteroGraph)
-
-    def test_homograph_property(self, dgl_methane):
-        assert isinstance(dgl_methane.graph, dgl.DGLHeteroGraph)
-        assert dgl_methane.homograph.is_homogeneous
+        assert isinstance(dgl_methane.graph, dgl.DGLGraph)
 
     def test_atom_features_property(self, dgl_methane):
         assert dgl_methane.atom_features.shape == (5, 4)
@@ -79,7 +51,7 @@ class TestDGLMolecule:
         dgl_molecule = from_function(
             input_object,
             [AtomConnectivity()],
-            [BondIsInRing()],
+            [BondOrder()],
         )
         dgl_graph = dgl_molecule.graph
 
@@ -98,14 +70,19 @@ class TestDGLMolecule:
             ),
         )
 
-        forward_features = dgl_graph.edges["forward"].data["feat"].numpy()
-        reverse_features = dgl_graph.edges["reverse"].data["feat"].numpy()
+        n_bonds = int(dgl_graph.number_of_edges() / 2)
+
+        assert dgl_graph.edata["mask"][:n_bonds].all()
+        assert (~dgl_graph.edata["mask"][n_bonds:]).all()
+
+        forward_features = dgl_graph.edata["feat"][dgl_graph.edata["mask"]].numpy()
+        reverse_features = dgl_graph.edata["feat"][~dgl_graph.edata["mask"]].numpy()
 
         assert forward_features.shape == reverse_features.shape
-        assert forward_features.shape == (3, 1)
+        assert forward_features.shape == (3, 3)
 
         assert numpy.allclose(forward_features, reverse_features)
-        assert numpy.allclose(
+        assert not numpy.allclose(
             forward_features[:], numpy.zeros_like(forward_features[:])
         )
 

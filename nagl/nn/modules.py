@@ -13,7 +13,6 @@ GCNArchitecture = Literal["SAGEConv"]
 
 _GRAPH_ARCHITECTURES: Dict[GCNArchitecture, Type[GCNStack]] = {
     "SAGEConv": SAGEConvStack,
-    # "GINConv": GINConvStack,
 }
 
 
@@ -40,12 +39,8 @@ class ConvolutionModule(torch.nn.Module):
 
     def forward(self, molecule: Union[DGLMolecule, DGLMoleculeBatch]):
 
-        # The input graph will be heterogeneous - the edges are split into forward
-        # edge types and their symmetric reverse counterparts. The convolution layer
-        # doesn't need this information and hence we produce a homogeneous graph for
-        # it to operate on with only a single edge type.
         molecule.graph.ndata["h"] = self.gcn_layers(
-            molecule.homograph, molecule.atom_features
+            molecule.graph, molecule.atom_features
         )
 
 

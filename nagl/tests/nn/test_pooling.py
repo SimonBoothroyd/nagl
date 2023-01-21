@@ -1,3 +1,6 @@
+import copy
+
+import dgl
 import numpy
 import torch
 import torch.nn
@@ -15,12 +18,20 @@ def test_pool_atom_features(dgl_methane):
 
 def test_pool_bond_features(dgl_methane):
 
-    bond_pool_layer = PoolBondFeatures(torch.nn.Identity())
+    molecule_a = dgl_methane
 
-    dgl_methane.graph.ndata["h"] = torch.from_numpy(numpy.arange(30).reshape(-1, 6))
+    molecule_b = copy.deepcopy(molecule_a)
+    molecule_b._graph = dgl.reverse(molecule_a.graph, copy_edata=True)
 
-    bond_features = bond_pool_layer.forward(dgl_methane).detach().numpy()
+    bond_pool_layer = PoolBondFeatures(torch.nn.Linear(12, 2))
 
-    assert not numpy.allclose(bond_features, 0.0)
-    assert numpy.allclose(bond_features[:, 0], bond_features[:, 6])
-    assert numpy.allclose(bond_features[:, 5], bond_features[:, 11])
+    molecule_a.graph.ndata["h"] = torch.from_numpy(
+        numpy.arange(30).reshape(-1, 6)
+    ).float()
+    molecule_b.graph.ndata["h"] = torch.clone(molecule_a.graph.ndata["h"])
+
+    bond_features_a = bond_pool_layer.forward(molecule_a).detach().numpy()
+    bond_features_b = bond_pool_layer.forward(molecule_b).detach().numpy()
+
+    assert not numpy.allclose(bond_features_a, 0.0)
+    assert numpy.allclose(bond_features_a, bond_features_b)
