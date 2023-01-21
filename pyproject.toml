@@ -4,16 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nagl"
-author = "Simon Boothroyd"
+authors = [ {name = "Simon Boothroyd"} ]
 description = "A playground for applying graph convolutional networks to molecules."
 dynamic = ["version"]
 readme = "README.md"
-license = "MIT"
 requires-python = ">=3.8"
 classifiers = ["Programming Language :: Python :: 3"]
 
 [project.scripts]
-bfe = "nagl=nagl.cli:cli"
+nagl = "nagl.cli:cli"
 
 [tool.setuptools]
 zip-safe = false

@@ -167,7 +167,7 @@ def dgl_molecule_from_networkx(nx_graph: networkx.Graph) -> "DGLMolecule":
     """
 
     from openff.units.elements import SYMBOLS
-    
+
     from nagl.molecules import DGLMolecule
 
     symbol_to_num = {v: k for k, v in SYMBOLS.items()}

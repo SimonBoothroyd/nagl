@@ -40,7 +40,12 @@ dependencies:
   - distributed
   - dask-jobqueue
 
-    # Testing
+    # Dev / Testing
+  - pre-commit
+  - isort
+  - black
+  - flake8
+
   - pytest
   - pytest-cov
   - codecov

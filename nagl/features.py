@@ -125,9 +125,9 @@ class AtomIsInRing(AtomFeature):
         ring_atoms = {
             index for index, in molecule.chemical_environment_matches("[*r:1]")
         }
-        return torch.tensor([int(i in ring_atoms) for i in range(molecule.n_atoms)]).reshape(
-            -1, 1
-        )
+        return torch.tensor(
+            [int(i in ring_atoms) for i in range(molecule.n_atoms)]
+        ).reshape(-1, 1)
 
     def __len__(self):
         return 1

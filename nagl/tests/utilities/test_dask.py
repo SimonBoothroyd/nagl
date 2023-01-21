@@ -1,5 +1,3 @@
-import os
-
 from distributed import LocalCluster
 from openff.utilities import temporary_cd
 
