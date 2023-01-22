@@ -6,7 +6,7 @@
 #
 # The code has been modified so that the architecture of the GCN is abstracted.
 import abc
-from typing import Callable, Generic, List, Optional, TypeVar
+import typing
 
 import dgl
 import dgl.nn.pytorch
@@ -14,16 +14,15 @@ import torch.nn
 import torch.nn.functional
 from typing_extensions import Literal
 
-ActivationFunction = Callable[[torch.tensor], torch.Tensor]
+ActivationFunction = typing.Callable[[torch.tensor], torch.Tensor]
 
 SAGEConvAggregatorType = Literal["mean", "gcn", "pool", "lstm"]
-GINConvAggregatorType = Literal["sum", "max", "mean"]
 
-S = TypeVar("S", bound=torch.nn.Module)
-T = TypeVar("T", bound=str)
+S = typing.TypeVar("S", bound=torch.nn.Module)
+T = typing.TypeVar("T", bound=str)
 
 
-class GCNStack(torch.nn.ModuleList, Generic[S, T], abc.ABC):
+class GCNStack(torch.nn.ModuleList, typing.Generic[S, T], abc.ABC):
     """A wrapper around a stack of GCN graph convolutional layers.
 
     Note:
@@ -33,10 +32,10 @@ class GCNStack(torch.nn.ModuleList, Generic[S, T], abc.ABC):
     def __init__(
         self,
         in_feats: int,
-        hidden_feats: List[int],
-        activation: Optional[List[ActivationFunction]] = None,
-        dropout: Optional[List[float]] = None,
-        aggregator_type: Optional[List[T]] = None,
+        hidden_feats: typing.List[int],
+        activation: typing.Optional[typing.List[torch.nn.Module]] = None,
+        dropout: typing.Optional[typing.List[float]] = None,
+        aggregator_type: typing.Optional[typing.List[T]] = None,
     ):
         """
         Args:

@@ -1,31 +1,31 @@
 """A module for handling cheminformatics toolkit calls directly which are not yet
 available in the OpenFF toolkit.
 """
+import contextlib
 import json
-from contextlib import contextmanager
-from typing import TYPE_CHECKING, Generator, List, Literal, overload
+import typing
 
 from openff.utilities import requires_package
 from openff.utilities.exceptions import MissingOptionalDependencyError
 
 from nagl import data
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
 
     from openff.toolkit.topology import Molecule
 
 
-@overload
+@typing.overload
 def _oe_stream_from_file(
-    file_path: str, as_smiles: Literal[True] = True
-) -> Generator[str, None, None]:  # pragma: no cover
+    file_path: str, as_smiles: typing.Literal[True] = True
+) -> typing.Generator[str, None, None]:  # pragma: no cover
     ...
 
 
-@overload
+@typing.overload
 def _oe_stream_from_file(
-    file_path: str, as_smiles: Literal[False] = False
-) -> Generator["Molecule", None, None]:  # pragma: no cover
+    file_path: str, as_smiles: typing.Literal[False] = False
+) -> typing.Generator["Molecule", None, None]:  # pragma: no cover
     ...
 
 
@@ -48,17 +48,17 @@ def _oe_stream_from_file(file_path: str, as_smiles=False):  # pragma: no cover
         )
 
 
-@overload
+@typing.overload
 def _rdkit_stream_from_file(
-    file_path: str, as_smiles: Literal[True] = True
-) -> Generator[str, None, None]:  # pragma: no cover
+    file_path: str, as_smiles: typing.Literal[True] = True
+) -> typing.Generator[str, None, None]:  # pragma: no cover
     ...
 
 
-@overload
+@typing.overload
 def _rdkit_stream_from_file(
-    file_path: str, as_smiles: Literal[False] = False
-) -> Generator["Molecule", None, None]:  # pragma: no cover
+    file_path: str, as_smiles: typing.Literal[False] = False
+) -> typing.Generator["Molecule", None, None]:  # pragma: no cover
     ...
 
 
@@ -83,17 +83,17 @@ def _rdkit_stream_from_file(file_path: str, as_smiles=False):
         )
 
 
-@overload
+@typing.overload
 def stream_from_file(
-    file_path: str, as_smiles: Literal[True] = True
-) -> Generator[str, None, None]:  # pragma: no cover
+    file_path: str, as_smiles: typing.Literal[True] = True
+) -> typing.Generator[str, None, None]:  # pragma: no cover
     ...
 
 
-@overload
+@typing.overload
 def stream_from_file(
-    file_path: str, as_smiles: Literal[False] = False
-) -> Generator["Molecule", None, None]:  # pragma: no cover
+    file_path: str, as_smiles: typing.Literal[False] = False
+) -> typing.Generator["Molecule", None, None]:  # pragma: no cover
     ...
 
 
@@ -109,7 +109,7 @@ def stream_from_file(file_path: str, as_smiles: bool = False):
 
 @requires_package("openeye.oechem")
 @requires_package("openff.toolkit")
-@contextmanager
+@contextlib.contextmanager
 def _oe_stream_to_file(file_path: str):  # pragma: no cover
 
     from openeye import oechem
@@ -126,7 +126,7 @@ def _oe_stream_to_file(file_path: str):  # pragma: no cover
 
 
 @requires_package("rdkit")
-@contextmanager
+@contextlib.contextmanager
 def _rdkit_stream_to_file(file_path: str):
 
     from rdkit import Chem
@@ -142,7 +142,7 @@ def _rdkit_stream_to_file(file_path: str):
     output_molecule_stream.close()
 
 
-@contextmanager
+@contextlib.contextmanager
 def stream_to_file(file_path: str):
 
     try:
@@ -153,7 +153,7 @@ def stream_to_file(file_path: str):
             yield writer
 
 
-@contextmanager
+@contextlib.contextmanager
 @requires_package("openeye.oechem")
 def _oe_capture_warnings():  # pragma: no cover
 
@@ -169,7 +169,7 @@ def _oe_capture_warnings():  # pragma: no cover
     oechem.OEThrow.SetOutputStream(oechem.oeerr)
 
 
-@contextmanager
+@contextlib.contextmanager
 def capture_toolkit_warnings():  # pragma: no cover
     """A convenience method to capture and discard any warning produced by external
     cheminformatics toolkits excluding the OpenFF toolkit. This should be used with
@@ -224,7 +224,9 @@ def smiles_to_inchi_key(smiles: str) -> str:
         return _rdkit_smiles_to_inchi_key(smiles)
 
 
-def _oe_get_atom_symmetries(molecule: "Molecule") -> List[int]:  # pragma: no cover
+def _oe_get_atom_symmetries(
+    molecule: "Molecule",
+) -> typing.List[int]:  # pragma: no cover
 
     from openeye import oechem
 
@@ -237,7 +239,7 @@ def _oe_get_atom_symmetries(molecule: "Molecule") -> List[int]:  # pragma: no co
     return [symmetry_classes_by_index[i] for i in range(molecule.n_atoms)]
 
 
-def _rd_get_atom_symmetries(molecule: "Molecule") -> List[int]:
+def _rd_get_atom_symmetries(molecule: "Molecule") -> typing.List[int]:
 
     from rdkit import Chem
 
@@ -245,7 +247,7 @@ def _rd_get_atom_symmetries(molecule: "Molecule") -> List[int]:
     return list(Chem.CanonicalRankAtoms(rd_mol, breakTies=False))
 
 
-def get_atom_symmetries(molecule: "Molecule") -> List[int]:
+def get_atom_symmetries(molecule: "Molecule") -> typing.List[int]:
 
     from openff.toolkit.utils import ToolkitUnavailableException
 
@@ -256,7 +258,7 @@ def get_atom_symmetries(molecule: "Molecule") -> List[int]:
 
 
 def _oe_normalize_molecule(
-    molecule: "Molecule", reaction_smarts: List[str]
+    molecule: "Molecule", reaction_smarts: typing.List[str]
 ) -> "Molecule":  # pragma: no cover
 
     from openeye import oechem
@@ -273,7 +275,7 @@ def _oe_normalize_molecule(
 
 
 def _rd_normalize_molecule(
-    molecule: "Molecule", reaction_smarts: List[str], max_iterations=10000
+    molecule: "Molecule", reaction_smarts: typing.List[str], max_iterations=10000
 ) -> "Molecule":
 
     from openff.toolkit.topology import Molecule

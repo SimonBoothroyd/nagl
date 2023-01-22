@@ -8,10 +8,10 @@ from openff.toolkit.topology import Molecule
 from nagl.datasets import DGLMoleculeDataLoader, DGLMoleculeDataset
 from nagl.features import AtomConnectivity, AtomicElement, BondOrder
 from nagl.lightning import DGLMoleculeLightningModel
-from nagl.nn import SequentialLayers
+from nagl.nn import Sequential
 from nagl.nn.modules import ConvolutionModule, ReadoutModule
-from nagl.nn.pooling import PoolAtomFeatures
-from nagl.nn.postprocess import ComputePartialCharges
+from nagl.nn.pooling import AtomPoolingLayer
+from nagl.nn.postprocess import PartialChargeLayer
 
 
 def label_function(molecule: Molecule) -> Dict[str, torch.Tensor]:
@@ -96,13 +96,13 @@ def main():
             # The keys of the readout modules should correspond to keys in the
             # label dictionary.
             "am1-charges": ReadoutModule(
-                pooling_layer=PoolAtomFeatures(),
-                readout_layers=SequentialLayers(
+                pooling_layer=AtomPoolingLayer(),
+                readout_layers=Sequential(
                     in_feats=n_gcn_hidden_features,
                     hidden_feats=[n_am1_hidden_features] * n_am1_layers + [2],
                     activation=["ReLU"] * n_am1_layers + ["Identity"],
                 ),
-                postprocess_layer=ComputePartialCharges(),
+                postprocess_layer=PartialChargeLayer(),
             )
         },
         learning_rate=learning_rate,

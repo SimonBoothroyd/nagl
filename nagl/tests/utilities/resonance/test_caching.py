@@ -1,4 +1,4 @@
-from nagl.resonance._caching import PathCache
+from nagl.utilities.resonance._caching import PathCache
 
 
 class TestPathCache:

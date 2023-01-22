@@ -6,7 +6,7 @@ Notes
 Most of the classes in the module are based off of the discussion here:
 https://github.com/samuelcolvin/pydantic/issues/380
 """
-from typing import Any
+import typing
 
 import numpy
 
@@ -24,9 +24,9 @@ class Array(numpy.ndarray, metaclass=ArrayMeta):
     @classmethod
     def validate_type(cls, val):
 
-        dtype = getattr(cls, "__dtype__", Any)
+        dtype = getattr(cls, "__dtype__", typing.Any)
 
-        if dtype is Any:
+        if dtype is typing.Any:
             return numpy.array(val)
         else:
             return numpy.array(val, dtype=dtype)

@@ -1,7 +1,7 @@
 import functools
 import logging
-from multiprocessing import Pool
-from typing import TYPE_CHECKING, Tuple
+import multiprocessing
+import typing
 
 import click
 from click_option_group import optgroup
@@ -14,13 +14,15 @@ from nagl.utilities.toolkits import (
     stream_to_file,
 )
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from openff.toolkit.topology import Molecule
 
 _logger = logging.getLogger(__name__)
 
 
-def apply_filter(molecule: "Molecule", retain_largest: bool) -> Tuple["Molecule", bool]:
+def apply_filter(
+    molecule: "Molecule", retain_largest: bool
+) -> typing.Tuple["Molecule", bool]:
 
     with capture_toolkit_warnings():
 
@@ -117,7 +119,7 @@ def filter_cli(
     with capture_toolkit_warnings():
         with stream_to_file(output_path) as writer:
 
-            with Pool(processes=n_processes) as pool:
+            with multiprocessing.Pool(processes=n_processes) as pool:
 
                 for molecule, should_include in tqdm(
                     pool.imap(

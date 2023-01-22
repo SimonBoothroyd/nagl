@@ -1,12 +1,12 @@
 import importlib
-from typing import Dict, Optional
+import typing
 
 from openff.utilities.provenance import get_ambertools_version
 
 import nagl
 
 
-def _get_optional_dependency_version(import_path: str) -> Optional[str]:
+def _get_optional_dependency_version(import_path: str) -> typing.Optional[str]:
     """Attempts to retrieve the version of an optional dependency
 
     Args:
@@ -24,7 +24,7 @@ def _get_optional_dependency_version(import_path: str) -> Optional[str]:
         return None
 
 
-def get_labelling_software_provenance() -> Dict[str, str]:
+def get_labelling_software_provenance() -> typing.Dict[str, str]:
     """Returns the versions of the core dependencies used when labelling a set of
     molecules."""
 

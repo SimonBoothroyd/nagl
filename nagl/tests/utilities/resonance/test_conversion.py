@@ -3,7 +3,7 @@ import pytest
 from openff.toolkit.topology import Molecule
 
 from nagl.molecules import DGLMolecule
-from nagl.resonance._conversion import (
+from nagl.utilities.resonance._conversion import (
     dgl_molecule_from_networkx,
     dgl_molecule_to_networkx,
     openff_molecule_from_networkx,

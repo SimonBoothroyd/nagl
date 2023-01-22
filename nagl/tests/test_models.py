@@ -1,8 +1,11 @@
-from nagl.models import ConvolutionModule, MoleculeGCNModel, ReadoutModule
-from nagl.nn import SequentialLayers
+import torch.nn
+
+from nagl.models import MoleculeGCNModel
+from nagl.nn import Sequential
 from nagl.nn.gcn import GCNStack
-from nagl.nn.pooling import PoolAtomFeatures, PoolBondFeatures
-from nagl.nn.postprocess import ComputePartialCharges
+from nagl.nn.modules import ConvolutionModule, ReadoutModule
+from nagl.nn.pooling import AtomPoolingLayer, BondPoolingLayer
+from nagl.nn.postprocess import PartialChargeLayer
 
 
 class TestMoleculeGCNModel:
@@ -14,17 +17,17 @@ class TestMoleculeGCNModel:
             ),
             readout_modules={
                 "atom": ReadoutModule(
-                    pooling_layer=PoolAtomFeatures(),
-                    readout_layers=SequentialLayers(
-                        in_feats=2, hidden_feats=[2], activation=["Identity"]
+                    pooling_layer=AtomPoolingLayer(),
+                    readout_layers=Sequential(
+                        in_feats=2, hidden_feats=[2], activation=[torch.nn.Identity()]
                     ),
-                    postprocess_layer=ComputePartialCharges(),
+                    postprocess_layer=PartialChargeLayer(),
                 ),
                 "bond": ReadoutModule(
-                    pooling_layer=PoolBondFeatures(
-                        layers=SequentialLayers(in_feats=4, hidden_feats=[4])
+                    pooling_layer=BondPoolingLayer(
+                        layers=Sequential(in_feats=4, hidden_feats=[4])
                     ),
-                    readout_layers=SequentialLayers(in_feats=4, hidden_feats=[8]),
+                    readout_layers=Sequential(in_feats=4, hidden_feats=[8]),
                 ),
             },
         )
@@ -37,8 +40,8 @@ class TestMoleculeGCNModel:
 
         assert all(x in model.readout_modules for x in ["atom", "bond"])
 
-        assert isinstance(model.readout_modules["atom"].pooling_layer, PoolAtomFeatures)
-        assert isinstance(model.readout_modules["bond"].pooling_layer, PoolBondFeatures)
+        assert isinstance(model.readout_modules["atom"].pooling_layer, AtomPoolingLayer)
+        assert isinstance(model.readout_modules["bond"].pooling_layer, BondPoolingLayer)
 
     def test_forward(self, dgl_methane):
 
@@ -48,9 +51,9 @@ class TestMoleculeGCNModel:
             ),
             readout_modules={
                 "atom": ReadoutModule(
-                    pooling_layer=PoolAtomFeatures(),
-                    readout_layers=SequentialLayers(in_feats=4, hidden_feats=[2]),
-                    postprocess_layer=ComputePartialCharges(),
+                    pooling_layer=AtomPoolingLayer(),
+                    readout_layers=Sequential(in_feats=4, hidden_feats=[2]),
+                    postprocess_layer=PartialChargeLayer(),
                 ),
             },
         )

@@ -25,7 +25,7 @@ def test_one_hot_encode():
 
 def test_atomic_element(openff_methane: Molecule):
 
-    feature = AtomicElement(["H", "C"])
+    feature = AtomicElement(values=["H", "C"])
     assert len(feature) == 2
 
     encoding = feature(openff_methane).numpy()
@@ -56,7 +56,7 @@ def test_atom_formal_charge():
 
     molecule = Molecule.from_smiles("[Cl-]")
 
-    feature = AtomFormalCharge([0, -1])
+    feature = AtomFormalCharge(values=[0, -1])
     assert len(feature) == 2
 
     encoding = feature(molecule).numpy()
@@ -112,7 +112,7 @@ def test_is_in_ring(feature_class):
 
 def test_bond_order():
 
-    feature = BondOrder([2, 1])
+    feature = BondOrder(values=[2, 1])
     assert len(feature) == 2
 
     encoding = feature(Molecule.from_smiles("C=O")).numpy()

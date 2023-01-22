@@ -1,6 +1,6 @@
 import copy
 import traceback
-from typing import TYPE_CHECKING, List, Optional, Tuple, Union, get_args
+import typing
 
 from openff.utilities import requires_package
 from tqdm import tqdm
@@ -16,7 +16,7 @@ from nagl.storage import (
 from nagl.utilities.smiles import smiles_to_molecule
 from nagl.utilities.toolkits import capture_toolkit_warnings
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from openff.toolkit.topology import Molecule
 
 _OPENFF_CHARGE_METHODS = {"am1": "am1-mulliken", "am1bcc": "am1bcc"}
@@ -25,10 +25,10 @@ _OPENFF_WBO_METHODS = {"am1": "am1-wiberg"}
 
 @requires_package("openff.toolkit")
 def label_molecule(
-    molecule: Union[str, "Molecule"],
+    molecule: typing.Union[str, "Molecule"],
     guess_stereochemistry: bool,
-    partial_charge_methods: List[ChargeMethod],
-    bond_order_methods: List[WBOMethod],
+    partial_charge_methods: typing.List[ChargeMethod],
+    bond_order_methods: typing.List[WBOMethod],
     n_conformers: int = 500,
     rms_cutoff: float = 0.05,
 ) -> MoleculeRecord:
@@ -129,13 +129,13 @@ def label_molecule(
 
 @requires_package("openff.toolkit")
 def label_molecules(
-    molecules: List[Union[str, "Molecule"]],
+    molecules: typing.List[typing.Union[str, "Molecule"]],
     guess_stereochemistry: bool,
-    partial_charge_methods: Optional[List[ChargeMethod]],
-    bond_order_methods: Optional[List[WBOMethod]],
+    partial_charge_methods: typing.Optional[typing.List[ChargeMethod]],
+    bond_order_methods: typing.Optional[typing.List[WBOMethod]],
     n_conformers: int = 500,
     rms_cutoff: float = 0.05,
-) -> List[Tuple[Optional[MoleculeRecord], Optional[str]]]:
+) -> typing.List[typing.Tuple[typing.Optional[MoleculeRecord], typing.Optional[str]]]:
     """Labels a batch of molecules using ``label_molecule``.
 
     Args:
@@ -159,10 +159,12 @@ def label_molecules(
     partial_charge_methods = (
         partial_charge_methods
         if partial_charge_methods is not None
-        else get_args(ChargeMethod)
+        else typing.get_args(ChargeMethod)
     )
     bond_order_methods = (
-        bond_order_methods if bond_order_methods is not None else get_args(WBOMethod)
+        bond_order_methods
+        if bond_order_methods is not None
+        else typing.get_args(WBOMethod)
     )
 
     molecule_records = []

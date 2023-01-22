@@ -1,18 +1,18 @@
 import copy
-from typing import TYPE_CHECKING, Callable, List, Tuple, Type, TypeVar
+import typing
 
 import dgl.function
 import torch
 
 from nagl.features import AtomFeature, AtomFeaturizer, BondFeature, BondFeaturizer
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from openff.toolkit.topology import Molecule
 
-_T = TypeVar("_T")
+_T = typing.TypeVar("_T")
 
-MoleculeToDGLFunc = Callable[
-    ["Molecule", List[AtomFeature], List[BondFeature]], "DGLMolecule"
+MoleculeToDGLFunc = typing.Callable[
+    ["Molecule", typing.List[AtomFeature], typing.List[BondFeature]], "DGLMolecule"
 ]
 
 
@@ -83,8 +83,8 @@ class DGLMolecule(_BaseDGLModel):
     def _molecule_to_dgl(
         cls,
         molecule: "Molecule",
-        atom_featurizers: List[AtomFeature],
-        bond_featurizers: List[BondFeature],
+        atom_featurizers: typing.List[AtomFeature],
+        bond_featurizers: typing.List[BondFeature],
     ) -> dgl.DGLGraph:
         """Maps an OpenFF molecule object into a ``dgl`` graph complete with atom (node)
         and bond (edge) features.
@@ -152,10 +152,10 @@ class DGLMolecule(_BaseDGLModel):
 
     @classmethod
     def from_openff(
-        cls: Type["DGLMolecule"],
+        cls: typing.Type["DGLMolecule"],
         molecule: "Molecule",
-        atom_features: List[AtomFeature],
-        bond_features: List[BondFeature],
+        atom_features: typing.List[AtomFeature],
+        bond_features: typing.List[BondFeature],
     ) -> "DGLMolecule":
         """Creates a new molecular graph representation from an OpenFF molecule object.
 
@@ -172,10 +172,10 @@ class DGLMolecule(_BaseDGLModel):
 
     @classmethod
     def from_smiles(
-        cls: Type["DGLMolecule"],
+        cls: typing.Type["DGLMolecule"],
         smiles: str,
-        atom_features: List[AtomFeature],
-        bond_features: List[BondFeature],
+        atom_features: typing.List[AtomFeature],
+        bond_features: typing.List[BondFeature],
     ) -> "DGLMolecule":
         """Creates a new molecular graph representation from a SMILES pattern.
 
@@ -201,12 +201,12 @@ class DGLMoleculeBatch(_BaseDGLModel):
     """A wrapper around a batch of DGL molecule objects."""
 
     @property
-    def n_atoms_per_molecule(self) -> Tuple[int, ...]:
+    def n_atoms_per_molecule(self) -> typing.Tuple[int, ...]:
         """Returns the number of atoms in each unique molecule in the batch."""
         return self._n_atoms
 
     @property
-    def n_representations_per_molecule(self) -> Tuple[int, ...]:
+    def n_representations_per_molecule(self) -> typing.Tuple[int, ...]:
         """Returns the number of different 'representations' (e.g. resonance structures)
         for each unique molecule in the batch.
         """

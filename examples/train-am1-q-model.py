@@ -9,11 +9,11 @@ from pytorch_lightning.loggers import TensorBoardLogger
 
 from nagl.features import AtomConnectivity, AtomFeature, AtomicElement
 from nagl.lightning import DGLMoleculeDataModule, DGLMoleculeLightningModel
-from nagl.nn import SequentialLayers
+from nagl.nn import Sequential
 from nagl.nn.modules import ConvolutionModule, ReadoutModule
-from nagl.nn.pooling import PoolAtomFeatures
-from nagl.nn.postprocess import ComputePartialCharges
-from nagl.resonance import enumerate_resonance_forms
+from nagl.nn.pooling import AtomPoolingLayer
+from nagl.nn.postprocess import PartialChargeLayer
+from nagl.utilities.resonance import enumerate_resonance_forms
 from nagl.utilities.toolkits import normalize_molecule
 
 
@@ -192,13 +192,13 @@ def main(
         ),
         readout_modules={
             "am1-charges": ReadoutModule(
-                pooling_layer=PoolAtomFeatures(),
-                readout_layers=SequentialLayers(
+                pooling_layer=AtomPoolingLayer(),
+                readout_layers=Sequential(
                     in_feats=n_gcn_hidden_features,
                     hidden_feats=[n_am1_hidden_features] * n_am1_layers + [2],
                     activation=["ReLU"] * n_am1_layers + ["Identity"],
                 ),
-                postprocess_layer=ComputePartialCharges(),
+                postprocess_layer=PartialChargeLayer(),
             )
         },
         learning_rate=learning_rate,

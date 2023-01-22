@@ -1,12 +1,12 @@
-from collections import defaultdict
-from typing import TYPE_CHECKING
+import collections
+import typing
 
 import dgl
 import networkx
 import torch
 from openff.toolkit.topology import Molecule
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from nagl.molecules import DGLMolecule
 
 
@@ -112,7 +112,7 @@ def dgl_molecule_to_networkx(molecule: "DGLMolecule") -> networkx.Graph:
     ]
     formal_charges = dgl_graph.ndata["formal_charge"]
 
-    per_atom_bond_orders = defaultdict(list)
+    per_atom_bond_orders = collections.defaultdict(list)
 
     indices_a, indices_b = dgl_graph.all_edges()
 
