@@ -1,6 +1,6 @@
 import functools
+import typing
 from multiprocessing import Pool
-from typing import Set
 
 import click
 from click_option_group import optgroup
@@ -21,7 +21,7 @@ def _enumerate_tautomers(
     max_tautomers: int,
     enumerate_protomers: bool,
     max_protomers: int,
-) -> Set[str]:
+) -> typing.Set[str]:
 
     found_forms = {smiles}
 

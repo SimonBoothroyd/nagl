@@ -1,8 +1,8 @@
-from typing import TYPE_CHECKING, Dict, Generator, Optional, Tuple
+import typing
 
 import networkx
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     pass
 
 
@@ -10,7 +10,9 @@ class PathCache:
     """A utility class that caches finding all simple paths between sets of nodes in
     a ``networkx`` graph."""
 
-    def __init__(self, nx_graph: networkx.Graph, max_path_length: Optional[int] = None):
+    def __init__(
+        self, nx_graph: networkx.Graph, max_path_length: typing.Optional[int] = None
+    ):
         """
 
         Args:
@@ -21,11 +23,13 @@ class PathCache:
         self._nx_graph = nx_graph
         self._max_path_length = max_path_length
 
-        self._cache: Dict[Tuple[int, int], Tuple[Tuple[int, ...]]] = {}
+        self._cache: typing.Dict[
+            typing.Tuple[int, int], typing.Tuple[typing.Tuple[int, ...]]
+        ] = {}
 
     def all_odd_n_simple_paths(
         self, index_a: int, index_b: int
-    ) -> Tuple[Tuple[int, ...]]:
+    ) -> typing.Tuple[typing.Tuple[int, ...]]:
         """Generate all simple paths in the graph G from ``index_a`` to ``index_b`` that
         contain an **odd** number of nodes.
         """
@@ -36,7 +40,7 @@ class PathCache:
             return tuple(path[::-1] for path in self._cache[(index_b, index_a)])
 
         # filter out any paths with even lengths as these cannot transfer paths
-        path_generator: Generator[int, None, None]
+        path_generator: typing.Generator[int, None, None]
         paths = []
 
         for path_generator in networkx.all_simple_paths(

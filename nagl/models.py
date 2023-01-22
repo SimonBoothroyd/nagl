@@ -1,4 +1,4 @@
-from typing import Dict, Union
+import typing
 
 import torch.nn.functional
 
@@ -14,7 +14,7 @@ class MoleculeGCNModel(torch.nn.Module):
     def __init__(
         self,
         convolution_module: ConvolutionModule,
-        readout_modules: Dict[str, ReadoutModule],
+        readout_modules: typing.Dict[str, ReadoutModule],
     ):
 
         super(MoleculeGCNModel, self).__init__()
@@ -23,12 +23,12 @@ class MoleculeGCNModel(torch.nn.Module):
         self.readout_modules = torch.nn.ModuleDict(readout_modules)
 
     def forward(
-        self, molecule: Union[DGLMolecule, DGLMoleculeBatch]
-    ) -> Dict[str, torch.Tensor]:
+        self, molecule: typing.Union[DGLMolecule, DGLMoleculeBatch]
+    ) -> typing.Dict[str, torch.Tensor]:
 
         self.convolution_module(molecule)
 
-        readouts: Dict[str, torch.Tensor] = {
+        readouts: typing.Dict[str, torch.Tensor] = {
             readout_type: readout_module(molecule)
             for readout_type, readout_module in self.readout_modules.items()
         }

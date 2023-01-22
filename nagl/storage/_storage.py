@@ -1,22 +1,11 @@
 """This module contains classes to store labelled molecules within a compact database
 structure.
 """
+import collections
+import contextlib
 import logging
 import time
-from collections import defaultdict
-from contextlib import contextmanager
-from typing import (
-    TYPE_CHECKING,
-    Collection,
-    ContextManager,
-    Dict,
-    List,
-    Literal,
-    Optional,
-    Tuple,
-    Type,
-    Union,
-)
+import typing
 
 import numpy
 from openff.utilities import requires_package
@@ -41,7 +30,7 @@ from nagl.utilities.rmsd import are_conformers_identical
 from nagl.utilities.smiles import map_indexed_smiles
 from nagl.utilities.toolkits import capture_toolkit_warnings, smiles_to_inchi_key
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     Array = numpy.ndarray
 else:
     from nagl.utilities.pydantic import Array
@@ -49,10 +38,10 @@ else:
 _logger = logging.getLogger(__name__)
 
 
-ChargeMethod = Union[Literal["am1", "am1bcc"], str]
-WBOMethod = Union[Literal["am1"], str]
+ChargeMethod = typing.Union[typing.Literal["am1", "am1bcc"], str]
+WBOMethod = typing.Union[typing.Literal["am1"], str]
 
-DBQueryResult = Tuple[
+DBQueryResult = typing.Tuple[
     int,  # DBMoleculeRecord.id
     str,  # DBMoleculeRecord.smiles,
     int,  # DBConformerRecord.id,
@@ -76,7 +65,7 @@ class PartialChargeSet(_BaseStoredModel):
         ..., description="The method used to compute these partial charges."
     )
 
-    values: Union[Tuple[float, ...], List[float]] = Field(
+    values: typing.Union[typing.Tuple[float, ...], typing.List[float]] = Field(
         ..., description="The values [e] of the partial charges."
     )
 
@@ -89,8 +78,9 @@ class WibergBondOrderSet(_BaseStoredModel):
         ..., description="The method used to compute these bond orders."
     )
 
-    values: Union[
-        Tuple[Tuple[int, int, float], ...], List[Tuple[int, int, float]]
+    values: typing.Union[
+        typing.Tuple[typing.Tuple[int, int, float], ...],
+        typing.List[typing.Tuple[int, int, float]],
     ] = Field(
         ...,
         description="The values of the WBOs stored as tuples of the form "
@@ -110,15 +100,15 @@ class ConformerRecord(_BaseStoredModel):
         "shape=(n_atoms, 3).",
     )
 
-    partial_charges: Union[
-        Tuple[PartialChargeSet, ...], List[PartialChargeSet]
+    partial_charges: typing.Union[
+        typing.Tuple[PartialChargeSet, ...], typing.List[PartialChargeSet]
     ] = Field(
         tuple(),
         description="Sets of partial charges computed using this conformer and "
         "different charge methods (e.g. am1, am1bcc).",
     )
-    bond_orders: Union[
-        Tuple[WibergBondOrderSet, ...], List[WibergBondOrderSet]
+    bond_orders: typing.Union[
+        typing.Tuple[WibergBondOrderSet, ...], typing.List[WibergBondOrderSet]
     ] = Field(
         tuple(),
         description="Sets of partial charges computed using this conformer and "
@@ -126,7 +116,9 @@ class ConformerRecord(_BaseStoredModel):
     )
 
     @property
-    def partial_charges_by_method(self) -> Dict[ChargeMethod, Tuple[float, ...]]:
+    def partial_charges_by_method(
+        self,
+    ) -> typing.Dict[ChargeMethod, typing.Tuple[float, ...]]:
         """Returns the values of partial charges [e] computed for this conformer using a
         specific method."""
         return {
@@ -136,7 +128,7 @@ class ConformerRecord(_BaseStoredModel):
     @property
     def bond_orders_by_method(
         self,
-    ) -> Dict[WBOMethod, Tuple[Tuple[int, int, float], ...]]:
+    ) -> typing.Dict[WBOMethod, typing.Tuple[typing.Tuple[int, int, float], ...]]:
         """Returns the values of the bond orders computed for this conformer using a
         specific method."""
 
@@ -189,14 +181,14 @@ class MoleculeRecord(_BaseStoredModel):
         "hydrogen).",
     )
 
-    conformers: List[ConformerRecord] = Field(
+    conformers: typing.List[ConformerRecord] = Field(
         ...,
         description="Conformers associated with this molecule. Each conformer will "
         "contain labelled properties, such as sets of partial charges and WBOs computed "
         "from the conformer.",
     )
 
-    def average_partial_charges(self, method: ChargeMethod) -> Tuple[float, ...]:
+    def average_partial_charges(self, method: ChargeMethod) -> typing.Tuple[float, ...]:
         """Computes the average partial charges [e] over all stored values."""
 
         return tuple(
@@ -279,7 +271,7 @@ class MoleculeStore:
             return db_info.version
 
     @property
-    def general_provenance(self) -> Dict[str, str]:
+    def general_provenance(self) -> typing.Dict[str, str]:
         """Returns a dictionary containing general provenance about the store such as
         the author and when it was generated.
         """
@@ -294,7 +286,7 @@ class MoleculeStore:
             }
 
     @property
-    def software_provenance(self) -> Dict[str, str]:
+    def software_provenance(self) -> typing.Dict[str, str]:
         """A dictionary containing provenance of the software and packages used
         to generate the data in the store.
         """
@@ -309,7 +301,7 @@ class MoleculeStore:
             }
 
     @property
-    def smiles(self) -> List[str]:
+    def smiles(self) -> typing.List[str]:
         """A list of SMILES representations of the unique molecules in the store."""
 
         with self._get_session() as db:
@@ -318,7 +310,7 @@ class MoleculeStore:
             ]
 
     @property
-    def charge_methods(self) -> List[str]:
+    def charge_methods(self) -> typing.List[str]:
         """A list of the methods used to compute the partial charges in the store."""
 
         with self._get_session() as db:
@@ -327,7 +319,7 @@ class MoleculeStore:
             ]
 
     @property
-    def wbo_methods(self) -> List[str]:
+    def wbo_methods(self) -> typing.List[str]:
         """A list of the methods used to compute the WBOs in the store."""
 
         with self._get_session() as db:
@@ -365,8 +357,8 @@ class MoleculeStore:
 
     def set_provenance(
         self,
-        general_provenance: Dict[str, str],
-        software_provenance: Dict[str, str],
+        general_provenance: typing.Dict[str, str],
+        software_provenance: typing.Dict[str, str],
     ):
         """Set the stores provenance information.
 
@@ -392,8 +384,8 @@ class MoleculeStore:
                 for key, value in software_provenance.items()
             ]
 
-    @contextmanager
-    def _get_session(self) -> ContextManager[Session]:
+    @contextlib.contextmanager
+    def _get_session(self) -> typing.ContextManager[Session]:
 
         session = self._session_maker()
 
@@ -411,9 +403,9 @@ class MoleculeStore:
     def _match_conformers(
         cls,
         indexed_smiles: str,
-        db_conformers: List[DBConformerRecord],
-        conformers: List[ConformerRecord],
-    ) -> Dict[int, int]:
+        db_conformers: typing.List[DBConformerRecord],
+        conformers: typing.List[ConformerRecord],
+    ) -> typing.Dict[int, int]:
         """A method which attempts to match a set of new conformers to store with
         conformers already present in the database by comparing the RMS of the
         two sets.
@@ -465,7 +457,10 @@ class MoleculeStore:
 
     @classmethod
     def _store_conformer_records(
-        cls, smiles: str, db_parent: DBMoleculeRecord, records: List[ConformerRecord]
+        cls,
+        smiles: str,
+        db_parent: DBMoleculeRecord,
+        records: typing.List[ConformerRecord],
     ):
         """Store a set of conformer records in an existing DB molecule record."""
 
@@ -532,8 +527,8 @@ class MoleculeStore:
         cls,
         db: Session,
         inchi_key: str,
-        records: List[MoleculeRecord],
-        existing_db_record: Optional[DBMoleculeRecord],
+        records: typing.List[MoleculeRecord],
+        existing_db_record: typing.Optional[DBMoleculeRecord],
     ):
         """Stores a set of records which all store information for molecules with the
         same SMILES representation AND the same fixed hydrogen InChI key.
@@ -571,7 +566,7 @@ class MoleculeStore:
 
     @classmethod
     def _store_records_with_inchi_key(
-        cls, db: Session, inchi_key: str, records: List[MoleculeRecord]
+        cls, db: Session, inchi_key: str, records: typing.List[MoleculeRecord]
     ):
         """Stores a set of records which all store information for molecules with the
         same fixed hydrogen InChI key.
@@ -589,7 +584,7 @@ class MoleculeStore:
 
         from openff.toolkit.topology import Molecule
 
-        existing_db_records: Collection[DBMoleculeRecord] = (
+        existing_db_records: typing.Collection[DBMoleculeRecord] = (
             db.query(DBMoleculeRecord)
             .filter(DBMoleculeRecord.inchi_key == inchi_key)
             .all()
@@ -611,7 +606,7 @@ class MoleculeStore:
 
             existing_db_records_by_smiles[smiles] = existing_db_record
 
-        records_by_smiles = defaultdict(list)
+        records_by_smiles = collections.defaultdict(list)
 
         for record in records:
 
@@ -640,7 +635,9 @@ class MoleculeStore:
 
         with capture_toolkit_warnings():
 
-            records_by_inchi_key: Dict[str, List[MoleculeRecord]] = defaultdict(list)
+            records_by_inchi_key: typing.Dict[
+                str, typing.List[MoleculeRecord]
+            ] = collections.defaultdict(list)
 
             for record in tqdm(records, desc="grouping records to store by InChI key"):
                 records_by_inchi_key[smiles_to_inchi_key(record.smiles)].append(record)
@@ -656,9 +653,11 @@ class MoleculeStore:
     def _db_query_by_method(
         cls,
         db: Session,
-        model_type: Union[Type[DBPartialChargeSet], Type[DBWibergBondOrderSet]],
-        allowed_methods: List[str],
-    ) -> List[DBQueryResult]:
+        model_type: typing.Union[
+            typing.Type[DBPartialChargeSet], typing.Type[DBWibergBondOrderSet]
+        ],
+        allowed_methods: typing.List[str],
+    ) -> typing.List[DBQueryResult]:
         """Returns the results of querying the DB for records associated with either a
         set of partial charge or bond order methods
 
@@ -700,9 +699,9 @@ class MoleculeStore:
     @classmethod
     def _db_columns_to_models(
         cls,
-        db_partial_charge_columns: List[DBQueryResult],
-        db_bond_order_columns: List[DBQueryResult],
-    ) -> List[MoleculeRecord]:
+        db_partial_charge_columns: typing.List[DBQueryResult],
+        db_bond_order_columns: typing.List[DBQueryResult],
+    ) -> typing.List[MoleculeRecord]:
         """Maps a set of database records into their corresponding data models,
         optionally retaining only partial charge sets and WBO sets computed with a
         specified method.
@@ -713,10 +712,10 @@ class MoleculeStore:
             The mapped data models.
         """
 
-        raw_objects = defaultdict(
+        raw_objects = collections.defaultdict(
             lambda: {
                 "smiles": None,
-                "conformers": defaultdict(
+                "conformers": collections.defaultdict(
                     lambda: {
                         "coordinates": None,
                         "partial_charges": {},
@@ -767,11 +766,13 @@ class MoleculeStore:
 
     def retrieve(
         self,
-        partial_charge_methods: Optional[
-            Union[ChargeMethod, List[ChargeMethod]]
+        partial_charge_methods: typing.Optional[
+            typing.Union[ChargeMethod, typing.List[ChargeMethod]]
         ] = None,
-        bond_order_methods: Optional[Union[WBOMethod, List[WBOMethod]]] = None,
-    ) -> List[MoleculeRecord]:
+        bond_order_methods: typing.Optional[
+            typing.Union[WBOMethod, typing.List[WBOMethod]]
+        ] = None,
+    ) -> typing.List[MoleculeRecord]:
         """Retrieve records stored in this data store
 
         Args:

@@ -3,54 +3,68 @@ import pytest
 import torch
 import torch.nn
 
-from nagl.nn import SequentialLayers
+import nagl.nn
 
 
-def test_init_sequential_layers_default():
+class TestSequential:
+    def test_init_default(self):
 
-    sequential_layers = SequentialLayers(in_feats=1, hidden_feats=[2])
+        sequential = nagl.nn.Sequential(in_feats=1, hidden_feats=[2])
 
-    assert len(sequential_layers) == 3
+        assert len(sequential) == 3
 
-    assert isinstance(sequential_layers[0], torch.nn.Linear)
-    assert isinstance(sequential_layers[1], torch.nn.ReLU)
-    assert isinstance(sequential_layers[2], torch.nn.Dropout)
-    assert numpy.isclose(sequential_layers[2].p, 0.0)
+        assert isinstance(sequential[0], torch.nn.Linear)
+        assert isinstance(sequential[1], torch.nn.ReLU)
+        assert isinstance(sequential[2], torch.nn.Dropout)
+        assert numpy.isclose(sequential[2].p, 0.0)
 
+    def test_init(self):
 
-def test_init_sequential_layers_inputs():
-
-    sequential_layers = SequentialLayers(
-        in_feats=1,
-        hidden_feats=[2, 1],
-        activation=["ReLU", "LeakyReLU"],
-        dropout=[0.0, 0.5],
-    )
-
-    assert len(sequential_layers) == 6
-
-    assert isinstance(sequential_layers[0], torch.nn.Linear)
-    assert isinstance(sequential_layers[1], torch.nn.ReLU)
-    assert isinstance(sequential_layers[2], torch.nn.Dropout)
-    assert numpy.isclose(sequential_layers[2].p, 0.0)
-
-    assert isinstance(sequential_layers[3], torch.nn.Linear)
-    assert isinstance(sequential_layers[4], torch.nn.LeakyReLU)
-    assert isinstance(sequential_layers[5], torch.nn.Dropout)
-    assert numpy.isclose(sequential_layers[5].p, 0.5)
-
-
-def test_init_sequential_layers_invalid():
-
-    with pytest.raises(ValueError) as error_info:
-
-        SequentialLayers(
+        sequential_layers = nagl.nn.Sequential(
             in_feats=1,
-            hidden_feats=[2],
-            activation=["ReLU", "LeakyReLU"],
+            hidden_feats=[2, 1],
+            activation=[torch.nn.ReLU(), torch.nn.LeakyReLU()],
             dropout=[0.0, 0.5],
         )
 
-    assert "The `hidden_feats`, `activation`, and `dropout` lists must be the" in str(
-        error_info.value
-    )
+        assert len(sequential_layers) == 6
+
+        assert isinstance(sequential_layers[0], torch.nn.Linear)
+        assert isinstance(sequential_layers[1], torch.nn.ReLU)
+        assert isinstance(sequential_layers[2], torch.nn.Dropout)
+        assert numpy.isclose(sequential_layers[2].p, 0.0)
+
+        assert isinstance(sequential_layers[3], torch.nn.Linear)
+        assert isinstance(sequential_layers[4], torch.nn.LeakyReLU)
+        assert isinstance(sequential_layers[5], torch.nn.Dropout)
+        assert numpy.isclose(sequential_layers[5].p, 0.5)
+
+    def test_init_invalid_inputs(self):
+
+        with pytest.raises(
+            ValueError, match="The `hidden_feats`, `activation`, and `dropout`"
+        ):
+
+            nagl.nn.Sequential(
+                in_feats=1,
+                hidden_feats=[2],
+                activation=[torch.nn.ReLU(), torch.nn.LeakyReLU()],
+                dropout=[0.0, 0.5],
+            )
+
+
+@pytest.mark.parametrize(
+    "type_, expected_class",
+    [
+        ("Identity", torch.nn.Identity),
+        ("Tanh", torch.nn.Tanh),
+        ("ReLU", torch.nn.ReLU),
+        ("relu", torch.nn.ReLU),
+        ("LeakyReLU", torch.nn.LeakyReLU),
+        ("SELU", torch.nn.SELU),
+        ("ELU", torch.nn.ELU),
+        ("GELU", torch.nn.GELU),
+    ],
+)
+def test_get_activation_func(type_, expected_class):
+    assert nagl.nn.get_activation_func(type_) == expected_class

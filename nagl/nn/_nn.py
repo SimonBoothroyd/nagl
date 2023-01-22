@@ -1,26 +1,22 @@
-from typing import TYPE_CHECKING, List, Optional
+import typing
 
 import torch.nn
-import torch.nn.functional
-from typing_extensions import Literal
 
-if TYPE_CHECKING:
-    ActivationFunction = str
-else:
-    ActivationFunction = Literal["Identity", "Tanh", "ReLU", "LeakyReLU", "ELU"]
+from nagl.config.model import ActivationFunction
 
 
-class SequentialLayers(torch.nn.Sequential):
-    """A convenience class for constructing a MLP model with a specified number
-    of linear and dropout layers combined with a specific activation function.
+class Sequential(torch.nn.Sequential):
+    """A convenience wrapper around ``torch.nn.Sequential`` for constructing MLP modules
+    with a specified number of linear and dropout layers combined with a specific
+    activation function.
     """
 
     def __init__(
         self,
         in_feats: int,
-        hidden_feats: List[int],
-        activation: Optional[List[ActivationFunction]] = None,
-        dropout: Optional[List[float]] = None,
+        hidden_feats: typing.List[int],
+        activation: typing.Optional[typing.List[torch.nn.Module]] = None,
+        dropout: typing.Optional[typing.List[float]] = None,
     ):
         """
         Args:
@@ -38,11 +34,7 @@ class SequentialLayers(torch.nn.Sequential):
         n_layers = len(hidden_feats)
 
         # Initialize the default inputs.
-        activation = (
-            [torch.nn.ReLU()] * n_layers
-            if activation is None
-            else [getattr(torch.nn, name)() for name in activation]
-        )
+        activation = [torch.nn.ReLU()] * n_layers if activation is None else activation
         dropout = [0.0] * n_layers if dropout is None else dropout
 
         # Validate that a consistent number of layers have been specified.
@@ -69,3 +61,34 @@ class SequentialLayers(torch.nn.Sequential):
                 ]
             )
         )
+
+
+def get_activation_func(type_: ActivationFunction) -> typing.Type[torch.nn.Module]:
+    """Return a PyTorch activation function of a given type.
+
+    Args:
+        type_: The type of activation function (e.g. 'ReLU').
+
+    Returns:
+        A function with signature ``(pred, target) -> metric``.
+    """
+
+    if type_.lower() == "identity":
+        return torch.nn.Identity
+    elif type_.lower() == "tanh":
+        return torch.nn.Tanh
+    elif type_.lower() == "relu":
+        return torch.nn.ReLU
+    elif type_.lower() == "leakyrelu":
+        return torch.nn.LeakyReLU
+    elif type_.lower() == "selu":
+        return torch.nn.SELU
+    elif type_.lower() == "elu":
+        return torch.nn.ELU
+
+    func = getattr(torch.nn, type_, None)
+
+    if func is None:
+        raise NotImplementedError(f"{type_} not a supported activation function")
+
+    return func

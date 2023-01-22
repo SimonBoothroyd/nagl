@@ -1,13 +1,21 @@
 import abc
-from typing import TYPE_CHECKING, Generic, List, Optional, TypeVar
+import typing
 
+import pydantic
 import torch
 
-from nagl.resonance import enumerate_resonance_forms
+from nagl.utilities.resonance import enumerate_resonance_forms
 from nagl.utilities.toolkits import normalize_molecule
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from openff.toolkit.topology import Molecule
+
+
+_DEFAULT_ELEMENTS = ["H", "C", "N", "O", "F", "Cl", "Br", "S", "P"]
+_DEFAULT_CONNECTIVITIES = [1, 2, 3, 4]
+_DEFAULT_CHARGES = [-3, -2, -1, 0, 1, 2, 3]
+
+_DEFAULT_BOND_ORDERS = [1, 2, 3]
 
 
 def one_hot_encode(item, elements):
@@ -27,16 +35,18 @@ class _Feature(abc.ABC):
         """
 
 
-T = TypeVar("T", bound=_Feature)
+T = typing.TypeVar("T", bound=_Feature)
 
 
-class _Featurizer(Generic[T], abc.ABC):
+@pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
+class _Featurizer(typing.Generic[T], abc.ABC):
     @classmethod
-    def featurize(cls, molecule: "Molecule", features: List[T]) -> torch.Tensor:
+    def featurize(cls, molecule: "Molecule", features: typing.List[T]) -> torch.Tensor:
         """Featurizes a given molecule based on a given feature list."""
         return torch.hstack([feature(molecule) for feature in features])
 
 
+@pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
 class AtomFeature(_Feature, abc.ABC):
     """The base class for atomic features."""
 
@@ -45,21 +55,18 @@ class AtomFeature(_Feature, abc.ABC):
         raise NotImplementedError
 
 
+@pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
 class AtomicElement(AtomFeature):
     """One-hot encodes the atomic element of each atom in a molecule."""
 
-    _ELEMENTS = ["H", "C", "N", "O", "F", "Cl", "Br", "S", "P"]
+    type: typing.Literal["element"] = pydantic.Field("element", const=True)
 
-    def __init__(self, elements: Optional[List[str]] = None):
-        """
-        Parameters
-        ----------
-        elements
-            The elements to include in the one-hot encoding in the order in which they
-            should be encoded. If none are provided, the default set of
-            ["H", "C", "N", "O", "F", "Cl", "Br", "S", "P"] will be used.
-        """
-        self.elements = elements if elements is not None else [*self._ELEMENTS]
+    values: typing.List[str] = pydantic.Field(
+        _DEFAULT_ELEMENTS,
+        description="The elements to include in the one-hot encoding in the order in "
+        "which they should be encoded. If none are provided, the default set of "
+        f"{_DEFAULT_ELEMENTS} will be used.",
+    )
 
     def __call__(self, molecule: "Molecule") -> torch.Tensor:
         """A function which should generate the relevant feature tensor for the
@@ -67,48 +74,43 @@ class AtomicElement(AtomFeature):
         """
 
         return torch.vstack(
-            [one_hot_encode(atom.symbol, self.elements) for atom in molecule.atoms]
+            [one_hot_encode(atom.symbol, self.values) for atom in molecule.atoms]
         )
 
     def __len__(self):
-        return len(self.elements)
+        return len(self.values)
 
 
+@pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
 class AtomConnectivity(AtomFeature):
     """One-hot encodes the connectivity (i.e. the number of bonds) of each atom in a
     molecule.
     """
 
-    _CONNECTIVITIES = [1, 2, 3, 4]
+    type: typing.Literal["connectivity"] = pydantic.Field("connectivity", const=True)
 
-    def __init__(self, connectivities: Optional[List[int]] = None):
-        """
-        Parameters
-        ----------
-        connectivities
-            The connectivities (i.e. number of bonds to an atom) to include in the
-            one-hot encoding in the order in which they should be encoded. If none are
-            provided, the default set of [1, 2, 3, 4] will be used.
-        """
-        self.connectivities = (
-            connectivities if connectivities is not None else [*self._CONNECTIVITIES]
-        )
+    values: typing.List[int] = pydantic.Field(
+        _DEFAULT_CONNECTIVITIES,
+        description="The connectivities (i.e. number of bonds to an atom) to include in "
+        "the one-hot encoding in the order in which they should be encoded. If none "
+        f"are provided, the default set of {_DEFAULT_CONNECTIVITIES} will be used.",
+    )
 
     def __call__(self, molecule: "Molecule") -> torch.Tensor:
 
         return torch.vstack(
-            [
-                one_hot_encode(len(atom.bonds), self.connectivities)
-                for atom in molecule.atoms
-            ]
+            [one_hot_encode(len(atom.bonds), self.values) for atom in molecule.atoms]
         )
 
     def __len__(self):
-        return len(self.connectivities)
+        return len(self.values)
 
 
+@pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
 class AtomIsAromatic(AtomFeature):
     """Encodes whether each atom in a molecule is aromatic."""
+
+    type: typing.Literal["is_aromatic"] = pydantic.Field("is_aromatic", const=True)
 
     def __call__(self, molecule: "Molecule") -> torch.Tensor:
 
@@ -120,8 +122,11 @@ class AtomIsAromatic(AtomFeature):
         return 1
 
 
+@pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
 class AtomIsInRing(AtomFeature):
     """Encodes whether each atom in a molecule is in a ring of any size."""
+
+    type: typing.Literal["is_in_ring"] = pydantic.Field("is_in_ring", const=True)
 
     def __call__(self, molecule: "Molecule") -> torch.Tensor:
 
@@ -136,21 +141,18 @@ class AtomIsInRing(AtomFeature):
         return 1
 
 
+@pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
 class AtomFormalCharge(AtomFeature):
     """One-hot encodes the formal charge on each atom in a molecule."""
 
-    _CHARGES = [-3, -2, -1, 0, 1, 2, 3]
+    type: typing.Literal["formal_charge"] = pydantic.Field("formal_charge", const=True)
 
-    def __init__(self, charges: Optional[List[int]] = None):
-        """
-        Parameters
-        ----------
-        charges
-            The charges to include in the one-hot encoding in the order in which they
-            should be encoded. If none are provided, the default set of
-            [-3, -2, -1, 0, 1, 2, 3] will be used.
-        """
-        self.charges = charges if charges is not None else [*self._CHARGES]
+    values: typing.List[int] = pydantic.Field(
+        _DEFAULT_CHARGES,
+        description="The charges to include in the one-hot encoding in the order in "
+        "which they should be encoded. If none are provided, the default set of "
+        f"{_DEFAULT_CHARGES} will be used.",
+    )
 
     def __call__(self, molecule: "Molecule") -> torch.Tensor:
 
@@ -160,39 +162,40 @@ class AtomFormalCharge(AtomFeature):
             [
                 one_hot_encode(
                     atom.formal_charge.m_as(unit.elementary_charges),
-                    self.charges,
+                    self.values,
                 )
                 for atom in molecule.atoms
             ]
         )
 
     def __len__(self):
-        return len(self.charges)
+        return len(self.values)
 
 
+@pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
 class AtomAverageFormalCharge(AtomFeature):
     """Computes the average formal charge on each atom in a molecule across resonance
     structures."""
 
-    def __init__(
-        self,
-        lowest_energy_only: bool = True,
-        max_path_length: Optional[int] = None,
-        include_all_transfer_pathways: bool = False,
-    ):
-        """
-        Parameters
-        ----------
-        lowest_energy_only: Whether to only return the resonance forms with the lowest
-            'energy'. See ``nagl.resonance.enumerate_resonance_forms`` for details.
-        max_path_length: The maximum number of bonds between a donor and acceptor to
-            consider.
-        include_all_transfer_pathways: Whether to include resonance forms that have
-            the same formal charges but have different arrangements of bond orders.
-        """
-        self.lowest_energy_only = lowest_energy_only
-        self.max_path_length = max_path_length
-        self.include_all_transfer_pathways = include_all_transfer_pathways
+    type: typing.Literal["avg_formal_charge"] = pydantic.Field(
+        "avg_formal_charge", const=True
+    )
+
+    lowest_energy_only: bool = pydantic.Field(
+        True,
+        description="Whether to only return the resonance forms with the lowest "
+        "'energy'. See ``nagl.resonance.enumerate_resonance_forms`` for details.",
+    )
+    max_path_length: typing.Optional[int] = pydantic.Field(
+        None,
+        description="The maximum number of bonds between a donor and acceptor to "
+        "consider.",
+    )
+    include_all_transfer_pathways: bool = pydantic.Field(
+        False,
+        description="Whether to include resonance forms that have the same formal "
+        "charges but have different arrangements of bond orders.",
+    )
 
     def __call__(self, molecule: "Molecule") -> torch.Tensor:
 
@@ -233,16 +236,30 @@ class AtomAverageFormalCharge(AtomFeature):
         return 1
 
 
+AtomFeatureType = typing.Union[
+    AtomicElement,
+    AtomConnectivity,
+    AtomIsAromatic,
+    AtomIsInRing,
+    AtomFormalCharge,
+    AtomAverageFormalCharge,
+]
+
+
 class AtomFeaturizer(_Featurizer[AtomFeature]):
     """A class for featurizing the atoms in a molecule."""
 
 
+@pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
 class BondFeature(_Feature, abc.ABC):
     """The base class for bond features."""
 
 
+@pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
 class BondIsAromatic(BondFeature):
     """Encodes whether each bond in a molecule is aromatic."""
+
+    type: typing.Literal["is_aromatic"] = pydantic.Field("is_aromatic", const=True)
 
     @classmethod
     def __call__(cls, molecule: "Molecule") -> torch.Tensor:
@@ -255,8 +272,11 @@ class BondIsAromatic(BondFeature):
         return 1
 
 
+@pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
 class BondIsInRing(BondFeature):
     """Encodes whether each bond in a molecule is in a ring of any size."""
+
+    type: typing.Literal["is_in_ring"] = pydantic.Field("is_in_ring", const=True)
 
     def __call__(self, molecule: "Molecule") -> torch.Tensor:
 
@@ -275,8 +295,11 @@ class BondIsInRing(BondFeature):
         return 1
 
 
+@pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
 class WibergBondOrder(BondFeature):
     """Encodes the fractional Wiberg bond order of all of the bonds in a molecule."""
+
+    type: typing.Literal["wbo"] = pydantic.Field("wbo", const=True)
 
     @classmethod
     def __call__(cls, molecule: "Molecule") -> torch.Tensor:
@@ -288,36 +311,34 @@ class WibergBondOrder(BondFeature):
         return 1
 
 
+@pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
 class BondOrder(BondFeature):
     """One-hot encodes the formal bond order of all of the bonds in a molecule."""
 
-    _BOND_ORDERS = [1, 2, 3]
+    type: typing.Literal["bond_order"] = pydantic.Field("bond_order", const=True)
 
-    def __init__(self, bond_orders: Optional[List[int]] = None):
-        """
-        Parameters
-        ----------
-        bond_orders
-            The bond orders to include in the one-hot encoding in the order in which
-            they should be encoded. If none are provided, the default set of [1, 2, 3]
-            will be used.
-        """
-        self.bond_orders = (
-            bond_orders if bond_orders is not None else [*self._BOND_ORDERS]
-        )
+    values: typing.List[int] = pydantic.Field(
+        _DEFAULT_BOND_ORDERS,
+        description="The bond orders to include in the one-hot encoding in the order "
+        "in which they should be encoded. If none are provided, the default set of "
+        f"{_DEFAULT_BOND_ORDERS} will be used.",
+    )
 
     def __call__(self, molecule: "Molecule") -> torch.Tensor:
 
         return torch.vstack(
             [
-                one_hot_encode(int(bond.bond_order), self.bond_orders)
+                one_hot_encode(int(bond.bond_order), self.values)
                 for bond in molecule.bonds
             ]
         )
 
     def __len__(self):
-        return len(self.bond_orders)
+        return len(self.values)
 
 
 class BondFeaturizer(_Featurizer[BondFeature]):
     """A class for featurizing the bonds in a molecule."""
+
+
+BondFeatureType = typing.Union[BondIsAromatic, BondIsInRing, BondOrder]

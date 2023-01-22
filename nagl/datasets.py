@@ -1,17 +1,7 @@
 import functools
 import logging
+import typing
 from collections import defaultdict
-from typing import (
-    TYPE_CHECKING,
-    Callable,
-    Collection,
-    Dict,
-    List,
-    NamedTuple,
-    Optional,
-    Type,
-    Union,
-)
 
 import dgl
 import numpy
@@ -23,7 +13,7 @@ from nagl.features import AtomFeature, BondFeature
 from nagl.molecules import DGLMolecule, DGLMoleculeBatch, MoleculeToDGLFunc
 from nagl.utilities.toolkits import capture_toolkit_warnings
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from openff.toolkit.topology import Molecule
 
     from nagl.storage import ChargeMethod, MoleculeStore, WBOMethod
@@ -31,13 +21,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class DGLMoleculeDatasetEntry(NamedTuple):
+class DGLMoleculeDatasetEntry(typing.NamedTuple):
     """A named tuple containing a featurized molecule graph, a tensor of the atom
     features, and a tensor of the molecule label.
     """
 
     molecule: DGLMolecule
-    labels: Dict[str, torch.Tensor]
+    labels: typing.Dict[str, torch.Tensor]
 
 
 class DGLMoleculeDataset(Dataset):
@@ -49,7 +39,7 @@ class DGLMoleculeDataset(Dataset):
         """Returns the number of atom features"""
         return 0 if len(self) == 0 else self[0][0].atom_features.shape[1]
 
-    def __init__(self, entries: List[DGLMoleculeDatasetEntry]):
+    def __init__(self, entries: typing.List[DGLMoleculeDatasetEntry]):
         """
         Args:
             entries: The list of entries to add to the data set.
@@ -58,12 +48,12 @@ class DGLMoleculeDataset(Dataset):
 
     @classmethod
     def from_molecules(
-        cls: Type["DGLMoleculeDataset"],
-        molecules: Collection["Molecule"],
-        atom_features: List[AtomFeature],
-        bond_features: List[BondFeature],
-        label_function: Callable[["Molecule"], Dict[str, torch.Tensor]],
-        molecule_to_dgl: Optional[MoleculeToDGLFunc] = None,
+        cls: typing.Type["DGLMoleculeDataset"],
+        molecules: typing.Collection["Molecule"],
+        atom_features: typing.List[AtomFeature],
+        bond_features: typing.List[BondFeature],
+        label_function: typing.Callable[["Molecule"], typing.Dict[str, torch.Tensor]],
+        molecule_to_dgl: typing.Optional[MoleculeToDGLFunc] = None,
     ) -> "DGLMoleculeDataset":
         """Creates a data set from a specified list of molecule objects.
 
@@ -94,12 +84,12 @@ class DGLMoleculeDataset(Dataset):
 
     @classmethod
     def from_smiles(
-        cls: Type["DGLMoleculeDataset"],
-        smiles: Collection[str],
-        atom_features: List[AtomFeature],
-        bond_features: List[BondFeature],
-        label_function: Callable[["Molecule"], Dict[str, torch.Tensor]],
-        molecule_to_dgl: Optional[MoleculeToDGLFunc] = None,
+        cls: typing.Type["DGLMoleculeDataset"],
+        smiles: typing.Collection[str],
+        atom_features: typing.List[AtomFeature],
+        bond_features: typing.List[BondFeature],
+        label_function: typing.Callable[["Molecule"], typing.Dict[str, torch.Tensor]],
+        molecule_to_dgl: typing.Optional[MoleculeToDGLFunc] = None,
     ) -> "DGLMoleculeDataset":
         """Creates a data set from a specified list of SMILES patterns.
 
@@ -129,9 +119,9 @@ class DGLMoleculeDataset(Dataset):
     def _labelled_molecule_to_dict(
         cls,
         molecule: "Molecule",
-        partial_charge_method: Optional["ChargeMethod"],
-        bond_order_method: Optional["WBOMethod"],
-    ) -> Dict[str, torch.Tensor]:
+        partial_charge_method: typing.Optional["ChargeMethod"],
+        bond_order_method: typing.Optional["WBOMethod"],
+    ) -> typing.Dict[str, torch.Tensor]:
         """A convenience method for mapping a pre-labelled molecule to a dictionary
         of label tensors.
 
@@ -169,13 +159,15 @@ class DGLMoleculeDataset(Dataset):
 
     @classmethod
     def from_molecule_stores(
-        cls: Type["DGLMoleculeDataset"],
-        molecule_stores: Union["MoleculeStore", Collection["MoleculeStore"]],
-        partial_charge_method: Optional["ChargeMethod"],
-        bond_order_method: Optional["WBOMethod"],
-        atom_features: List[AtomFeature],
-        bond_features: List[BondFeature],
-        molecule_to_dgl: Optional[MoleculeToDGLFunc] = None,
+        cls: typing.Type["DGLMoleculeDataset"],
+        molecule_stores: typing.Union[
+            "MoleculeStore", typing.Collection["MoleculeStore"]
+        ],
+        partial_charge_method: typing.Optional["ChargeMethod"],
+        bond_order_method: typing.Optional["WBOMethod"],
+        atom_features: typing.List[AtomFeature],
+        bond_features: typing.List[BondFeature],
+        molecule_to_dgl: typing.Optional[MoleculeToDGLFunc] = None,
     ) -> "DGLMoleculeDataset":
         """Creates a data set from a specified set of labelled molecule stores.
 
@@ -273,10 +265,10 @@ class DGLMoleculeDataset(Dataset):
     def _build_entry(
         cls,
         molecule: "Molecule",
-        atom_features: List[AtomFeature],
-        bond_features: List[BondFeature],
-        label_function: Callable[["Molecule"], Dict[str, torch.Tensor]],
-        molecule_to_dgl: Optional[MoleculeToDGLFunc] = None,
+        atom_features: typing.List[AtomFeature],
+        bond_features: typing.List[BondFeature],
+        label_function: typing.Callable[["Molecule"], typing.Dict[str, torch.Tensor]],
+        molecule_to_dgl: typing.Optional[MoleculeToDGLFunc] = None,
     ) -> DGLMoleculeDatasetEntry:
         """Maps a molecule into a labeled, featurized graph representation.
 
@@ -317,12 +309,12 @@ class DGLMoleculeDataLoader(DataLoader):
 
     def __init__(
         self,
-        dataset: Union[DGLMoleculeDataset, ConcatDataset],
-        batch_size: Optional[int] = 1,
+        dataset: typing.Union[DGLMoleculeDataset, ConcatDataset],
+        batch_size: typing.Optional[int] = 1,
         shuffle: bool = False,
         num_workers: int = 0,
     ):
-        def collate(graph_entries: List[DGLMoleculeDatasetEntry]):
+        def collate(graph_entries: typing.List[DGLMoleculeDatasetEntry]):
 
             if isinstance(graph_entries[0], dgl.DGLGraph):
                 graph_entries = [graph_entries]

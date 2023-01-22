@@ -1,8 +1,8 @@
-from typing import TYPE_CHECKING
+import typing
 
 from openff.utilities import requires_package
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from dask_jobqueue import LSFCluster
     from distributed import LocalCluster
 

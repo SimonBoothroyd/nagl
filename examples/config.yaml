@@ -1,0 +1,62 @@
+model:
+
+  atom_features:
+    - type: "element"
+      values: ["H", "C", "N", "O", "F", "Cl", "Br", "S", "P"]
+    - type: "connectivity"
+      values: [1, 2, 3, 4]
+    - type: "avg_formal_charge"
+      lowest_energy_only: true
+      include_all_transfer_pathways: false
+    - type: "ring_size"
+      values: [0, 3, 4, 5, 6, 7]
+    - type: "is_aromatic"
+
+  bond_features:
+    - type: "ring_size"
+      values: [0, 3, 4, 5, 6, 7]
+    - type: "is_aromatic"
+
+  convolution:
+    type: "SAGEConv"
+    hidden_feats: [ 128,    128,    128     2 ]
+    activation:   [ "ReLU", "ReLU", "ReLU", "Identity" ]
+
+  readouts:
+    charges:
+      pooling: "atom"
+      readout:
+        hidden_feats: [ 128,    128,    128     2 ]
+        activation:   [ "ReLU", "ReLU", "ReLU", "Identity" ]
+      postprocess:
+        type: "charges"
+
+data:
+
+  training:
+    targets:
+      am1bcc-charges:
+        readout: "charges"
+        sources: ...
+        metric: "rmse"
+    batch_size: ...
+
+  validation:
+    targets:
+      am1bcc-charges:
+        readout: "charges"
+        sources: ...
+        metric: "rmse"
+    batch_size: ...
+
+  test:
+    targets:
+      am1bcc-charges:
+        readout: "charges"
+        sources: ...
+        metric: "rmse"
+    batch_size: ...
+
+optimizer:
+  type: "Adam"
+  lr: ...

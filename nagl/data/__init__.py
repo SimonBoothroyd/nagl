@@ -1,7 +1,7 @@
-from typing import Literal
+import typing
 
 
-def get_file_path(relative_file_path: Literal["normalizations.json"]) -> str:
+def get_file_path(relative_file_path: typing.Literal["normalizations.json"]) -> str:
     """Get the full path to one of the files in the ``data`` directory.
 
     Args:

@@ -2,7 +2,7 @@ import networkx
 import pytest
 from openff.toolkit.topology import Molecule
 
-from nagl.resonance._conversion import openff_molecule_to_networkx
+from nagl.utilities.resonance._conversion import openff_molecule_to_networkx
 
 
 @pytest.fixture()

@@ -1,14 +1,14 @@
 import logging
-from typing import TYPE_CHECKING, Dict, TypeVar
+import typing
 
 from openff.utilities import requires_package
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from openff.toolkit.topology import Molecule
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
+T = typing.TypeVar("T")
 
 
 @requires_package("openff.toolkit")
@@ -55,7 +55,7 @@ def smiles_to_molecule(smiles: str, guess_stereochemistry: bool = False) -> "Mol
 
 
 @requires_package("openff.toolkit")
-def map_indexed_smiles(smiles_a: str, smiles_b: str) -> Dict[int, int]:
+def map_indexed_smiles(smiles_a: str, smiles_b: str) -> typing.Dict[int, int]:
     """Creates a map between the indices of atoms in one indexed SMILES pattern and
     the indices of atoms in another indexed SMILES pattern.
 

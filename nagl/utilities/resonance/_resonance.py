@@ -2,54 +2,41 @@ import hashlib
 import itertools
 import json
 import pickle
-from typing import (
-    TYPE_CHECKING,
-    Dict,
-    List,
-    Literal,
-    NamedTuple,
-    Optional,
-    Sequence,
-    Tuple,
-    Type,
-    TypeVar,
-    Union,
-    overload,
-)
+import typing
 
 import networkx
 import numpy
 from openff.toolkit.topology import Molecule
 
-from nagl.resonance._caching import PathCache
-from nagl.resonance._conversion import (
+from nagl.utilities.resonance._caching import PathCache
+from nagl.utilities.resonance._conversion import (
     dgl_molecule_from_networkx,
     dgl_molecule_to_networkx,
     openff_molecule_from_networkx,
     openff_molecule_to_networkx,
 )
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from nagl.molecules import DGLMolecule
 
-_T = TypeVar("_T")
+_T = typing.TypeVar("_T")
 
 
-class ResonanceTypeKey(NamedTuple):
+class ResonanceTypeKey(typing.NamedTuple):
     """A convenient data structure for storing information used to recognize a possible
     resonance atom type by."""
 
-    element: Literal["O", "S", "N"]
+    element: typing.Literal["O", "S", "N"]
 
     formal_charge: int
-    bond_orders: Tuple[int, ...]
+    bond_orders: typing.Tuple[int, ...]
 
 
-class ResonanceTypeValue(NamedTuple):
+class ResonanceTypeValue(typing.NamedTuple):
     """A convenient data structure for storing information about a possible resonance
     atom type in."""
 
-    type: Literal["A", "D"]
+    type: typing.Literal["A", "D"]
 
     energy: float
 
@@ -57,7 +44,7 @@ class ResonanceTypeValue(NamedTuple):
     conjugate_id: int
 
 
-_RESONANCE_TYPES: Dict[ResonanceTypeKey, ResonanceTypeValue] = {
+_RESONANCE_TYPES: typing.Dict[ResonanceTypeKey, ResonanceTypeValue] = {
     ResonanceTypeKey("O", 0, (2,)): ResonanceTypeValue("A", 0.0, 1, 2),
     ResonanceTypeKey("O", -1, (1,)): ResonanceTypeValue("D", 5.0, 2, 1),
     #
@@ -77,43 +64,43 @@ _RESONANCE_TYPES: Dict[ResonanceTypeKey, ResonanceTypeValue] = {
 _RESONANCE_KEYS_BY_ID = {value.id: key for key, value in _RESONANCE_TYPES.items()}
 
 
-@overload
+@typing.overload
 def enumerate_resonance_forms(
     molecule: Molecule,
     lowest_energy_only: bool = True,
-    max_path_length: Optional[int] = None,
-    as_dicts: Literal[False] = False,
+    max_path_length: typing.Optional[int] = None,
+    as_dicts: typing.Literal[False] = False,
     include_all_transfer_pathways: bool = False,
-) -> List[Molecule]:
+) -> typing.List[Molecule]:
     ...
 
 
-@overload
+@typing.overload
 def enumerate_resonance_forms(
     molecule: "DGLMolecule",
     lowest_energy_only: bool = True,
-    max_path_length: Optional[int] = None,
-    as_dicts: Literal[False] = False,
+    max_path_length: typing.Optional[int] = None,
+    as_dicts: typing.Literal[False] = False,
     include_all_transfer_pathways: bool = False,
-) -> List["DGLMolecule"]:
+) -> typing.List["DGLMolecule"]:
     ...
 
 
-@overload
+@typing.overload
 def enumerate_resonance_forms(
-    molecule: Union[Molecule, "DGLMolecule"],
+    molecule: typing.Union[Molecule, "DGLMolecule"],
     lowest_energy_only: bool = True,
-    max_path_length: Optional[int] = None,
-    as_dicts: Literal[True] = True,
+    max_path_length: typing.Optional[int] = None,
+    as_dicts: typing.Literal[True] = True,
     include_all_transfer_pathways: bool = False,
-) -> List[dict]:
+) -> typing.List[dict]:
     ...
 
 
 def enumerate_resonance_forms(
     molecule,
     lowest_energy_only: bool = True,
-    max_path_length: Optional[int] = None,
+    max_path_length: typing.Optional[int] = None,
     as_dicts: bool = False,
     include_all_transfer_pathways: bool = False,
 ):
@@ -233,10 +220,10 @@ def _graph_to_hash(nx_graph: networkx.Graph, include_bonds: bool) -> bytes:
 
 
 def _graphs_to_molecules(
-    expected_type: Type[_T],
+    expected_type: typing.Type[_T],
     original_nx_graph: networkx.Graph,
-    resonance_sub_graphs: List[Dict[bytes, networkx.Graph]],
-) -> List[_T]:
+    resonance_sub_graphs: typing.List[typing.Dict[bytes, networkx.Graph]],
+) -> typing.List[_T]:
 
     found_resonance_forms = []
 
@@ -279,14 +266,16 @@ def _graphs_to_molecules(
 
 
 def _graphs_to_dicts(
-    resonance_sub_graphs: List[Dict[bytes, networkx.Graph]],
-) -> List[dict]:
+    resonance_sub_graphs: typing.List[typing.Dict[bytes, networkx.Graph]],
+) -> typing.List[dict]:
 
     found_resonance_forms = []
 
     for resonance_graph_dicts in resonance_sub_graphs:
 
-        resonance_graphs: List[networkx.Graph] = [*resonance_graph_dicts.values()]
+        resonance_graphs: typing.List[networkx.Graph] = [
+            *resonance_graph_dicts.values()
+        ]
 
         bond_orders = {
             (index_a, index_b): [
@@ -335,9 +324,9 @@ def _graphs_to_dicts(
 def _enumerate_resonance_graphs(
     nx_graph: networkx.Graph,
     lowest_energy_only: bool,
-    max_path_length: Optional[int],
+    max_path_length: typing.Optional[int],
     include_all_transfer_pathways: bool,
-) -> Dict[bytes, networkx.Graph]:
+) -> typing.Dict[bytes, networkx.Graph]:
     """Attempts to find all resonance structures of an input molecule stored
     in a graph representation according to the v-charge algorithm proposed by Gilson et
     al [1].
@@ -361,11 +350,11 @@ def _enumerate_resonance_graphs(
     path_cache = PathCache(nx_graph, max_path_length)
 
     open_list = {_graph_to_hash(nx_graph, True): nx_graph}
-    closed_list: Dict[bytes, networkx.Graph] = {}
+    closed_list: typing.Dict[bytes, networkx.Graph] = {}
 
     while len(open_list) > 0:
 
-        found_graphs: Dict[bytes, networkx.Graph] = {}
+        found_graphs: typing.Dict[bytes, networkx.Graph] = {}
 
         for current_key, current_graph in open_list.items():
 
@@ -422,7 +411,7 @@ def _enumerate_resonance_graphs(
     return closed_list
 
 
-def _find_sub_graphs(nx_graph: networkx.Graph) -> List[networkx.Graph]:
+def _find_sub_graphs(nx_graph: networkx.Graph) -> typing.List[networkx.Graph]:
     """Attempts to split a graph into sub-graphs that contain a minimal number of,
     but at least one, acceptor donor pairs.
 
@@ -475,7 +464,9 @@ def _find_sub_graphs(nx_graph: networkx.Graph) -> List[networkx.Graph]:
     return pruned_sub_graphs
 
 
-def _find_donor_acceptors(nx_graph: networkx.Graph) -> Dict[int, Literal["A", "D"]]:
+def _find_donor_acceptors(
+    nx_graph: networkx.Graph,
+) -> typing.Dict[int, typing.Literal["A", "D"]]:
     """Attempts to find any potential acceptor / donor atoms in a molecular graph
     and returns the resonance type key (see the ``_RESONANCE_TYPES`` dictionary)
     associated with each.
@@ -488,7 +479,7 @@ def _find_donor_acceptors(nx_graph: networkx.Graph) -> Dict[int, Literal["A", "D
         type key ('A' or 'D').
     """
 
-    atom_types: Dict[int, Literal["A", "D"]] = {}
+    atom_types: typing.Dict[int, typing.Literal["A", "D"]] = {}
 
     for atom_index in nx_graph:
 
@@ -513,7 +504,7 @@ def _find_transfer_paths(
     acceptor_index: int,
     donor_index: int,
     path_cache: PathCache,
-) -> List[Tuple[int, ...]]:
+) -> typing.List[typing.Tuple[int, ...]]:
     """Attempts to find all possible electron transfer paths, as defined by Gilson et
     al [1], between a donor and an acceptor atom.
 
@@ -573,7 +564,7 @@ def _find_transfer_paths(
 
 
 def _perform_electron_transfer(
-    nx_graph: networkx.Graph, transfer_path: Sequence[int]
+    nx_graph: networkx.Graph, transfer_path: typing.Sequence[int]
 ) -> networkx.Graph:
     """Carries out an electron transfer along the pre-determined transfer path starting
     from a donor and ending in an acceptor.
@@ -614,8 +605,8 @@ def _perform_electron_transfer(
 
 
 def _select_lowest_energy_forms(
-    resonance_forms: Dict[bytes, networkx.Graph]
-) -> Dict[bytes, networkx.Graph]:
+    resonance_forms: typing.Dict[bytes, networkx.Graph]
+) -> typing.Dict[bytes, networkx.Graph]:
     """Select the lowest 'energy' resonance forms from an input list."""
 
     if len(resonance_forms) == 0:

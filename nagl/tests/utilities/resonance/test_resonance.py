@@ -1,13 +1,8 @@
 import pytest
 from openff.toolkit.topology import Molecule
 
-from nagl.resonance import enumerate_resonance_forms
-from nagl.resonance._caching import PathCache
-from nagl.resonance._conversion import (
-    openff_molecule_from_networkx,
-    openff_molecule_to_networkx,
-)
-from nagl.resonance._resonance import (
+from nagl.utilities.resonance._resonance import (
+    PathCache,
     _find_donor_acceptors,
     _find_sub_graphs,
     _find_transfer_paths,
@@ -15,6 +10,9 @@ from nagl.resonance._resonance import (
     _graphs_to_dicts,
     _perform_electron_transfer,
     _select_lowest_energy_forms,
+    enumerate_resonance_forms,
+    openff_molecule_from_networkx,
+    openff_molecule_to_networkx,
 )
 
 

@@ -1,8 +1,9 @@
 import abc
-from typing import Union
+import typing
 
 import torch.nn
 
+from nagl.config.model import PostprocessType
 from nagl.molecules import DGLMolecule, DGLMoleculeBatch
 
 
@@ -11,14 +12,19 @@ class PostprocessLayer(torch.nn.Module, abc.ABC):
 
     @abc.abstractmethod
     def forward(
-        self, molecule: Union[DGLMolecule, DGLMoleculeBatch], inputs: torch.Tensor
+        self,
+        molecule: typing.Union[DGLMolecule, DGLMoleculeBatch],
+        inputs: torch.Tensor,
     ) -> torch.Tensor:
         """Returns the post-processed input vector."""
 
 
-class ComputePartialCharges(PostprocessLayer):
+class PartialChargeLayer(PostprocessLayer):
     """A layer which will map an NN readout containing a set of atomic electronegativity
     and hardness parameters to a set of partial charges [1].
+
+    The layer expects two features per atom (i.e an input of (n_atoms, 2)) - the
+    electronegativity and the hardness.
 
     References:
         [1] Gilson, Michael K., Hillary SR Gilson, and Michael J. Potter. "Fast
@@ -60,7 +66,9 @@ class ComputePartialCharges(PostprocessLayer):
         return charges
 
     def forward(
-        self, molecule: Union[DGLMolecule, DGLMoleculeBatch], inputs: torch.Tensor
+        self,
+        molecule: typing.Union[DGLMolecule, DGLMoleculeBatch],
+        inputs: torch.Tensor,
     ) -> torch.Tensor:
 
         charges = []
@@ -103,3 +111,11 @@ class ComputePartialCharges(PostprocessLayer):
             counter += n_atoms * n_representations
 
         return torch.vstack(charges)
+
+
+def get_postprocess_layer(type_: PostprocessType) -> typing.Type[PostprocessLayer]:
+
+    if type_.lower() == "charges":
+        return PartialChargeLayer
+
+    raise NotImplementedError(f"{type_} not a supported postprocess layer type")

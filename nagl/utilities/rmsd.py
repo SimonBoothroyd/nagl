@@ -2,24 +2,24 @@
 in different conformers.
 """
 import itertools
+import typing
 from collections import defaultdict
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 import numpy
 from openff.utilities import requires_package
 
 from nagl.utilities.toolkits import get_atom_symmetries
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from openff.toolkit.topology import Molecule
 
 
 def align_conformers(
     conformer_a: numpy.ndarray,
     conformer_b: numpy.ndarray,
-    subset_indices_a: Optional[List[int]] = None,
-    subset_indices_b: Optional[List[int]] = None,
-) -> Tuple[numpy.ndarray, numpy.ndarray]:
+    subset_indices_a: typing.Optional[typing.List[int]] = None,
+    subset_indices_b: typing.Optional[typing.List[int]] = None,
+) -> typing.Tuple[numpy.ndarray, numpy.ndarray]:
     """A method align two conformers using the Kabsch algorithm.
 
     Args:
@@ -108,11 +108,11 @@ def _is_conformer_linear(conformer: numpy.ndarray) -> bool:
 
 
 def _find_alignment_atoms(
-    atom_symmetries: List[int], conformer: numpy.ndarray
-) -> List[List[int]]:
+    atom_symmetries: typing.List[int], conformer: numpy.ndarray
+) -> typing.List[typing.List[int]]:
 
     # Figure out which atoms are topologically symmetric.
-    atoms_per_symmetry_group: Dict[int, List[int]] = defaultdict(list)
+    atoms_per_symmetry_group: typing.Dict[int, typing.List[int]] = defaultdict(list)
 
     for i, symmetry_group in enumerate(atom_symmetries):
         atoms_per_symmetry_group[symmetry_group].append(i)
@@ -194,7 +194,7 @@ def are_conformers_identical(
     # to try and account for automorphism.
     atom_symmetries = get_atom_symmetries(molecule)
 
-    atoms_per_symmetry_group: Dict[int, List[int]] = defaultdict(list)
+    atoms_per_symmetry_group: typing.Dict[int, typing.List[int]] = defaultdict(list)
 
     for i, symmetry_group in enumerate(atom_symmetries):
         atoms_per_symmetry_group[symmetry_group].append(i)
