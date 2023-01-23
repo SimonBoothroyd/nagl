@@ -109,7 +109,7 @@ class TestDGLMoleculeLightningModel:
         monkeypatch.setattr(mock_lightning_model, "forward", mock_forward)
 
         loss = getattr(mock_lightning_model, method_name)(
-            (dgl_methane, {"charges": torch.tensor([[2.0, 3.0, 4.0, 5.0, 6.0]])}), 0
+            (dgl_methane, {"charges-am1": torch.tensor([[2.0, 3.0, 4.0, 5.0, 6.0]])}), 0
         )
         assert torch.isclose(loss, torch.tensor([1.0]))
 
