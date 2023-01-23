@@ -1,21 +1,12 @@
-import os
-
 import numpy
-import pytest
+import pyarrow
 import torch
 from openff.toolkit.topology import Molecule
 from openff.units import unit
 
-from nagl.datasets import DGLMoleculeDataLoader, DGLMoleculeDataset
-from nagl.features import AtomConnectivity, BondIsInRing
+from nagl.datasets import DGLMoleculeDataset, collate_dgl_molecules
+from nagl.features import AtomConnectivity, AtomicElement, BondIsInRing
 from nagl.molecules import DGLMolecule, DGLMoleculeBatch
-from nagl.storage import (
-    ConformerRecord,
-    MoleculeRecord,
-    MoleculeStore,
-    PartialChargeSet,
-    WibergBondOrderSet,
-)
 
 
 def label_function(molecule: Molecule):
@@ -30,113 +21,169 @@ def label_function(molecule: Molecule):
     }
 
 
-def test_data_set_from_molecules(openff_methane):
+class TestDGLMoleculeDataset:
+    def test_from_molecules(self, openff_methane):
 
-    data_set = DGLMoleculeDataset.from_molecules(
-        [openff_methane], [AtomConnectivity()], [BondIsInRing()], label_function
-    )
-    assert len(data_set) == 1
-    assert data_set.n_features == 4
-
-    dgl_molecule, labels = data_set[0]
-
-    assert isinstance(dgl_molecule, DGLMolecule)
-    assert dgl_molecule.n_atoms == 5
-
-    assert "formal_charges" in labels
-    label = labels["formal_charges"]
-
-    assert label.numpy().shape == (5,)
-
-
-@pytest.mark.parametrize(
-    "partial_charge_method, bond_order_method",
-    [("am1", None), (None, "am1"), ("am1", "am1")],
-)
-def test_labelled_molecule_to_dict(
-    openff_methane, partial_charge_method, bond_order_method
-):
-
-    expected_charges = numpy.arange(openff_methane.n_atoms)
-    expected_orders = numpy.arange(openff_methane.n_bonds)
-
-    openff_methane.partial_charges = expected_charges * unit.elementary_charge
-
-    for i, bond in enumerate(openff_methane.bonds):
-        bond.fractional_bond_order = expected_orders[i]
-
-    labels = DGLMoleculeDataset._labelled_molecule_to_dict(
-        openff_methane, partial_charge_method, bond_order_method
-    )
-
-    if partial_charge_method is not None:
-        assert "am1-charges" in labels
-        assert numpy.allclose(expected_charges, labels["am1-charges"])
-    else:
-        assert "am1-charges" not in labels
-
-    if bond_order_method is not None:
-        assert "am1-wbo" in labels
-        assert numpy.allclose(expected_orders, labels["am1-wbo"])
-    else:
-        assert "am1-wbo" not in labels
-
-
-def test_data_set_from_molecule_stores(tmpdir):
-
-    molecule_store = MoleculeStore(os.path.join(tmpdir, "store.sqlite"))
-    molecule_store.store(
-        MoleculeRecord(
-            smiles="[Cl:1]-[H:2]",
-            conformers=[
-                ConformerRecord(
-                    coordinates=numpy.array([[-1.0, 0.0, 0.0], [1.0, 0.0, 0.0]]),
-                    partial_charges=[
-                        PartialChargeSet(method="am1", values=[0.1, -0.1])
-                    ],
-                    bond_orders=[
-                        WibergBondOrderSet(method="am1", values=[(0, 1, 1.1)])
-                    ],
-                )
-            ],
+        data_set = DGLMoleculeDataset.from_molecules(
+            [openff_methane], [AtomConnectivity()], [BondIsInRing()], label_function
         )
-    )
+        assert len(data_set) == 1
 
-    data_set = DGLMoleculeDataset.from_molecule_stores(
-        molecule_store, "am1", "am1", [AtomConnectivity()], [BondIsInRing()]
-    )
+        dgl_molecule, labels = data_set[0]
 
-    assert len(data_set) == 1
-    assert data_set.n_features == 4
+        assert isinstance(dgl_molecule, DGLMolecule)
+        assert dgl_molecule.n_atoms == 5
 
-    dgl_molecule, labels = data_set[0]
-
-    assert isinstance(dgl_molecule, DGLMolecule)
-    assert dgl_molecule.n_atoms == 2
-
-    assert "am1-charges" in labels
-    assert labels["am1-charges"].numpy().shape == (2,)
-
-    assert "am1-wbo" in labels
-    assert labels["am1-wbo"].numpy().shape == (1,)
-
-
-def test_data_set_loader():
-
-    data_loader = DGLMoleculeDataLoader(
-        dataset=DGLMoleculeDataset.from_molecules(
-            [Molecule.from_smiles("C"), Molecule.from_smiles("C[O-]")],
-            [AtomConnectivity()],
-            [],
-            label_function,
-        ),
-    )
-
-    entries = [*data_loader]
-
-    for dgl_molecule, labels in entries:
-
-        assert isinstance(
-            dgl_molecule, DGLMoleculeBatch
-        ) and dgl_molecule.n_atoms_per_molecule == (5,)
         assert "formal_charges" in labels
+        label = labels["formal_charges"]
+
+        assert label.numpy().shape == (5,)
+
+    def test_from_unfeaturized(self, tmp_cwd):
+
+        table = pyarrow.table(
+            [
+                ["[O-:1][H:2]", "[H:1][H:2]"],
+                [numpy.arange(2).astype(float), numpy.zeros(2).astype(float)],
+                [numpy.arange(2).astype(float) + 2, None],
+            ],
+            ["smiles", "charges-am1", "charges-am1bcc"],
+        )
+
+        parquet_path = tmp_cwd / "labels.parquet"
+        pyarrow.parquet.write_table(table, parquet_path)
+
+        data_set = DGLMoleculeDataset.from_unfeaturized(
+            parquet_path,
+            ["charges-am1bcc"],
+            [AtomicElement(values=["H", "O"])],
+            [BondIsInRing()],
+        )
+
+        assert len(data_set) == 2
+
+        dgl_molecule, labels = data_set[0]
+
+        assert isinstance(dgl_molecule, DGLMolecule)
+        assert dgl_molecule.n_atoms == 2
+
+        expected_features = numpy.array([[0.0, 1.0], [1.0, 0.0]])
+        assert dgl_molecule.atom_features.shape == (2, 2)
+        assert numpy.allclose(dgl_molecule.atom_features.numpy(), expected_features)
+
+        assert {*labels} == {"charges-am1bcc"}
+        charges = labels["charges-am1bcc"].numpy()
+
+        assert charges.shape == (2,)
+        assert numpy.allclose(charges, numpy.array([2.0, 3.0]))
+
+        _, labels = data_set[1]
+        assert labels["charges-am1bcc"] is None
+
+    def test_from_featurized(self, tmp_cwd):
+
+        table = pyarrow.table(
+            [
+                ["[O-:1][H:2]", "[H:1][H:2]"],
+                [
+                    numpy.array([[0.0, 1.0], [1.0, 0.0]]).flatten(),
+                    numpy.array([[1.0, 0.0], [1.0, 0.0]]).flatten(),
+                ],
+                [numpy.array([[0.0]]).flatten(), numpy.array([[0.0]]).flatten()],
+                [numpy.array([-1.0, 0.0]), numpy.array([0.0, 0.0])],
+            ],
+            ["smiles", "atom_features", "bond_features", "formal_charges"],
+        )
+
+        parquet_path = tmp_cwd / "labels.parquet"
+        pyarrow.parquet.write_table(table, parquet_path)
+
+        data_set = DGLMoleculeDataset.from_featurized(parquet_path, None)
+
+        assert len(data_set) == 2
+
+        dgl_molecule, labels = data_set[0]
+
+        assert isinstance(dgl_molecule, DGLMolecule)
+        assert dgl_molecule.n_atoms == 2
+        assert dgl_molecule.n_bonds == 1
+
+        expected_features = numpy.array([[0.0, 1.0], [1.0, 0.0]])
+        assert dgl_molecule.atom_features.shape == expected_features.shape
+        assert numpy.allclose(dgl_molecule.atom_features.numpy(), expected_features)
+
+        assert {*labels} == {"formal_charges"}
+        charges = labels["formal_charges"].numpy()
+
+        assert charges.shape == (2,)
+        assert numpy.allclose(charges, numpy.array([-1.0, 0.0]))
+
+    def test_to_table(self, tmp_cwd):
+
+        dataset = DGLMoleculeDataset.from_molecules(
+            [
+                Molecule.from_mapped_smiles("[O-:1][H:2]"),
+                Molecule.from_mapped_smiles("[H:1][H:2]"),
+            ],
+            [AtomicElement(values=["H", "O"])],
+            [BondIsInRing()],
+            label_function,
+        )
+
+        expected_rows = [
+            {
+                "smiles": "[O-:1][H:2]",
+                "atom_features": numpy.array([[0.0, 1.0], [1.0, 0.0]]).flatten(),
+                "bond_features": numpy.array([[0.0]]).flatten(),
+                "formal_charges": numpy.array([-1.0, 0.0]),
+            },
+            {
+                "smiles": "[H:1][H:2]",
+                "atom_features": numpy.array([[1.0, 0.0], [1.0, 0.0]]).flatten(),
+                "bond_features": numpy.array([[0.0]]).flatten(),
+                "formal_charges": numpy.array([0.0, 0.0]),
+            },
+        ]
+        actual_table = dataset.to_table()
+        actual_rows = actual_table.to_pylist()
+
+        for expected_row, actual_row in zip(expected_rows, actual_rows):
+
+            assert {*expected_row} == {*actual_row}
+            assert expected_row.pop("smiles") == actual_row.pop("smiles")
+
+            for column in expected_row:
+
+                assert (
+                    expected_row[column].shape == numpy.array(actual_row[column]).shape
+                )
+                assert numpy.allclose(
+                    expected_row[column], numpy.array(actual_row[column])
+                )
+
+
+def test_collate_dgl_molecules():
+
+    dataset = DGLMoleculeDataset.from_molecules(
+        [
+            Molecule.from_mapped_smiles("[O-:1][H:2]"),
+            Molecule.from_mapped_smiles("[H:1][H:2]"),
+        ],
+        [AtomicElement(values=["H", "O"])],
+        [],
+        label_function,
+    )
+    entries = dataset._entries
+
+    dgl_molecule, labels = collate_dgl_molecules(entries)
+
+    assert isinstance(dgl_molecule, DGLMoleculeBatch)
+    assert dgl_molecule.n_atoms_per_molecule == (2, 2)
+    assert dgl_molecule.graph.batch_size == 2
+    assert torch.allclose(dgl_molecule.graph.batch_num_nodes(), torch.tensor([2, 2]))
+
+    expected_features = numpy.array([[0.0, 1.0], [1.0, 0.0], [1.0, 0.0], [1.0, 0.0]])
+    actual_features = dgl_molecule.atom_features.numpy()
+
+    assert expected_features.shape == actual_features.shape
+    assert numpy.allclose(expected_features, actual_features)

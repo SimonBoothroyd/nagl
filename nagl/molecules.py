@@ -23,10 +23,25 @@ class _BaseDGLModel:
         return self._graph
 
     @property
-    def atom_features(self) -> torch.Tensor:
+    def atom_features(self) -> typing.Optional[torch.Tensor]:
         """Returns a tensor containing the initial atom features with
         shape=(n_atoms, n_atom_features)."""
-        return self._graph.ndata["feat"].float()
+        return (
+            None
+            if "feat" not in self._graph.ndata
+            else self._graph.ndata["feat"].float()
+        )
+
+    @property
+    def bond_features(self) -> typing.Optional[torch.Tensor]:
+        """Returns a tensor containing the initial bond features with
+        shape=(n_atoms, n_bond_features)."""
+
+        return (
+            None
+            if "feat" not in self._graph.edata
+            else self._graph.edata["feat"][self._graph.edata["mask"], :].float()
+        )
 
     def __init__(self, graph: dgl.DGLGraph):
         """
@@ -80,17 +95,38 @@ class DGLMolecule(_BaseDGLModel):
         self._n_representations = n_representations
 
     @classmethod
-    def _molecule_to_dgl(
+    def from_openff(
         cls,
         molecule: "Molecule",
-        atom_featurizers: typing.List[AtomFeature],
-        bond_featurizers: typing.List[BondFeature],
-    ) -> dgl.DGLGraph:
-        """Maps an OpenFF molecule object into a ``dgl`` graph complete with atom (node)
-        and bond (edge) features.
+        atom_features: typing.Optional[typing.List[AtomFeature]],
+        bond_features: typing.Optional[typing.List[BondFeature]],
+        atom_feature_tensor: typing.Optional[torch.Tensor] = None,
+        bond_feature_tensor: typing.Optional[torch.Tensor] = None,
+    ) -> "DGLMolecule":
+        """Creates a new DGL graph molecule representation from an OpenFF molecule
+        object.
+
+        Args:
+            molecule: The molecule to store in the graph.
+            atom_features: The atom features to compute for the molecule.
+            bond_features: The bond features to compute for the molecule.
+            atom_feature_tensor: The (optional) pre-computed atom features. This
+                option is mutually exclusive with ``atom_features``.
+            bond_feature_tensor: The (optional) pre-computed bond features This
+                option is mutually exclusive with ``bond_features``.
+
+        Returns:
+            The constructed graph.
         """
 
         from openff.units import unit
+
+        assert (
+            atom_features is None or atom_feature_tensor is None
+        ), "``atom_features`` and ``atom_feature_tensor`` are mutually exclusive."
+        assert (
+            bond_features is None or bond_feature_tensor is None
+        ), "``bond_features`` and ``bond_feature_tensor`` are mutually exclusive."
 
         # Create the bond tensors.
         indices_a = []
@@ -108,67 +144,43 @@ class DGLMolecule(_BaseDGLModel):
 
         # Map the bond indices to a molecule graph, making sure to make the graph
         # undirected.
-        molecule_graph: dgl.DGLGraph = dgl.graph(
-            (undirected_indices_a, undirected_indices_b)
-        )
+        graph: dgl.DGLGraph = dgl.graph((undirected_indices_a, undirected_indices_b))
 
         # Track which edges correspond to an original bond and which were added to
         # make the graph undirected.
         bond_mask = torch.tensor(
             [True] * molecule.n_bonds + [False] * molecule.n_bonds, dtype=torch.bool
         )
-        molecule_graph.edata["mask"] = bond_mask
+        graph.edata["mask"] = bond_mask
 
-        # Assign the atom (node) features.
-        if len(atom_featurizers) > 0:
+        if atom_features is not None and len(atom_features) > 0:
+            atom_feature_tensor = AtomFeaturizer.featurize(molecule, atom_features)
+        if atom_feature_tensor is not None:
+            graph.ndata["feat"] = atom_feature_tensor
 
-            molecule_graph.ndata["feat"] = AtomFeaturizer.featurize(
-                molecule, atom_featurizers
-            )
-
-        if len(bond_featurizers) > 0:
-
-            bond_features = BondFeaturizer.featurize(molecule, bond_featurizers)
+        if bond_features is not None and len(bond_features) > 0:
+            bond_feature_tensor = BondFeaturizer.featurize(molecule, bond_features)
+        if bond_feature_tensor is not None:
             # We need to 'double stack' the features as the graph is bidirectional
-            molecule_graph.edata["feat"] = torch.cat([bond_features, bond_features])
+            graph.edata["feat"] = torch.cat([bond_feature_tensor, bond_feature_tensor])
 
-        molecule_graph.ndata["formal_charge"] = torch.tensor(
+        graph.ndata["formal_charge"] = torch.tensor(
             [
                 atom.formal_charge.m_as(unit.elementary_charge)
                 for atom in molecule.atoms
             ],
             dtype=torch.int8,
         )
-        molecule_graph.ndata["atomic_number"] = torch.tensor(
+        graph.ndata["atomic_number"] = torch.tensor(
             [atom.atomic_number for atom in molecule.atoms], dtype=torch.uint8
         )
 
         bond_orders = torch.tensor(
             [bond.bond_order for bond in molecule.bonds], dtype=torch.uint8
         )
-        molecule_graph.edata["bond_order"] = torch.cat([bond_orders, bond_orders])
+        graph.edata["bond_order"] = torch.cat([bond_orders, bond_orders])
 
-        return molecule_graph
-
-    @classmethod
-    def from_openff(
-        cls: typing.Type["DGLMolecule"],
-        molecule: "Molecule",
-        atom_features: typing.List[AtomFeature],
-        bond_features: typing.List[BondFeature],
-    ) -> "DGLMolecule":
-        """Creates a new molecular graph representation from an OpenFF molecule object.
-
-        Args:
-            molecule: The molecule to store in the graph.
-            atom_features: The atom features to compute for the molecule.
-            bond_features: The bond features to compute for the molecule.
-
-        Returns:
-            The constructed graph.
-        """
-
-        return cls(cls._molecule_to_dgl(molecule, atom_features, bond_features), 1)
+        return cls(graph, 1)
 
     @classmethod
     def from_smiles(
@@ -195,6 +207,30 @@ class DGLMolecule(_BaseDGLModel):
             atom_features,
             bond_features,
         )
+
+    def to_openff(self) -> "Molecule":
+        """Converts this DGL molecule into an OpenFF molecule object."""
+
+        from openff.toolkit import Molecule
+
+        molecule = Molecule()
+
+        atomic_numbers = self.graph.ndata["atomic_number"].detach().numpy().tolist()
+        formal_charges = self.graph.ndata["formal_charge"].detach().numpy().tolist()
+
+        for atomic_num, formal_charge in zip(atomic_numbers, formal_charges):
+            molecule.add_atom(int(atomic_num), int(formal_charge), False)
+
+        indices_a, indices_b = self.graph.all_edges()
+
+        for index_a, index_b, bond_order in zip(
+            indices_a[self.graph.edata["mask"]],
+            indices_b[self.graph.edata["mask"]],
+            self.graph.edata["bond_order"][self.graph.edata["mask"]],
+        ):
+            molecule.add_bond(int(index_a), int(index_b), int(bond_order), False)
+
+        return molecule
 
 
 class DGLMoleculeBatch(_BaseDGLModel):
