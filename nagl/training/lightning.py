@@ -1,17 +1,21 @@
+import pathlib
 import typing
 
+import pyarrow.parquet
 import pytorch_lightning as pl
 import torch
 import torch.nn
+from torch.utils.data import DataLoader
 
 import nagl.nn
 import nagl.nn.modules
 import nagl.nn.pooling
 import nagl.nn.postprocess
 from nagl.config import Config
-from nagl.config.data import DatasetTarget
+from nagl.config.data import Dataset as DatasetConfig
 from nagl.config.model import ActivationFunction
-from nagl.molecules import DGLMolecule, DGLMoleculeBatch
+from nagl.datasets import DGLMoleculeDataset, collate_dgl_molecules
+from nagl.molecules import DGLMolecule, DGLMoleculeBatch, MoleculeToDGLFunc
 from nagl.training.metrics import get_metric
 
 
@@ -92,27 +96,27 @@ class DGLMoleculeLightningModel(pl.LightningModule):
             "val": self.config.data.validation,
             "test": self.config.data.test,
         }
-        targets: typing.Dict[str, DatasetTarget] = dataset_configs[step_type].targets
+        targets = dataset_configs[step_type].targets
 
         y_pred = self.forward(molecule)
         metric = torch.zeros(1).type_as(next(iter(y_pred.values())))
 
-        for target_name, target_config in targets.items():
+        for target in targets:
 
-            if target_name not in labels:
+            if labels[target.column] is None:
                 continue
 
-            target_labels = labels[target_name]
-            target_y_pred = y_pred[target_config.readout]
+            target_labels = labels[target.column]
+            target_y_pred = y_pred[target.readout]
 
-            metric_function = get_metric(target_config.metric)
+            metric_function = get_metric(target.metric)
 
             target_metric = metric_function(target_y_pred, target_labels)
-            self.log(f"{step_type}_{target_name}_{target_config.metric}", target_metric)
+            self.log(f"{step_type}-{target.column}-{target.metric}", target_metric)
 
             metric += target_metric
 
-        self.log(f"{step_type}_loss", metric)
+        self.log(f"{step_type}-loss", metric)
         return metric
 
     def training_step(self, train_batch, batch_idx):
@@ -133,112 +137,109 @@ class DGLMoleculeLightningModel(pl.LightningModule):
         return optimizer
 
 
-# class DGLMoleculeDataModule(pl.LightningDataModule):
-#     """A utility class that makes loading and featurizing train, validation and test
-#     sets more compact."""
-#
-#     def __init__(
-#         self,
-#         config: Config,
-#         cache_dir: typing.Optional[pathlib.Path] = None,
-#         molecule_to_dgl: typing.Optional[MoleculeToDGLFunc] = None,
-#     ):
-#         """
-#
-#         Args:
-#             config: The configuration defining what data should be included.
-#             cache_dir: The (optional) directory to store and load cached featurized data
-#                 in. **No validation is done to ensure the loaded data matches the input
-#                 config so be extra careful when using this option**.
-#             molecule_to_dgl: A (optional) callable to use when converting an OpenFF
-#                 ``Molecule`` object to a ``DGLMolecule`` object. By default, the
-#                 ``DGLMolecule.from_openff`` class method is used.
-#         """
-#         super().__init__()
-#
-#         self._config = config
-#         self._cache_dir = cache_dir
-#
-#         self._molecule_to_dgl = molecule_to_dgl
-#
-#         self._data_sets: typing.Dict[str, ConcatDataset] = {}
-#
-#         self._data_set_paths = {
-#             "train": self._create_dataloader(self._config.data.training, "train"),
-#             "val": self._create_dataloader(self._config.data.validation, "val"),
-#             "test": self._create_dataloader(self._config.data.test, "test"),
-#         }
-#
-#     def _create_dataloader(
-#         self,
-#         dataset_config: typing.Optional[Dataset],
-#         stage: typing.Literal["train", "val", "test"],
-#     ) -> typing.Optional[typing.List[pathlib.Path]]:
-#
-#         if dataset_config is None:
-#             return None
-#
-#         if len(dataset_config.targets) != 1:
-#
-#             raise NotImplementedError(
-#                 "Exactly one target per stage (train, val, test) is currently supported."
-#             )
-#
-#         target_name, target = next(iter(dataset_config.targets.items()))
-#
-#         def _factory() -> DGLMoleculeDataLoader:
-#
-#             target_data = self._data_sets[stage]
-#
-#             return DGLMoleculeDataLoader(
-#                 target_data,
-#                 batch_size=(
-#                     target.batch_size
-#                     if target.batch_size is not None
-#                     else len(target_data)
-#                 ),
-#             )
-#
-#         setattr(self, f"{stage}_dataloader", _factory)
-#
-#         return [pathlib.Path(source) for source in target.sources]
-#
-#     def prepare_data(self):
-#         pass
-#         # for stage, stage_paths in self._data_set_paths.items():
-#         #
-#         #     if stage_paths is None:
-#         #         continue
-#         #
-#         #     self._data_sets[stage] = ConcatDataset(
-#         #         DGLMoleculeDataset.from_file(
-#         #             data_path,
-#         #             atom_features=self._config.model.atom_features,
-#         #             bond_features=self._config.model.bond_features,
-#         #             molecule_to_dgl=self._molecule_to_dgl,
-#         #         )
-#         #         for data_path in stage_paths
-#         #     )
-#
-#     def setup(self, stage: typing.Optional[str] = None):
-#
-#         data_set_paths = (
-#             self._data_set_paths
-#             if stage is None
-#             else {stage: self._data_set_paths[stage]}
-#         )
-#
-#         for stage, stage_paths in data_set_paths.items():
-#
-#             if stage_paths is None:
-#                 continue
-#
-#             self._data_sets[stage] = ConcatDataset(
-#                 DGLMoleculeDataset.from_file(
-#                     data_path,
-#                     atom_features=self._config.model.atom_features,
-#                     bond_features=self._config.model.bond_features,
-#                     molecule_to_dgl=self._molecule_to_dgl,
-#                 )
-#                 for data_path in stage_paths
-#             )
+class DGLMoleculeDataModule(pl.LightningDataModule):
+    """A utility class that makes loading and featurizing train, validation and test
+    sets more compact."""
+
+    def __init__(
+        self,
+        config: Config,
+        cache_dir: typing.Optional[pathlib.Path] = None,
+        molecule_to_dgl: typing.Optional[MoleculeToDGLFunc] = None,
+    ):
+        """
+
+        Args:
+            config: The configuration defining what data should be included.
+            cache_dir: The (optional) directory to store and load cached featurized data
+                in. **No validation is done to ensure the loaded data matches the input
+                config so be extra careful when using this option**.
+            molecule_to_dgl: A (optional) callable to use when converting an OpenFF
+                ``Molecule`` object to a ``DGLMolecule`` object. By default, the
+                ``DGLMolecule.from_openff`` class method is used.
+        """
+        super().__init__()
+
+        self._config = config
+        self._cache_dir = cache_dir
+
+        self._molecule_to_dgl = molecule_to_dgl
+
+        self._data_sets: typing.Dict[str, DGLMoleculeDataset] = {}
+
+        self._data_set_configs: typing.Dict[str, typing.Optional[DatasetConfig]] = {
+            "train": config.data.training,
+            "val": config.data.validation,
+            "test": config.data.test,
+        }
+
+        self._data_set_paths = {
+            stage: None if dataset_config is None else dataset_config.sources
+            for stage, dataset_config in self._data_set_configs.items()
+        }
+
+        for stage, dataset_config in self._data_set_configs.items():
+            self._create_dataloader(dataset_config, stage)
+
+    def _create_dataloader(
+        self,
+        dataset_config: typing.Optional[DatasetConfig],
+        stage: typing.Literal["train", "val", "test"],
+    ):
+
+        if dataset_config is None:
+            return
+
+        def _factory() -> DataLoader:
+
+            target_data = self._data_sets[stage]
+
+            return DataLoader(
+                dataset=target_data,
+                batch_size=dataset_config.batch_size,
+                shuffle=False,
+                num_workers=1,
+                collate_fn=collate_dgl_molecules,
+            )
+
+        setattr(self, f"{stage}_dataloader", _factory)
+
+    def prepare_data(self):
+
+        for stage, stage_paths in self._data_set_paths.items():
+
+            if stage_paths is None:
+                continue
+
+            dataset_config = self._data_set_configs[stage]
+            columns = sorted({target.column for target in dataset_config.targets})
+
+            dataset = DGLMoleculeDataset.from_unfeaturized(
+                [pathlib.Path(path) for path in stage_paths],
+                columns=columns,
+                atom_features=self._config.model.atom_features,
+                bond_features=self._config.model.bond_features,
+                molecule_to_dgl=self._molecule_to_dgl,
+            )
+
+            if self._cache_dir is None:
+                self._data_sets[stage] = dataset
+            else:
+                self._cache_dir.mkdir(parents=True, exist_ok=True)
+
+                table = dataset.to_table()
+                pyarrow.parquet.write_table(table, self._cache_dir / f"{stage}.parquet")
+
+    def setup(self, stage: typing.Optional[str] = None):
+
+        if self._cache_dir is None:
+            return
+
+        stages = [stage] if stage is not None else [*self._data_set_paths]
+        stages = [stage for stage in stages if self._data_set_paths[stage] is not None]
+
+        for stage in stages:
+
+            self._data_sets[stage] = DGLMoleculeDataset.from_featurized(
+                self._cache_dir / f"{stage}.parquet", columns=None
+            )

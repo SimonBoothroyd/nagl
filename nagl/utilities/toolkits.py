@@ -1,8 +1,9 @@
-"""A module for handling cheminformatics toolkit calls directly which are not yet
-available in the OpenFF toolkit.
+"""Wrappers around cheminformatics toolkit functionality not yet available in the OpenFF
+toolkit.
 """
 import contextlib
 import json
+import pathlib
 import typing
 
 from openff.utilities import requires_package
@@ -11,7 +12,6 @@ from openff.utilities.exceptions import MissingOptionalDependencyError
 from nagl import data
 
 if typing.TYPE_CHECKING:
-
     from openff.toolkit.topology import Molecule
 
 
@@ -97,7 +97,11 @@ def stream_from_file(
     ...
 
 
-def stream_from_file(file_path: str, as_smiles: bool = False):
+def stream_from_file(
+    file_path: typing.Union[str, pathlib.Path], as_smiles: bool = False
+):
+
+    file_path = str(file_path)
 
     try:
         for molecule in _oe_stream_from_file(file_path, as_smiles):
@@ -143,7 +147,9 @@ def _rdkit_stream_to_file(file_path: str):
 
 
 @contextlib.contextmanager
-def stream_to_file(file_path: str):
+def stream_to_file(file_path: typing.Union[str, pathlib.Path]):
+
+    file_path = str(file_path)
 
     try:
         with _oe_stream_to_file(file_path) as writer:
@@ -191,70 +197,6 @@ def capture_toolkit_warnings():  # pragma: no cover
         yield
 
     logging.getLogger("openff.toolkit").setLevel(openff_logger_level)
-
-
-@requires_package("openeye.oechem")
-def _oe_smiles_to_inchi_key(smiles: str) -> str:  # pragma: no cover
-
-    from openeye import oechem
-
-    oe_molecule = oechem.OEMol()
-    oechem.OESmilesToMol(oe_molecule, smiles)
-
-    opts = oechem.OEInChIOptions()
-    opts.SetFixedHLayer(True)
-
-    return oechem.OEMolToInChIKey(oe_molecule)
-
-
-@requires_package("rdkit")
-def _rdkit_smiles_to_inchi_key(smiles: str) -> str:
-
-    from rdkit import Chem
-
-    rd_molecule = Chem.MolFromSmiles(smiles)
-    return Chem.MolToInchiKey(rd_molecule, options="-FixedH")
-
-
-def smiles_to_inchi_key(smiles: str) -> str:
-
-    try:  # pragma: no cover
-        return _oe_smiles_to_inchi_key(smiles)
-    except MissingOptionalDependencyError:
-        return _rdkit_smiles_to_inchi_key(smiles)
-
-
-def _oe_get_atom_symmetries(
-    molecule: "Molecule",
-) -> typing.List[int]:  # pragma: no cover
-
-    from openeye import oechem
-
-    oe_molecule = molecule.to_openeye()
-    oechem.OEPerceiveSymmetry(oe_molecule)
-
-    symmetry_classes_by_index = {
-        a.GetIdx(): a.GetSymmetryClass() for a in oe_molecule.GetAtoms()
-    }
-    return [symmetry_classes_by_index[i] for i in range(molecule.n_atoms)]
-
-
-def _rd_get_atom_symmetries(molecule: "Molecule") -> typing.List[int]:
-
-    from rdkit import Chem
-
-    rd_mol = molecule.to_rdkit()
-    return list(Chem.CanonicalRankAtoms(rd_mol, breakTies=False))
-
-
-def get_atom_symmetries(molecule: "Molecule") -> typing.List[int]:
-
-    from openff.toolkit.utils import ToolkitUnavailableException
-
-    try:  # pragma: no cover
-        return _oe_get_atom_symmetries(molecule)
-    except (ImportError, ModuleNotFoundError, ToolkitUnavailableException):
-        return _rd_get_atom_symmetries(molecule)
 
 
 def _oe_normalize_molecule(

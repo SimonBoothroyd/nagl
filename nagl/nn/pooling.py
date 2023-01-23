@@ -71,8 +71,8 @@ class BondPoolingLayer(PoolingLayer):
 
         graph.apply_edges(self._apply_edges)
 
-        h_forward = graph.edata["h"][graph.edata["mask"]]
-        h_reverse = graph.edata["h"][~graph.edata["mask"]]
+        h_forward = graph.edata["h"][graph.edata["mask"], :]
+        h_reverse = graph.edata["h"][~graph.edata["mask"], :]
 
         return self.layers(h_forward) + self.layers(h_reverse)
 

@@ -1,40 +1,28 @@
+import numpy
 import pytest
 from openff.toolkit.topology import Molecule
 
-from nagl.labelling import label_molecule, label_molecules
-from nagl.storage import MoleculeRecord
+from nagl.labelling import compute_batch_charges, compute_charges
 
 
 @pytest.mark.parametrize("molecule", ["C", Molecule.from_smiles("C")])
-def test_label_molecule(molecule):
+def test_compute_charges(molecule):
 
-    labelled_record = label_molecule(
-        molecule,
-        guess_stereochemistry=True,
-        partial_charge_methods=["am1bcc"],
-        bond_order_methods=["am1"],
-    )
-    assert isinstance(labelled_record, MoleculeRecord)
+    charges_per_method = compute_charges(molecule, "am1bcc")
+    assert set(charges_per_method) == {"smiles", "am1bcc"}
 
-    assert len(labelled_record.conformers) == 1
-    assert {*labelled_record.conformers[0].partial_charges_by_method} == {"am1bcc"}
-    assert {*labelled_record.conformers[0].bond_orders_by_method} == {"am1"}
-
-    if isinstance(molecule, Molecule):
-        assert molecule.conformers is None
+    charges = charges_per_method["am1bcc"]
+    assert charges.shape == (5,)
+    assert not numpy.allclose(charges, 0.0)
 
 
-def test_label_molecules():
+def test_compute_batch_charges():
 
-    [(record_1, error_1), (record_2, error_2)] = label_molecules(
-        ["C", "ClC=CCl"],
-        guess_stereochemistry=False,
-        partial_charge_methods=["am1"],
-        bond_order_methods=[],
+    [(record_1, error_1), (record_2, error_2)] = compute_batch_charges(
+        ["C", "ClC=CCl"], "am1", guess_stereo=False
     )
 
-    assert isinstance(record_1, MoleculeRecord)
-    assert {*record_1.conformers[0].partial_charges_by_method} == {"am1"}
+    assert {*record_1} == {"smiles", "am1"}
     assert error_1 is None
 
     assert record_2 is None

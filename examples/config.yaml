@@ -34,27 +34,27 @@ model:
 data:
 
   training:
+    sources: []
     targets:
-      am1bcc-charges:
-        readout: "charges"
-        sources: ...
+      - column: "charges-am1bcc"
         metric: "rmse"
+        readout: "charges"
     batch_size: ...
 
   validation:
+    sources: []
     targets:
-      am1bcc-charges:
-        readout: "charges"
-        sources: ...
+      - column: "charges-am1bcc"
         metric: "rmse"
+        readout: "charges"
     batch_size: ...
 
   test:
+    sources: []
     targets:
-      am1bcc-charges:
-        readout: "charges"
-        sources: ...
+      - column: "charges-am1bcc"
         metric: "rmse"
+        readout: "charges"
     batch_size: ...
 
 optimizer:

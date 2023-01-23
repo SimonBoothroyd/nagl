@@ -8,15 +8,11 @@ dependencies:
   - python >3.8
   - pip
 
-    ### Core dependencies.
   - openff-utilities >=0.1.5
   - pydantic
 
   - click
   - click-option-group
-
-  - rdkit
-  - ambertools
 
   - pytorch
   - dgl >=0.7
@@ -24,22 +20,15 @@ dependencies:
   - tqdm
   - rich
 
-    ### Optional dependencies
+    # Optional dependencies
 
-    # Model training
+    ## Model training
   - pytorch-lightning
-
-    # Molecule loading and processing.
+  - pyarrow
+    ## Molecule loading and processing.
   - openff-toolkit-base >=0.11.0
-
-    # SQL based molecule storage.
-  - sqlalchemy
-  - sqlite
-
-    # Distributed molecule processing / labelling.
-  - dask
-  - distributed
-  - dask-jobqueue
+  - rdkit
+  - ambertools
 
     # Dev / Testing
   - pre-commit
@@ -49,5 +38,6 @@ dependencies:
 
   - pytest
   - pytest-cov
+  - pytest-mock
   - codecov
   - coverage >6.4

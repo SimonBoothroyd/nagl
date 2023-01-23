@@ -1,13 +1,11 @@
-import functools
 import logging
+import pathlib
 import typing
-from collections import defaultdict
 
 import dgl
-import numpy
+import pyarrow.parquet
 import torch
-from torch.utils.data import ConcatDataset, DataLoader, Dataset
-from tqdm import tqdm
+from torch.utils.data import Dataset
 
 from nagl.features import AtomFeature, BondFeature
 from nagl.molecules import DGLMolecule, DGLMoleculeBatch, MoleculeToDGLFunc
@@ -15,8 +13,6 @@ from nagl.utilities.toolkits import capture_toolkit_warnings
 
 if typing.TYPE_CHECKING:
     from openff.toolkit.topology import Molecule
-
-    from nagl.storage import ChargeMethod, MoleculeStore, WBOMethod
 
 logger = logging.getLogger(__name__)
 
@@ -34,17 +30,12 @@ class DGLMoleculeDataset(Dataset):
     """A data set which stores a featurized graph representation of a labelled set of
     molecules."""
 
-    @property
-    def n_features(self) -> int:
-        """Returns the number of atom features"""
-        return 0 if len(self) == 0 else self[0][0].atom_features.shape[1]
-
     def __init__(self, entries: typing.List[DGLMoleculeDatasetEntry]):
         """
         Args:
             entries: The list of entries to add to the data set.
         """
-        self._entries = entries
+        self._entries: typing.List[DGLMoleculeDatasetEntry] = entries
 
     @classmethod
     def from_molecules(
@@ -54,6 +45,7 @@ class DGLMoleculeDataset(Dataset):
         bond_features: typing.List[BondFeature],
         label_function: typing.Callable[["Molecule"], typing.Dict[str, torch.Tensor]],
         molecule_to_dgl: typing.Optional[MoleculeToDGLFunc] = None,
+        progress_iterator: typing.Optional[typing.Any] = None,
     ) -> "DGLMoleculeDataset":
         """Creates a data set from a specified list of molecule objects.
 
@@ -67,18 +59,25 @@ class DGLMoleculeDataset(Dataset):
             molecule_to_dgl: A (optional) callable to use when converting an OpenFF
                 ``Molecule`` object to a ``DGLMolecule`` object. By default, the
                 ``DGLMolecule.from_openff`` class method is used.
+            progress_iterator: An iterator (each a ``tqdm``) to loop over all molecules
+                using. This is useful if you wish to display a progress bar for example.
         """
 
-        entries = [
-            cls._build_entry(
-                molecule,
-                atom_features=atom_features,
-                bond_features=bond_features,
-                label_function=label_function,
-                molecule_to_dgl=molecule_to_dgl,
-            )
-            for molecule in tqdm(molecules)
-        ]
+        molecule_to_dgl = (
+            DGLMolecule.from_openff if molecule_to_dgl is None else molecule_to_dgl
+        )
+
+        molecules = (
+            molecules if progress_iterator is None else progress_iterator(molecules)
+        )
+        entries = []
+
+        for molecule in molecules:
+
+            label = label_function(molecule)
+            dgl_molecule = molecule_to_dgl(molecule, atom_features, bond_features)
+
+            entries.append(DGLMoleculeDatasetEntry(dgl_molecule, label))
 
         return cls(entries)
 
@@ -90,6 +89,7 @@ class DGLMoleculeDataset(Dataset):
         bond_features: typing.List[BondFeature],
         label_function: typing.Callable[["Molecule"], typing.Dict[str, torch.Tensor]],
         molecule_to_dgl: typing.Optional[MoleculeToDGLFunc] = None,
+        progress_iterator: typing.Optional[typing.Any] = None,
     ) -> "DGLMoleculeDataset":
         """Creates a data set from a specified list of SMILES patterns.
 
@@ -103,199 +103,208 @@ class DGLMoleculeDataset(Dataset):
             molecule_to_dgl: A (optional) callable to use when converting an OpenFF
                 ``Molecule`` object to a ``DGLMolecule`` object. By default, the
                 ``DGLMolecule.from_openff`` class method is used.
+            progress_iterator: An iterator (each a ``tqdm``) to loop over all molecules
+                using. This is useful if you wish to display a progress bar for example.
         """
 
         from openff.toolkit.topology import Molecule
 
         return cls.from_molecules(
-            [Molecule.from_smiles(pattern) for pattern in smiles],
+            [
+                Molecule.from_smiles(pattern, allow_undefined_stereo=True)
+                for pattern in smiles
+            ],
             atom_features,
             bond_features,
             label_function,
             molecule_to_dgl,
+            progress_iterator=progress_iterator,
         )
 
     @classmethod
-    def _labelled_molecule_to_dict(
-        cls,
-        molecule: "Molecule",
-        partial_charge_method: typing.Optional["ChargeMethod"],
-        bond_order_method: typing.Optional["WBOMethod"],
-    ) -> typing.Dict[str, torch.Tensor]:
-        """A convenience method for mapping a pre-labelled molecule to a dictionary
-        of label tensors.
-
-        Args:
-            molecule: The labelled molecule object.
-            partial_charge_method: The method which was used to generate the partial
-                charge on each atom, or ``None`` if charge labels should not be included.
-            bond_order_method: The method which was used to generate the Wiberg bond
-                orders of each bond, or ``None`` if WBO labels should not be included.
-
-        Returns:
-            A dictionary of the tensor labels.
-        """
-        from openff.units import unit
-
-        labels = {}
-
-        if partial_charge_method is not None:
-            labels[f"{partial_charge_method}-charges"] = torch.tensor(
-                [
-                    atom.partial_charge.m_as(unit.elementary_charge)
-                    for atom in molecule.atoms
-                ],
-                dtype=torch.float,
-            )
-
-        if bond_order_method is not None:
-
-            labels[f"{bond_order_method}-wbo"] = torch.tensor(
-                [bond.fractional_bond_order for bond in molecule.bonds],
-                dtype=torch.float,
-            )
-
-        return labels
-
-    @classmethod
-    def from_molecule_stores(
+    def from_unfeaturized(
         cls: typing.Type["DGLMoleculeDataset"],
-        molecule_stores: typing.Union[
-            "MoleculeStore", typing.Collection["MoleculeStore"]
-        ],
-        partial_charge_method: typing.Optional["ChargeMethod"],
-        bond_order_method: typing.Optional["WBOMethod"],
+        paths: typing.Union[pathlib.Path, typing.List[pathlib.Path]],
+        columns: typing.Optional[typing.List[str]],
         atom_features: typing.List[AtomFeature],
         bond_features: typing.List[BondFeature],
         molecule_to_dgl: typing.Optional[MoleculeToDGLFunc] = None,
+        progress_iterator: typing.Optional[typing.Any] = None,
     ) -> "DGLMoleculeDataset":
-        """Creates a data set from a specified set of labelled molecule stores.
+        """Creates a data set from unfeaturized data stored in parquet file.
+
+        The file *must* at minimum contain a ``smiles`` column that stores *mapped*
+        SMILES patterns, and additionally columns containing the labels.
 
         Args:
-            molecule_stores: The molecule stores which contain the pre-labelled
-                molecules.
-            partial_charge_method: The partial charge method to label each atom using.
-                If ``None``, atoms won't be labelled with partial charges.
-            bond_order_method: The Wiberg bond order method to label each bond using.
-                If ``None``, bonds won't be labelled with WBOs.
+            paths: The path(s) to the parquet file containing the data labels.
+            columns: The columns (in addition to ``smiles``) to load from the file.
             atom_features: The atom features to compute for each molecule.
             bond_features: The bond features to compute for each molecule.
             molecule_to_dgl: A (optional) callable to use when converting an OpenFF
                 ``Molecule`` object to a ``DGLMolecule`` object. By default, the
                 ``DGLMolecule.from_openff`` class method is used.
+            progress_iterator: An iterator (each a ``tqdm``) to loop over all molecules
+                using. This is useful if you wish to display a progress bar for example.
         """
 
         from openff.toolkit.topology import Molecule
-        from openff.units import unit
 
-        from nagl.storage import MoleculeStore
+        columns = None if columns is None else ["smiles"] + columns
 
-        assert partial_charge_method is not None or bond_order_method is not None, (
-            "at least one of the ``partial_charge_method`` and  ``bond_order_method`` "
-            "must not be ``None``."
-        )
-
-        if isinstance(molecule_stores, MoleculeStore):
-            molecule_stores = [molecule_stores]
-
-        stored_records = list(
-            record
-            for molecule_store in molecule_stores
-            for record in molecule_store.retrieve(
-                [] if partial_charge_method is None else partial_charge_method,
-                [] if bond_order_method is None else bond_order_method,
-            )
-        )
-
-        entries = []
-
-        for record in tqdm(stored_records, desc="featurizing molecules"):
-
-            with capture_toolkit_warnings():
-
-                molecule: Molecule = Molecule.from_mapped_smiles(
-                    record.smiles, allow_undefined_stereo=True
-                )
-
-            if partial_charge_method is not None:
-
-                molecule.partial_charges = (
-                    numpy.array(record.average_partial_charges(partial_charge_method))
-                    * unit.elementary_charge
-                )
-
-            if bond_order_method is not None:
-
-                bond_order_value_tuples = [
-                    value_tuple
-                    for conformer in record.conformers
-                    for bond_order_set in conformer.bond_orders
-                    if bond_order_set.method == bond_order_method
-                    for value_tuple in bond_order_set.values
-                ]
-
-                bond_orders = defaultdict(list)
-
-                for index_a, index_b, value in bond_order_value_tuples:
-                    bond_orders[tuple(sorted([index_a, index_b]))].append(value)
-
-                for bond in molecule.bonds:
-
-                    bond.fractional_bond_order = numpy.mean(
-                        bond_orders[tuple(sorted([bond.atom1_index, bond.atom2_index]))]
-                    )
-
-            entries.append(
-                cls._build_entry(
-                    molecule,
-                    atom_features,
-                    bond_features,
-                    functools.partial(
-                        cls._labelled_molecule_to_dict,
-                        partial_charge_method=partial_charge_method,
-                        bond_order_method=bond_order_method,
-                    ),
-                    molecule_to_dgl,
-                )
-            )
-
-        return cls(entries)
-
-    @classmethod
-    def _build_entry(
-        cls,
-        molecule: "Molecule",
-        atom_features: typing.List[AtomFeature],
-        bond_features: typing.List[BondFeature],
-        label_function: typing.Callable[["Molecule"], typing.Dict[str, torch.Tensor]],
-        molecule_to_dgl: typing.Optional[MoleculeToDGLFunc] = None,
-    ) -> DGLMoleculeDatasetEntry:
-        """Maps a molecule into a labeled, featurized graph representation.
-
-        Args:
-            molecule: The molecule.
-            atom_features: The atom features to compute for each molecule.
-            bond_features: The bond features to compute for each molecule.
-            label_function: A function which will return a label for a given molecule.
-                The function should take a molecule as input, and return and tensor
-                with shape=(n_atoms,) containing the label of each atom.
-            molecule_to_dgl: A (optional) callable to use when converting an OpenFF
-                ``Molecule`` object to a ``DGLMolecule`` object. By default, the
-                ``DGLMolecule.from_openff`` class method is used.
-
-        Returns:
-            A named tuple containing the featurized molecule graph, a tensor of the atom
-            features, and a tensor of the atom labels for the molecule.
-        """
-        label = label_function(molecule)
-
-        # Map the molecule to a graph and assign features.
         molecule_to_dgl = (
             DGLMolecule.from_openff if molecule_to_dgl is None else molecule_to_dgl
         )
-        dgl_molecule = molecule_to_dgl(molecule, atom_features, bond_features)
 
-        return DGLMoleculeDatasetEntry(dgl_molecule, label)
+        table = pyarrow.parquet.read_table(paths, columns=columns)
+        entries = []
+
+        label_list = table.to_pylist()
+        label_list = label_list if progress_iterator is None else label_list
+
+        for labels in label_list:
+
+            smiles = labels.pop("smiles")
+
+            with capture_toolkit_warnings():
+                molecule = Molecule.from_smiles(smiles, allow_undefined_stereo=True)
+                dgl_molecule = molecule_to_dgl(molecule, atom_features, bond_features)
+
+            for label, value in labels.items():
+
+                if value is None:
+                    continue
+
+                labels[label] = torch.tensor(value)
+
+            entries.append(DGLMoleculeDatasetEntry(dgl_molecule, labels))
+
+        return DGLMoleculeDataset(entries)
+
+    @classmethod
+    def from_featurized(
+        cls: typing.Type["DGLMoleculeDataset"],
+        paths: typing.Union[pathlib.Path, typing.List[pathlib.Path]],
+        columns: typing.Optional[typing.List[str]],
+        progress_iterator: typing.Optional[typing.Any] = None,
+    ) -> "DGLMoleculeDataset":
+        """Creates a data set from unfeaturized data stored in parquet file.
+
+        The file *must* at minimum contain a ``smiles``, an ``atom_features``, and a
+        ``bond_features`` column that stores *mapped* SMILES patterns, atom features and
+        bon features respectively. It should additionally have columns containing the
+        labels.
+
+        Args:
+            paths: The path(s) to the parquet file containing the featurized molecules
+                and data labels.
+            columns: The columns (in addition to ``smiles``, ``atom_features``,
+                ``bond_features``) to load from the file.
+            progress_iterator: An iterator (each a ``tqdm``) to loop over all molecules
+                using. This is useful if you wish to display a progress bar for example.
+        """
+
+        from openff.toolkit.topology import Molecule
+
+        required_columns = ["smiles", "atom_features", "bond_features"]
+        columns = None if columns is None else required_columns + columns
+
+        table = pyarrow.parquet.read_table(paths, columns=columns)
+        entries = []
+
+        label_list = table.to_pylist()
+        label_list = label_list if progress_iterator is None else label_list
+
+        for labels in label_list:
+
+            smiles = labels.pop("smiles")
+
+            atom_features = labels.pop("atom_features")
+            bond_features = labels.pop("bond_features")
+
+            with capture_toolkit_warnings():
+
+                molecule = Molecule.from_smiles(smiles, allow_undefined_stereo=True)
+
+                atom_features = (
+                    None
+                    if atom_features is None
+                    else torch.tensor(atom_features)
+                    .float()
+                    .reshape(molecule.n_atoms, -1)
+                )
+                bond_features = (
+                    None
+                    if bond_features is None
+                    else torch.tensor(bond_features)
+                    .float()
+                    .reshape(molecule.n_bonds, -1)
+                )
+
+                dgl_molecule = DGLMolecule.from_openff(
+                    molecule,
+                    atom_features=None,
+                    bond_features=None,
+                    atom_feature_tensor=atom_features,
+                    bond_feature_tensor=bond_features,
+                )
+
+            for label, value in labels.items():
+
+                if value is None:
+                    continue
+
+                labels[label] = torch.tensor(value)
+
+            entries.append(DGLMoleculeDatasetEntry(dgl_molecule, labels))
+
+        return DGLMoleculeDataset(entries)
+
+    def to_table(self) -> pyarrow.Table:
+        """Converts the dataset to a ``pyarrow`` table.
+
+        The table will contain at minimum a ``smiles``, an ``atom_features``, and a
+        ``bond_features column that stores the *mapped* SMILES patterns, atom features
+        and bond features of each molecule in the set respectively. It will additionally
+        have columns containing the labels.
+        """
+
+        dgl_molecule: DGLMolecule
+
+        rows = []
+
+        required_columns = ["smiles", "atom_features", "bond_features"]
+        label_columns = [] if len(self._entries) == 0 else [*self._entries[0][1]]
+
+        for dgl_molecule, labels in self._entries:
+
+            openff_molecule = dgl_molecule.to_openff()
+            smiles = openff_molecule.to_smiles(mapped=True)
+
+            atom_features = (
+                None
+                if dgl_molecule.atom_features is None
+                else dgl_molecule.atom_features.detach().numpy().flatten()
+            )
+            bond_features = (
+                None
+                if dgl_molecule.bond_features is None
+                else dgl_molecule.bond_features.detach().numpy().flatten()
+            )
+
+            assert {*labels} == {*label_columns}
+
+            rows.append(
+                (
+                    smiles,
+                    atom_features,
+                    bond_features,
+                    *[labels[column].numpy() for column in label_columns],
+                )
+            )
+
+        table = pyarrow.table([*zip(*rows)], required_columns + label_columns)
+        return table
 
     def __len__(self) -> int:
         return len(self._entries)
@@ -304,38 +313,25 @@ class DGLMoleculeDataset(Dataset):
         return self._entries[index]
 
 
-class DGLMoleculeDataLoader(DataLoader):
-    """A custom data loader for batching ``DGLMoleculeDataset`` objects."""
+def collate_dgl_molecules(
+    entries: typing.Union[
+        typing.Tuple[DGLMolecule, typing.List[DGLMoleculeDatasetEntry]],
+        typing.List[typing.Tuple[dgl.DGLGraph, typing.List[DGLMoleculeDatasetEntry]]],
+    ]
+) -> typing.Tuple[DGLMoleculeBatch, typing.Dict[str, torch.Tensor]]:
 
-    def __init__(
-        self,
-        dataset: typing.Union[DGLMoleculeDataset, ConcatDataset],
-        batch_size: typing.Optional[int] = 1,
-        shuffle: bool = False,
-        num_workers: int = 0,
-    ):
-        def collate(graph_entries: typing.List[DGLMoleculeDatasetEntry]):
+    if isinstance(entries[0], dgl.DGLGraph):
+        entries = [entries]
 
-            if isinstance(graph_entries[0], dgl.DGLGraph):
-                graph_entries = [graph_entries]
+    molecules, labels = zip(*entries)
 
-            molecules, labels = zip(*graph_entries)
+    batched_molecules = DGLMoleculeBatch(*molecules)
+    batched_labels = {}
 
-            batched_molecules = DGLMoleculeBatch(*molecules)
-            batched_labels = {}
+    for label_name in labels[0]:
 
-            for label_name in labels[0]:
-
-                batched_labels[label_name] = torch.vstack(
-                    [label[label_name].reshape(-1, 1) for label in labels]
-                )
-
-            return batched_molecules, batched_labels
-
-        super(DGLMoleculeDataLoader, self).__init__(
-            dataset=dataset,
-            batch_size=batch_size,
-            shuffle=shuffle,
-            num_workers=num_workers,
-            collate_fn=collate,
+        batched_labels[label_name] = torch.vstack(
+            [label[label_name].reshape(-1, 1) for label in labels]
         )
+
+    return batched_molecules, batched_labels

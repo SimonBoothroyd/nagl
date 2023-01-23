@@ -11,8 +11,26 @@ class TestBaseDGLModel:
     def test_graph_property(self, dgl_methane):
         assert isinstance(dgl_methane.graph, dgl.DGLGraph)
 
-    def test_atom_features_property(self, dgl_methane):
+    def test_features_property(self, dgl_methane):
+
         assert dgl_methane.atom_features.shape == (5, 4)
+        assert numpy.allclose(
+            dgl_methane.atom_features.numpy(),
+            numpy.array(
+                [
+                    [0.0, 0.0, 0.0, 1.0],
+                    [1.0, 0.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0, 0.0],
+                ]
+            ),
+        )
+
+        assert dgl_methane.bond_features.shape == (4, 1)
+        assert numpy.allclose(
+            dgl_methane.bond_features.numpy(), numpy.array([[0.0], [0.0], [0.0], [0.0]])
+        )
 
     def test_to(self, dgl_methane):
 
@@ -85,6 +103,17 @@ class TestDGLMolecule:
         assert not numpy.allclose(
             forward_features[:], numpy.zeros_like(forward_features[:])
         )
+
+    @pytest.mark.parametrize("expected_smiles", ["C", "C[O-]", "C=O", "C1=CC=CC=C1"])
+    def test_to_openff(self, expected_smiles):
+
+        # add explicit H's
+        expected_smiles = Molecule.from_smiles(expected_smiles).to_smiles()
+
+        dgl_molecule = DGLMolecule.from_smiles(expected_smiles, [], [])
+
+        openff_molecule = dgl_molecule.to_openff()
+        assert openff_molecule.to_smiles() == expected_smiles
 
 
 class TestDGLMoleculeBatch:

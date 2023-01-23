@@ -19,7 +19,7 @@ def dgl_carboxylate():
     )
 
     graphs = [
-        DGLMolecule._molecule_to_dgl(resonance_form, [], [])
+        DGLMolecule.from_openff(resonance_form, [], []).graph
         for resonance_form in resonance_forms
     ]
 

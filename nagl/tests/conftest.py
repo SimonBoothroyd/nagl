@@ -1,3 +1,5 @@
+import pathlib
+
 import numpy
 import pytest
 from openff.toolkit.topology import Molecule
@@ -32,3 +34,9 @@ def dgl_methane(openff_methane) -> DGLMolecule:
     return DGLMolecule.from_openff(
         openff_methane, [AtomConnectivity()], [BondIsInRing()]
     )
+
+
+@pytest.fixture
+def tmp_cwd(tmp_path, monkeypatch) -> pathlib.Path:
+    monkeypatch.chdir(tmp_path)
+    yield tmp_path
