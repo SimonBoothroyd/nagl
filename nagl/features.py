@@ -1,4 +1,5 @@
 import abc
+import dataclasses
 import typing
 
 import pydantic
@@ -17,6 +18,9 @@ _DEFAULT_CHARGES = [-3, -2, -1, 0, 1, 2, 3]
 
 _DEFAULT_BOND_ORDERS = [1, 2, 3]
 
+_CUSTOM_ATOM_FEATURES = {}
+_CUSTOM_BOND_FEATURES = {}
+
 
 def one_hot_encode(item, elements):
 
@@ -25,6 +29,7 @@ def one_hot_encode(item, elements):
     ).reshape(1, -1)
 
 
+@pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
 class _Feature(abc.ABC):
     """The base class for features of molecules."""
 
@@ -33,6 +38,37 @@ class _Feature(abc.ABC):
         """A function which should generate the relevant feature tensor for the
         molecule.
         """
+
+    @abc.abstractmethod
+    def __len__(self) -> int:
+        """The number of columns associated with this feature."""
+
+
+def _get_custom_feature(
+    wrapper: _Feature, features: typing.Dict[str, typing.Type[_Feature]]
+) -> _Feature:
+    """Return an instance of a feature defined outside of NAGL based on a
+    ``CustomXXXFeature`` wrapper.
+
+    Args:
+        wrapper: The ``CustomXXXFeature`` wrapper.
+        features: The feature registry that external features should be searched in.
+
+    Returns:
+        An instance of the external feature.
+    """
+
+    type_ = wrapper.type
+
+    if type_ not in features:
+        raise KeyError(f"No feature with type={type_} could be found.")
+
+    feature_class = features[type_]
+
+    features_kwargs = dataclasses.asdict(wrapper)
+    features_kwargs.pop("type")
+
+    return feature_class(**features_kwargs)
 
 
 T = typing.TypeVar("T", bound=_Feature)
@@ -49,10 +85,6 @@ class _Featurizer(typing.Generic[T], abc.ABC):
 @pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
 class AtomFeature(_Feature, abc.ABC):
     """The base class for atomic features."""
-
-    @abc.abstractmethod
-    def __len__(self):
-        raise NotImplementedError
 
 
 @pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
@@ -236,6 +268,21 @@ class AtomAverageFormalCharge(AtomFeature):
         return 1
 
 
+@pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.allow})
+class CustomAtomFeature(AtomFeature):
+    """A wrapper around a custom atom feature defined outside of NAGL."""
+
+    type: str = pydantic.Field(..., description="The custom feature type.")
+
+    def __call__(self, molecule: "Molecule") -> torch.Tensor:
+        feature = _get_custom_feature(self, _CUSTOM_ATOM_FEATURES)
+        return feature(molecule)
+
+    def __len__(self):
+        feature = _get_custom_feature(self, _CUSTOM_ATOM_FEATURES)
+        return len(feature)
+
+
 AtomFeatureType = typing.Union[
     AtomicElement,
     AtomConnectivity,
@@ -243,7 +290,22 @@ AtomFeatureType = typing.Union[
     AtomIsInRing,
     AtomFormalCharge,
     AtomAverageFormalCharge,
+    CustomAtomFeature,
 ]
+
+
+def register_atom_feature(feature_cls: typing.Type[AtomFeature]):
+    """Register a class of atom feature for use with NAGL.
+
+    This will make the feature available from the model configuration.
+    """
+
+    if not issubclass(feature_cls, AtomFeature):
+        raise TypeError("feature should subclass `AtomFeature`")
+    if not hasattr(feature_cls, "type"):
+        raise AttributeError(f"{feature_cls.__name__} has no `type` attribute.")
+
+    _CUSTOM_ATOM_FEATURES[feature_cls.type] = feature_cls
 
 
 class AtomFeaturizer(_Featurizer[AtomFeature]):
@@ -337,8 +399,39 @@ class BondOrder(BondFeature):
         return len(self.values)
 
 
+@pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.allow})
+class CustomBondFeature(BondFeature):
+    """A wrapper around a custom bond feature defined outside of NAGL."""
+
+    type: str = pydantic.Field(..., description="The custom feature type.")
+
+    def __call__(self, molecule: "Molecule") -> torch.Tensor:
+        feature = _get_custom_feature(self, _CUSTOM_BOND_FEATURES)
+        return feature(molecule)
+
+    def __len__(self):
+        feature = _get_custom_feature(self, _CUSTOM_BOND_FEATURES)
+        return len(feature)
+
+
+BondFeatureType = typing.Union[
+    BondIsAromatic, BondIsInRing, BondOrder, CustomBondFeature
+]
+
+
+def register_bond_feature(feature_cls: typing.Type[BondFeature]):
+    """Register a class of bond feature for use with NAGL.
+
+    This will make the feature available from the model configuration.
+    """
+
+    if not issubclass(feature_cls, BondFeature):
+        raise TypeError("feature should subclass `BondFeature`")
+    if not hasattr(feature_cls, "type"):
+        raise AttributeError(f"{feature_cls.__name__} has no `type` attribute.")
+
+    _CUSTOM_BOND_FEATURES[feature_cls.type] = feature_cls
+
+
 class BondFeaturizer(_Featurizer[BondFeature]):
     """A class for featurizing the bonds in a molecule."""
-
-
-BondFeatureType = typing.Union[BondIsAromatic, BondIsInRing, BondOrder]
