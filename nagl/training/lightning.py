@@ -8,9 +8,10 @@ import torch.nn
 from torch.utils.data import DataLoader
 
 import nagl.nn
-import nagl.nn.modules
+import nagl.nn.convolution
 import nagl.nn.pooling
 import nagl.nn.postprocess
+import nagl.nn.readout
 from nagl.config import Config
 from nagl.config.data import Dataset as DatasetConfig
 from nagl.config.model import ActivationFunction
@@ -43,8 +44,10 @@ class DGLMoleculeLightningModel(pl.LightningModule):
 
         n_input_feats = sum(len(feature) for feature in self.config.model.atom_features)
 
-        self.convolution_module = nagl.nn.modules.ConvolutionModule(
-            config.model.convolution.type,
+        convolution_class = nagl.nn.convolution.get_convolution_layer(
+            config.model.convolution.type
+        )
+        self.convolution_module = convolution_class(
             n_input_feats,
             config.model.convolution.hidden_feats,
             _get_activation(config.model.convolution.activation),
@@ -52,15 +55,15 @@ class DGLMoleculeLightningModel(pl.LightningModule):
         )
         self.readout_modules = torch.nn.ModuleDict(
             {
-                readout_name: nagl.nn.modules.ReadoutModule(
+                readout_name: nagl.nn.readout.ReadoutModule(
                     pooling_layer=nagl.nn.pooling.get_pooling_layer(
                         readout_config.pooling
                     )(),
-                    readout_layers=nagl.nn.Sequential(
+                    forward_layers=nagl.nn.Sequential(
                         config.model.convolution.hidden_feats[-1],
-                        readout_config.readout.hidden_feats,
-                        _get_activation(readout_config.readout.activation),
-                        readout_config.readout.dropout,
+                        readout_config.forward.hidden_feats,
+                        _get_activation(readout_config.forward.activation),
+                        readout_config.forward.dropout,
                     ),
                     postprocess_layer=nagl.nn.postprocess.get_postprocess_layer(
                         readout_config.postprocess
@@ -74,8 +77,9 @@ class DGLMoleculeLightningModel(pl.LightningModule):
         self, molecule: typing.Union[DGLMolecule, DGLMoleculeBatch]
     ) -> typing.Dict[str, torch.Tensor]:
 
-        self.convolution_module(molecule)
-
+        molecule.graph.ndata["h"] = self.convolution_module(
+            molecule.graph, molecule.atom_features
+        )
         readouts: typing.Dict[str, torch.Tensor] = {
             readout_type: readout_module(molecule)
             for readout_type, readout_module in self.readout_modules.items()

@@ -3,12 +3,13 @@ import typing
 import torch.nn.functional
 
 from nagl.molecules import DGLMolecule, DGLMoleculeBatch
-from nagl.nn.modules import ConvolutionModule, ReadoutModule
+from nagl.nn.convolution import ConvolutionModule
+from nagl.nn.readout import ReadoutModule
 
 
-class MoleculeGCNModel(torch.nn.Module):
-    """A model which applies a graph convolutional step followed by multiple (labelled)
-    pooling and readout steps.
+class DGLMoleculeModel(torch.nn.Module):
+    """A model which applies a convolutional step followed by multiple pooling and
+    readout steps.
     """
 
     def __init__(
@@ -17,7 +18,7 @@ class MoleculeGCNModel(torch.nn.Module):
         readout_modules: typing.Dict[str, ReadoutModule],
     ):
 
-        super(MoleculeGCNModel, self).__init__()
+        super(DGLMoleculeModel, self).__init__()
 
         self.convolution_module = convolution_module
         self.readout_modules = torch.nn.ModuleDict(readout_modules)
@@ -26,8 +27,9 @@ class MoleculeGCNModel(torch.nn.Module):
         self, molecule: typing.Union[DGLMolecule, DGLMoleculeBatch]
     ) -> typing.Dict[str, torch.Tensor]:
 
-        self.convolution_module(molecule)
-
+        molecule.graph.ndata["h"] = self.convolution_module(
+            molecule.graph, molecule.atom_features
+        )
         readouts: typing.Dict[str, torch.Tensor] = {
             readout_type: readout_module(molecule)
             for readout_type, readout_module in self.readout_modules.items()

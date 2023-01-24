@@ -6,10 +6,10 @@ import torch.optim
 from torch.utils.data import DataLoader
 
 import nagl.nn
-import nagl.nn.gcn
-import nagl.nn.modules
+import nagl.nn.convolution
 import nagl.nn.pooling
 import nagl.nn.postprocess
+import nagl.nn.readout
 from nagl.config import Config, DataConfig, ModelConfig, OptimizerConfig
 from nagl.config.data import Dataset, Target
 from nagl.config.model import GCNConvolutionModule, ReadoutModule, Sequential
@@ -32,7 +32,7 @@ def mock_config() -> Config:
             readouts={
                 "atom": ReadoutModule(
                     pooling="atom",
-                    readout=Sequential(hidden_feats=[2], activation=["Identity"]),
+                    forward=Sequential(hidden_feats=[2], activation=["Identity"]),
                     postprocess="charges",
                 )
             },
@@ -68,12 +68,8 @@ class TestDGLMoleculeLightningModel:
 
         model = DGLMoleculeLightningModel(mock_config)
 
-        assert isinstance(model.convolution_module, nagl.nn.modules.ConvolutionModule)
-
-        assert isinstance(
-            model.convolution_module.gcn_layers, nagl.nn.gcn.SAGEConvStack
-        )
-        assert len(model.convolution_module.gcn_layers) == 2
+        assert isinstance(model.convolution_module, nagl.nn.convolution.SAGEConvStack)
+        assert len(model.convolution_module) == 2
 
         assert all(x in model.readout_modules for x in ["atom"])
 

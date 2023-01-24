@@ -19,14 +19,14 @@ model:
 
   convolution:
     type: "SAGEConv"
-    hidden_feats: [ 128,    128,    128     2 ]
-    activation:   [ "ReLU", "ReLU", "ReLU", "Identity" ]
+    hidden_feats: [ 128,    128,    128     128 ]
+    activation:   [ "ReLU", "ReLU", "ReLU", "ReLU" ]
 
   readouts:
     charges:
       pooling: "atom"
       readout:
-        hidden_feats: [ 128,    128,    128     2 ]
+        hidden_feats: [ 64,    64,    64     2 ]
         activation:   [ "ReLU", "ReLU", "ReLU", "Identity" ]
       postprocess:
         type: "charges"
@@ -34,29 +34,27 @@ model:
 data:
 
   training:
-    sources: []
+    sources: ["my-training-set.parquet"]
     targets:
       - column: "charges-am1bcc"
         metric: "rmse"
         readout: "charges"
-    batch_size: ...
+    batch_size: 256
 
   validation:
-    sources: []
+    sources: ["my-validation-set.parquet"]
     targets:
       - column: "charges-am1bcc"
         metric: "rmse"
         readout: "charges"
-    batch_size: ...
 
   test:
-    sources: []
+    sources: ["my-test-set.parquet"]
     targets:
       - column: "charges-am1bcc"
         metric: "rmse"
         readout: "charges"
-    batch_size: ...
 
 optimizer:
   type: "Adam"
-  lr: ...
+  lr: 0.001

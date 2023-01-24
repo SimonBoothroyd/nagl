@@ -2,14 +2,13 @@
 toolkit.
 """
 import contextlib
-import json
 import pathlib
 import typing
 
 from openff.utilities import requires_package
 from openff.utilities.exceptions import MissingOptionalDependencyError
 
-from nagl import data
+from nagl.utilities.normalization import NORMALIZATION_SMARTS
 
 if typing.TYPE_CHECKING:
     from openff.toolkit.topology import Molecule
@@ -285,10 +284,7 @@ def normalize_molecule(molecule: "Molecule", check_output: bool = True) -> "Mole
     from openff.toolkit.topology import Molecule
     from openff.toolkit.utils import ToolkitUnavailableException
 
-    reaction_smarts_path = data.get_file_path("normalizations.json")
-
-    with open(reaction_smarts_path) as file:
-        reaction_smarts = [entry["smarts"] for entry in json.load(file)]
+    reaction_smarts = [entry["smarts"] for entry in NORMALIZATION_SMARTS]
 
     try:  # pragma: no cover
         # normal_molecule = _oe_normalize_molecule(molecule, reaction_smarts)

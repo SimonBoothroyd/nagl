@@ -29,8 +29,8 @@ class Dataset:
     """Defines the targets to train / evaluate the model against during a given
     stage (i.e train, val, test)."""
 
-    sources: typing.List[str] = pydantic.Field(
-        ..., description="The paths to the data."
+    sources: typing.Optional[typing.List[str]] = pydantic.Field(
+        None, description="The paths to the data."
     )
     targets: typing.List[Target] = pydantic.Field(
         ..., description="The targets to train / evaluate against."

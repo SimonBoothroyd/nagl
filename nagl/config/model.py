@@ -57,7 +57,7 @@ class ReadoutModule:
     pooling: PoolingType = pydantic.Field(
         ..., description="The type of Janossy pooling to apply."
     )
-    readout: Sequential = pydantic.Field(
+    forward: Sequential = pydantic.Field(
         ...,
         description="The feed forward network to map GCN features to desired outputs.",
     )
@@ -82,5 +82,5 @@ class ModelConfig:
         ..., description="The convolution module to pass the molecule features through."
     )
     readouts: typing.Dict[str, ReadoutModule] = pydantic.Field(
-        ..., description="The readout modules to map convolution features to outputs."
+        ..., description="The readout nn to map convolution features to outputs."
     )
