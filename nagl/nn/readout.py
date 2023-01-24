@@ -1,47 +1,11 @@
 import typing
 
 import torch
-from typing_extensions import Literal
 
 from nagl.molecules import DGLMolecule, DGLMoleculeBatch
 from nagl.nn import Sequential
-from nagl.nn.gcn import GCNStack, SAGEConvStack
 from nagl.nn.pooling import PoolingLayer
 from nagl.nn.postprocess import PostprocessLayer
-
-GCNArchitecture = Literal["SAGEConv"]
-
-_GRAPH_ARCHITECTURES: typing.Dict[GCNArchitecture, typing.Type[GCNStack]] = {
-    "SAGEConv": SAGEConvStack,
-}
-
-
-class ConvolutionModule(torch.nn.Module):
-    """A module that applies a series of graph convolutions to a given input molecule."""
-
-    def __init__(
-        self,
-        architecture: GCNArchitecture,
-        in_feats: int,
-        hidden_feats: typing.List[int],
-        activation: typing.Optional[typing.List[torch.nn.Module]] = None,
-        dropout: typing.Optional[typing.List[typing.Optional[float]]] = None,
-    ):
-
-        super().__init__()
-
-        self.gcn_layers = _GRAPH_ARCHITECTURES[architecture](
-            in_feats=in_feats,
-            hidden_feats=hidden_feats,
-            activation=activation,
-            dropout=dropout,
-        )
-
-    def forward(self, molecule: typing.Union[DGLMolecule, DGLMoleculeBatch]):
-
-        molecule.graph.ndata["h"] = self.gcn_layers(
-            molecule.graph, molecule.atom_features
-        )
 
 
 class ReadoutModule(torch.nn.Module):
@@ -53,7 +17,7 @@ class ReadoutModule(torch.nn.Module):
     def __init__(
         self,
         pooling_layer: PoolingLayer,
-        readout_layers: Sequential,
+        forward_layers: Sequential,
         postprocess_layer: typing.Optional[PostprocessLayer] = None,
     ):
         """
@@ -63,8 +27,8 @@ class ReadoutModule(torch.nn.Module):
                 computed by a graph convolution into appropriate extended features (e.g.
                 bond or angle features). The concatenated features will be provided as
                 input to the dense readout layers.
-            readout_layers: The dense NN readout layers to apply to the output of the
-                pooling layers.
+            forward_layers: The dense NN layers to apply to the output of the
+                pooling layers that will predict the readout values.
             postprocess_layer: A (optional) postprocessing layer to apply to the output
                 of the readout layers
         """
@@ -72,7 +36,7 @@ class ReadoutModule(torch.nn.Module):
         super().__init__()
 
         self.pooling_layer = pooling_layer
-        self.readout_layers = readout_layers
+        self.forward_layers = forward_layers
         self.postprocess_layer = postprocess_layer
 
     def forward(
@@ -80,7 +44,7 @@ class ReadoutModule(torch.nn.Module):
     ) -> torch.Tensor:
 
         x = self.pooling_layer.forward(molecule)
-        x = self.readout_layers.forward(x)
+        x = self.forward_layers.forward(x)
 
         if self.postprocess_layer is not None:
             x = self.postprocess_layer.forward(molecule, x)

@@ -1,10 +1,3 @@
-# The ``GraphGCNStack`` class is based upon the ``dgllife.model.GraphSAGE`` module which
-# is licensed under:
-#
-#     Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-#     SPDX-License-Identifier: Apache-2.0
-#
-# The code has been modified so that the architecture of the GCN is abstracted.
 import abc
 import typing
 
@@ -23,11 +16,7 @@ T = typing.TypeVar("T", bound=str)
 
 
 class GCNStack(torch.nn.ModuleList, typing.Generic[S, T], abc.ABC):
-    """A wrapper around a stack of GCN graph convolutional layers.
-
-    Note:
-        This class is based on the ``dgllife.model.SAGEConv`` module.
-    """
+    """A wrapper around a stack of GCN graph convolutional layers."""
 
     def __init__(
         self,
@@ -35,7 +24,7 @@ class GCNStack(torch.nn.ModuleList, typing.Generic[S, T], abc.ABC):
         hidden_feats: typing.List[int],
         activation: typing.Optional[typing.List[torch.nn.Module]] = None,
         dropout: typing.Optional[typing.List[float]] = None,
-        aggregator_type: typing.Optional[typing.List[T]] = None,
+        aggregator: typing.Optional[typing.List[T]] = None,
     ):
         """
         Args:
@@ -43,13 +32,13 @@ class GCNStack(torch.nn.ModuleList, typing.Generic[S, T], abc.ABC):
             hidden_feats: ``hidden_feats[i]`` gives the size of node representations
                 after the i-th GCN layer. ``len(hidden_feats)`` equals the number of
                 GCN layers.
-            activation: If not None, ``activation[i]`` gives the activation function to
-                be used for the i-th GCN layer. ``len(activation)`` equals the number
-                of GCN layers.
+            activation: ``activation[i]`` decides the activation function to apply to
+                the i-th GCN layer. ``len(activation)`` equals the number of GCN layers.
+                In no values are specified ReLU will be used after each layer.
             dropout: ``dropout[i]`` decides the dropout probability on the output of the
                 i-th GCN layer. ``len(dropout)`` equals the number of GCN layers.
                 By default, no dropout is performed for all layers.
-            aggregator_type: ``aggregator_type[i]`` decides the aggregator type for the
+            aggregator: ``aggregator[i]`` decides the aggregator type for the
                 i-th GCN layer.
         """
 
@@ -57,29 +46,22 @@ class GCNStack(torch.nn.ModuleList, typing.Generic[S, T], abc.ABC):
 
         n_layers = len(hidden_feats)
 
-        # Set the default options.
-        if activation is None:
-            activation = [torch.nn.functional.relu for _ in range(n_layers)]
-        if dropout is None:
-            dropout = [0.0 for _ in range(n_layers)]
-        if aggregator_type is None:
-            aggregator_type = [self._default_aggregator_type() for _ in range(n_layers)]
+        activation = [torch.nn.ReLU()] * n_layers if activation is None else activation
+        dropout = [0.0] * n_layers if dropout is None else dropout
 
-        lengths = [
-            len(hidden_feats),
-            len(activation),
-            len(dropout),
-            len(aggregator_type),
-        ]
+        default_aggregator = self._default_aggregator()
+        aggregator = (
+            [default_aggregator] * n_layers if aggregator is None else aggregator
+        )
+
+        lengths = [len(hidden_feats), len(activation), len(dropout), len(aggregator)]
 
         if len(set(lengths)) != 1:
 
             raise ValueError(
-                f"`hidden_feats`, `activation`, `dropout` and `aggregator_type` must "
+                f"`hidden_feats`, `activation`, `dropout` and `aggregator` must "
                 f"be lists of the same length ({lengths})"
             )
-
-        self.hidden_feats = hidden_feats
 
         for i in range(n_layers):
 
@@ -87,7 +69,7 @@ class GCNStack(torch.nn.ModuleList, typing.Generic[S, T], abc.ABC):
                 self._gcn_factory(
                     in_feats,
                     hidden_feats[i],
-                    aggregator_type[i],
+                    aggregator[i],
                     dropout[i],
                     activation[i],
                 )
@@ -97,7 +79,7 @@ class GCNStack(torch.nn.ModuleList, typing.Generic[S, T], abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def _default_aggregator_type(cls) -> T:
+    def _default_aggregator(cls) -> T:
         """The default aggregator type to use for the GCN layers."""
 
     @classmethod
@@ -152,7 +134,7 @@ class SAGEConvStack(GCNStack[dgl.nn.pytorch.SAGEConv, SAGEConvAggregatorType]):
     """A wrapper around a stack of SAGEConv graph convolutional layers"""
 
     @classmethod
-    def _default_aggregator_type(cls) -> SAGEConvAggregatorType:
+    def _default_aggregator(cls) -> SAGEConvAggregatorType:
         return "mean"
 
     @classmethod
@@ -173,3 +155,16 @@ class SAGEConvStack(GCNStack[dgl.nn.pytorch.SAGEConv, SAGEConvAggregatorType]):
             feat_drop=dropout,
             aggregator_type=aggregator_type,
         )
+
+
+ConvolutionModule = typing.Union[GCNStack]
+
+
+def get_convolution_layer(
+    type_: typing.Literal["SAGEConv"],
+) -> typing.Type[ConvolutionModule]:
+
+    if type_.lower() == "sageconv":
+        return SAGEConvStack
+
+    raise NotImplementedError(f"{type_} not a supported convolution layer type")
