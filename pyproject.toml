@@ -23,4 +23,4 @@ namespaces = true
 where = ["."]
 
 [tool.setuptools.package-data]
-"nagl" = ["data/**/*"]
+"nagl" = ["reporting/template.html"]
