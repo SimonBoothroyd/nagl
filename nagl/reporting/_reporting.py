@@ -32,7 +32,7 @@ def _draw_molecule_with_atom_labels(
 
     if highlight_outliers:
 
-        delta_sq = torch.abs(pred - ref)
+        delta_sq = torch.abs(pred.squeeze() - ref.squeeze())
 
         delta_mean = delta_sq.mean()
         delta_std = delta_sq.std()
@@ -44,7 +44,7 @@ def _draw_molecule_with_atom_labels(
     pred_molecule: Chem = molecule.to_rdkit()
 
     for atom, label in zip(pred_molecule.GetAtoms(), pred.detach().numpy()):
-        atom.SetProp("atomNote", str(f"{label:.3f}"))
+        atom.SetProp("atomNote", str(f"{float(label):.3f}"))
 
     Draw.PrepareMolForDrawing(pred_molecule)
 

@@ -171,14 +171,17 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
 
         self._data_sets: typing.Dict[str, DGLMoleculeDataset] = {}
 
-        self._data_set_configs: typing.Dict[str, typing.Optional[DatasetConfig]] = {
+        data_set_configs = {
             "train": config.data.training,
             "val": config.data.validation,
             "test": config.data.test,
         }
 
+        self._data_set_configs: typing.Dict[str, DatasetConfig] = {
+            k: v for k, v in data_set_configs.items() if v is not None
+        }
         self._data_set_paths = {
-            stage: None if dataset_config is None else dataset_config.sources
+            stage: dataset_config.sources
             for stage, dataset_config in self._data_set_configs.items()
         }
 
@@ -187,22 +190,24 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
 
     def _create_dataloader(
         self,
-        dataset_config: typing.Optional[DatasetConfig],
+        dataset_config: DatasetConfig,
         stage: typing.Literal["train", "val", "test"],
     ):
-
-        if dataset_config is None:
-            return
-
         def _factory() -> DataLoader:
 
             target_data = self._data_sets[stage]
 
+            batch_size = (
+                len(target_data)
+                if dataset_config.batch_size is None
+                else dataset_config.batch_size
+            )
+
             return DataLoader(
                 dataset=target_data,
-                batch_size=dataset_config.batch_size,
+                batch_size=batch_size,
                 shuffle=False,
-                num_workers=1,
+                num_workers=0,
                 collate_fn=collate_dgl_molecules,
             )
 
@@ -211,9 +216,6 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
     def prepare_data(self):
 
         for stage, stage_paths in self._data_set_paths.items():
-
-            if stage_paths is None:
-                continue
 
             dataset_config = self._data_set_configs[stage]
             columns = sorted({target.column for target in dataset_config.targets})
@@ -239,10 +241,7 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
         if self._cache_dir is None:
             return
 
-        stages = [stage] if stage is not None else [*self._data_set_paths]
-        stages = [stage for stage in stages if self._data_set_paths[stage] is not None]
-
-        for stage in stages:
+        for stage in self._data_set_paths:
 
             self._data_sets[stage] = DGLMoleculeDataset.from_featurized(
                 self._cache_dir / f"{stage}.parquet", columns=None

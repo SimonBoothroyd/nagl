@@ -320,7 +320,7 @@ def collate_dgl_molecules(
     ]
 ) -> typing.Tuple[DGLMoleculeBatch, typing.Dict[str, torch.Tensor]]:
 
-    if isinstance(entries[0], dgl.DGLGraph):
+    if isinstance(entries[0], (dgl.DGLGraph, DGLMolecule)):
         entries = [entries]
 
     molecules, labels = zip(*entries)
