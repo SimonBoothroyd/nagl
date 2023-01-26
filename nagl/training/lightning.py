@@ -171,14 +171,17 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
 
         self._data_sets: typing.Dict[str, DGLMoleculeDataset] = {}
 
-        self._data_set_configs: typing.Dict[str, typing.Optional[DatasetConfig]] = {
+        data_set_configs = {
             "train": config.data.training,
             "val": config.data.validation,
             "test": config.data.test,
         }
 
+        self._data_set_configs: typing.Dict[str, DatasetConfig] = {
+            k: v for k, v in data_set_configs.items() if v is not None
+        }
         self._data_set_paths = {
-            stage: None if dataset_config is None else dataset_config.sources
+            stage: dataset_config.sources
             for stage, dataset_config in self._data_set_configs.items()
         }
 
@@ -187,13 +190,9 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
 
     def _create_dataloader(
         self,
-        dataset_config: typing.Optional[DatasetConfig],
+        dataset_config: DatasetConfig,
         stage: typing.Literal["train", "val", "test"],
     ):
-
-        if dataset_config is None:
-            return
-
         def _factory() -> DataLoader:
 
             target_data = self._data_sets[stage]
@@ -217,9 +216,6 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
     def prepare_data(self):
 
         for stage, stage_paths in self._data_set_paths.items():
-
-            if stage_paths is None:
-                continue
 
             dataset_config = self._data_set_configs[stage]
             columns = sorted({target.column for target in dataset_config.targets})
