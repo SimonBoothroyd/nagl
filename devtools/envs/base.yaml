@@ -11,12 +11,15 @@ dependencies:
   - openff-utilities >=0.1.5
   - pydantic
 
+  - rdkit
+
   - click
   - click-option-group
 
   - pytorch
   - dgl >=0.7
 
+  - jinja2
   - tqdm
   - rich
 
@@ -27,7 +30,6 @@ dependencies:
   - pyarrow
     ## Molecule loading and processing.
   - openff-toolkit-base >=0.11.0
-  - rdkit
   - ambertools
 
     # Dev / Testing
