@@ -22,11 +22,11 @@ def test_draw_molecule_with_atom_labels():
 def test_generate_per_atom_jinja_dicts():
 
     entries = [
-        (Molecule.from_smiles("[H]CL"), torch.zeros(2), torch.zeros(2)),
+        (Molecule.from_smiles("[H]Cl"), torch.zeros(2), torch.zeros(2)),
         (DGLMolecule.from_smiles("[H]Br", [], []), torch.zeros(2), torch.zeros(2)),
     ]
 
-    jinja_dicts = _generate_per_atom_jinja_dicts(entries, ["rmse"])
+    jinja_dicts = _generate_per_atom_jinja_dicts(entries, ["rmse"], True, 1.0)
     assert len(jinja_dicts) == 2
 
     assert all("img" in item for item in jinja_dicts)

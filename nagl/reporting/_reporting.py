@@ -18,11 +18,28 @@ _TEMPLATE_DIR = pathlib.Path(__file__).parent
 
 
 def _draw_molecule_with_atom_labels(
-    molecule: "Molecule", pred: torch.Tensor, ref: torch.Tensor
+    molecule: "Molecule",
+    pred: torch.Tensor,
+    ref: torch.Tensor,
+    highlight_outliers: bool = False,
+    outlier_threshold: float = 1.0,
 ) -> str:
     """Renders two molecules with per atom labels as an SVG image - one showing
     predicted labels and another showing reference ones.
     """
+
+    highlight_atoms = None
+
+    if highlight_outliers:
+
+        delta_sq = torch.abs(pred - ref)
+
+        delta_mean = delta_sq.mean()
+        delta_std = delta_sq.std()
+
+        should_highlight = (delta_sq - delta_mean) > (delta_std * outlier_threshold)
+
+        highlight_atoms = [i for i, outlier in enumerate(should_highlight) if outlier]
 
     pred_molecule: Chem = molecule.to_rdkit()
 
@@ -48,6 +65,7 @@ def _draw_molecule_with_atom_labels(
         subImgSize=(400, 400),
         useSVG=True,
         drawOptions=draw_options,
+        highlightAtomLists=[highlight_atoms, highlight_atoms],
     )
     return image
 
@@ -55,6 +73,8 @@ def _draw_molecule_with_atom_labels(
 def _generate_per_atom_jinja_dicts(
     entries: typing.List[typing.Tuple["Molecule", torch.Tensor, torch.Tensor]],
     metrics: typing.List[MetricType],
+    highlight_outliers: bool,
+    outlier_threshold: float,
 ):
 
     metrics_funcs = {
@@ -68,15 +88,18 @@ def _generate_per_atom_jinja_dicts(
         if isinstance(molecule, DGLMolecule):
             molecule = molecule.to_openff()
 
-        image = _draw_molecule_with_atom_labels(molecule, per_atom_pred, per_atom_ref)
-
-        image_encoded = base64.b64encode(image.encode()).decode()
-        image_src = f"data:image/svg+xml;base64,{image_encoded}"
-
         entry_metrics = {
             metric.upper(): f"{metrics_func(per_atom_pred, per_atom_ref):.4f}"
             for metric, metrics_func in metrics_funcs.items()
         }
+
+        image = _draw_molecule_with_atom_labels(
+            molecule, per_atom_pred, per_atom_ref, highlight_outliers, outlier_threshold
+        )
+
+        image_encoded = base64.b64encode(image.encode()).decode()
+        image_src = f"data:image/svg+xml;base64,{image_encoded}"
+
         return_value.append({"img": image_src, "metrics": entry_metrics})
 
     return return_value
@@ -89,6 +112,8 @@ def create_atom_label_report(
     output_path: pathlib.Path,
     top_n_entries: int = 100,
     bottom_n_entries: int = 100,
+    highlight_outliers: bool = True,
+    outlier_threshold: float = 1.0,
 ):
     """Creates a simple HTML report that shows the values of predicted and reference
     labels for the top N and bottom M entries in the specified list.
@@ -106,6 +131,9 @@ def create_atom_label_report(
             ``rank_by``.
         bottom_n_entries: The number of lowest ranking entries to show according to
             ``rank_by``.
+        highlight_outliers: Whether to highlight atoms whose predicted and reference
+            labels differ by more than ``outlier_threshold * std(|pred - ref|)``
+        outlier_threshold: The threshold for detecting outliers.
     """
 
     entries_and_ranks = []
@@ -122,10 +150,16 @@ def create_atom_label_report(
     entries_and_ranks = sorted(entries_and_ranks, key=lambda x: x[1], reverse=True)
 
     top_n_structures = _generate_per_atom_jinja_dicts(
-        [x for x, _ in entries_and_ranks[:top_n_entries]], metrics
+        [x for x, _ in entries_and_ranks[:top_n_entries]],
+        metrics,
+        highlight_outliers,
+        outlier_threshold,
     )
     bottom_n_structures = _generate_per_atom_jinja_dicts(
-        [x for x, _ in entries_and_ranks[-bottom_n_entries:]], metrics
+        [x for x, _ in entries_and_ranks[-bottom_n_entries:]],
+        metrics,
+        highlight_outliers,
+        outlier_threshold,
     )
 
     template_loader = jinja2.FileSystemLoader(searchpath=_TEMPLATE_DIR)
