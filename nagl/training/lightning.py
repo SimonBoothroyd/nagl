@@ -198,11 +198,17 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
 
             target_data = self._data_sets[stage]
 
+            batch_size = (
+                len(target_data)
+                if dataset_config.batch_size is None
+                else dataset_config.batch_size
+            )
+
             return DataLoader(
                 dataset=target_data,
-                batch_size=dataset_config.batch_size,
+                batch_size=batch_size,
                 shuffle=False,
-                num_workers=1,
+                num_workers=0,
                 collate_fn=collate_dgl_molecules,
             )
 
@@ -239,10 +245,7 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
         if self._cache_dir is None:
             return
 
-        stages = [stage] if stage is not None else [*self._data_set_paths]
-        stages = [stage for stage in stages if self._data_set_paths[stage] is not None]
-
-        for stage in stages:
+        for stage in self._data_set_paths:
 
             self._data_sets[stage] = DGLMoleculeDataset.from_featurized(
                 self._cache_dir / f"{stage}.parquet", columns=None
