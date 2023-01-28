@@ -10,26 +10,26 @@ dependencies:
 
   - openff-utilities >=0.1.5
   - pydantic
+  - jinja2
 
+  - openff-toolkit-base >=0.11.0
   - rdkit
 
   - click
   - click-option-group
 
   - pytorch
+  - pytorch-lightning
   - dgl >=0.7
+  - pyarrow
+  - mlflow
 
-  - jinja2
   - tqdm
   - rich
 
-    # Optional dependencies
+  # Optional dependencies
 
-    ## Model training
-  - pytorch-lightning
-  - pyarrow
-    ## Molecule loading and processing.
-  - openff-toolkit-base >=0.11.0
+  ### Computing charges
   - ambertools
 
     # Dev / Testing

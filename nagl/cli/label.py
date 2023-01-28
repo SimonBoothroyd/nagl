@@ -1,7 +1,6 @@
 import functools
 import json
 import logging
-import multiprocessing
 import pathlib
 
 import click
@@ -10,8 +9,8 @@ from click_option_group import optgroup
 from openff.utilities import requires_package
 
 import nagl
-from nagl.labelling import compute_batch_charges
-from nagl.utilities.provenance import get_labelling_software_provenance
+from nagl.labelling import compute_charges_func, label_molecules
+from nagl.utilities.provenance import default_software_provenance
 from nagl.utilities.toolkits import capture_toolkit_warnings, stream_from_file
 
 _logger = logging.getLogger("nagl.label")
@@ -74,10 +73,10 @@ _OUTPUT_PATH = click.Path(
 @optgroup.group("Parallelization configuration")
 @optgroup.option(
     "--n-workers",
-    help="The number of workers to distribute the labelling across. Use -1 to request "
-    "one worker per batch.",
+    help="The number of workers to distribute the labelling across. Use 0 to disable "
+    "multiprocessing.",
     type=int,
-    default=1,
+    default=0,
     show_default=True,
 )
 @requires_package("openff.toolkit")
@@ -113,42 +112,25 @@ def label_cli(
             f"{len(all_smiles) - len(unique_smiles)} duplicate molecules were ignored"
         )
 
-    label_func = functools.partial(
-        compute_batch_charges,
+    label_func = compute_charges_func(
         methods=["am1", "am1bcc"],
         n_conformers=n_conformers,
         rms_cutoff=rms_cutoff,
+    )
+    progress_bar = functools.partial(
+        rich.progress.track, description="labelling molecules"
+    )
+
+    labels, errors = label_molecules(
+        unique_smiles,
+        label_func,
+        metadata={"package-versions": json.dumps(default_software_provenance())},
         guess_stereo=guess_stereo,
+        progress_iterator=progress_bar,
+        n_processes=n_workers,
     )
 
-    batch_smiles = [[smiles] for smiles in unique_smiles]
+    for error in errors:
+        _logger.warning(error)
 
-    with multiprocessing.Pool(processes=n_workers) as pool:
-        results = pool.imap(
-            label_func,
-            rich.progress.track(batch_smiles, description="labelling molecules"),
-        )
-
-    rows = []
-
-    for (smiles,), (result, error) in zip(batch_smiles, results):
-
-        if error is not None:
-            _logger.warning(f"failed to label {smiles} - {error}")
-            continue
-
-        rows.append((result["smiles"], result["am1"], result["am1bcc"]))
-
-    smiles, charges_am1, charges_am1bcc = zip(*rows)
-
-    table = pyarrow.table(
-        [smiles, charges_am1, charges_am1bcc],
-        ["smiles", "charges-am1", "charges-am1bcc"],
-        metadata={"package-versions": json.dumps(get_labelling_software_provenance())},
-    )
-
-    pyarrow.parquet.write_table(table, output_path)
-
-
-if __name__ == "__main__":
-    label_cli()
+    pyarrow.parquet.write_table(labels, output_path)

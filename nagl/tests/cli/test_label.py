@@ -1,7 +1,6 @@
 import logging
 import pathlib
 
-import numpy
 import pyarrow.parquet
 import pytest
 from openff.toolkit.topology import Molecule
@@ -23,22 +22,7 @@ def mock_molecules(tmp_path) -> pathlib.Path:
     return molecule_path
 
 
-def test_label_cli(tmp_cwd, mock_molecules, runner, mocker, caplog):
-
-    mock_results = [
-        (None, "Some error occured"),
-        (
-            {
-                "smiles": "[H:1][C:2]([H:3])([H:4])[H:5]",
-                "am1": numpy.arange(5),
-                "am1bcc": numpy.arange(5) + 5,
-            },
-            None,
-        ),
-    ]
-    mocker.patch(
-        "multiprocessing.Pool", autospec=True
-    ).return_value.__enter__.return_value.imap.return_value = mock_results
+def test_label_cli(tmp_cwd, mock_molecules, runner, caplog):
 
     expected_output_path = tmp_cwd / "labelled.parquet"
 
@@ -58,7 +42,7 @@ def test_label_cli(tmp_cwd, mock_molecules, runner, mocker, caplog):
         print(result.stdout, flush=True)
         raise result.exception
 
-    assert "failed to label [H]C(F)(Cl)Br - Some error occured" in caplog.text
+    assert "Failed to process [H]C(F)(Cl)Br" in caplog.text
 
     assert expected_output_path.is_file()
 

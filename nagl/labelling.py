@@ -1,9 +1,13 @@
+import contextlib
 import copy
+import functools
+import multiprocessing
 import traceback
 import typing
+from collections import defaultdict
 
 import numpy
-from openff.utilities import requires_package
+import pyarrow
 
 from nagl.utilities.smiles import smiles_to_molecule
 from nagl.utilities.toolkits import capture_toolkit_warnings
@@ -16,35 +20,34 @@ _OPENFF_CHARGE_METHODS = {"am1": "am1-mulliken", "am1bcc": "am1bcc"}
 _OPENFF_WBO_METHODS = {"am1": "am1-wiberg"}
 
 ChargeMethod = typing.Literal["am1", "am1bcc"]
-WBOMethod = typing.Literal["am1"]
+
+Labels = typing.Dict[str, numpy.ndarray]
+LabelFunction = typing.Callable[["Molecule"], Labels]
+
+ProgressIterator = typing.Callable[
+    [typing.Iterable[typing.Union[str, "Molecule"]]],
+    typing.Iterable[typing.Union[str, "Molecule"]],
+]
 
 
-DataLabels = typing.Dict[str, numpy.ndarray]
-
-
-@requires_package("openff.toolkit")
 def compute_charges(
-    molecule: typing.Union[str, "Molecule"],
+    molecule: "Molecule",
     methods: typing.Optional[typing.Union[ChargeMethod, typing.List[ChargeMethod]]],
     n_conformers: int = 500,
     rms_cutoff: float = 0.05,
-    guess_stereo: bool = True,
-) -> DataLabels:
+) -> Labels:
     """Computes sets of partial charges  for an input molecule.
 
     Notes:
         Conformers will be pruned using the ELF10 method provided by the OpenFF toolkit
 
     Args:
-        molecule: The molecule (or SMILES representation of the molecule) to label.
+        molecule: The molecule to label.
         methods: The method(s) to compute the partial charges using. By
             default, all available methods will be used.
         n_conformers: The *maximum* number of conformers to compute partial charge and
             bond orders using.
         rms_cutoff: The RMS cutoff [Å] to use when generating the conformers.
-        guess_stereo: Whether to guess the stereochemistry of the SMILES
-            representation of the molecule if provided and if the stereochemistry of
-            some atoms / bonds is not fully defined.
 
     Returns:
         The labelled molecule stored in a record object
@@ -52,10 +55,7 @@ def compute_charges(
 
     from openff.units import unit
 
-    if isinstance(molecule, str):
-        molecule = smiles_to_molecule(molecule, guess_stereo)
-    else:
-        molecule = copy.deepcopy(molecule)
+    molecule = copy.deepcopy(molecule)
 
     methods = [methods] if isinstance(methods, str) else methods
     methods = methods if methods is not None else [*_OPENFF_CHARGE_METHODS]
@@ -75,60 +75,137 @@ def compute_charges(
         charges = [
             atom.partial_charge.m_as(unit.elementary_charge) for atom in molecule.atoms
         ]
-        return_value[method] = numpy.array(charges)
+        return_value[f"charges-{method}"] = numpy.array(charges).reshape(-1, 1)
 
     return return_value
 
 
-@requires_package("openff.toolkit")
-def compute_batch_charges(
-    molecules: typing.List[typing.Union[str, "Molecule"]],
+def compute_charges_func(
     methods: typing.Optional[typing.Union[ChargeMethod, typing.List[ChargeMethod]]],
     n_conformers: int = 500,
     rms_cutoff: float = 0.05,
-    guess_stereo: bool = True,
-    progress_iterator: typing.Optional[typing.Any] = None,
-) -> typing.List[typing.Tuple[typing.Optional[DataLabels], typing.Optional[str]]]:
-    """Computes charges for a batch of molecules using ``compute_charges``.
+) -> LabelFunction:
+    """Returns a function for computing a set of partial charges for an input molecule.
+    See ``nagl.labelling.compute_charges`` for details.
 
     Args:
-        molecules: A list of the molecule (or SMILES representation of the molecules) to
-            label.
         methods: The method(s) to compute the partial charges using. By
             default, all available methods will be used.
         n_conformers: The *maximum* number of conformers to compute partial charge and
             bond orders using.
         rms_cutoff: The RMS cutoff [Å] to use when generating the conformers.
-        guess_stereo: Whether to guess the stereochemistry of the SMILES
-            representation of the molecule if provided and if the stereochemistry of
-            some atoms / bonds is not fully defined.
-        progress_iterator: An iterator (each a ``tqdm``) to loop over all molecules
-           using. This is useful if you wish to display a progress bar for example.
+
     Returns:
-        A list of tuples of the form ``(labelled_record, error_message)``.
+        A wrapped version of ``nagl.labelling.compute_charges`` that only requires
+        a molecule as input.
+    """
+
+    return functools.partial(
+        compute_charges,
+        methods=methods,
+        n_conformers=n_conformers,
+        rms_cutoff=rms_cutoff,
+    )
+
+
+@contextlib.contextmanager
+def _get_map_func(
+    n_processes: int,
+) -> typing.Callable[[typing.Callable, typing.Iterable], typing.Any]:
+
+    if n_processes > 0:
+
+        with multiprocessing.Pool(n_processes) as pool:
+            yield pool.imap
+
+    else:
+        yield map
+
+
+def _label_molecule(
+    molecule: typing.Union[str, "Molecule"],
+    label_func: LabelFunction,
+    guess_stereo: bool = True,
+) -> typing.Tuple[typing.Optional[Labels], typing.Optional[str]]:
+
+    try:
+
+        molecule = (
+            molecule
+            if not isinstance(molecule, str)
+            else smiles_to_molecule(molecule, guess_stereo)
+        )
+        return label_func(molecule), None
+
+    except BaseException as e:
+
+        formatted_traceback = traceback.format_exception(type(e), e, e.__traceback__)
+        return None, f"Failed to process {str(molecule)}: {formatted_traceback}"
+
+
+def label_molecules(
+    molecules: typing.List[typing.Union[str, "Molecule"]],
+    label_func: LabelFunction,
+    metadata: typing.Optional[typing.Dict[str, str]] = None,
+    guess_stereo: bool = True,
+    progress_iterator: typing.Optional[ProgressIterator] = None,
+    n_processes: int = 0,
+) -> typing.Tuple[typing.Optional[pyarrow.Table], typing.List[str]]:
+    """Computes labels for a batch of molecules using ``label_func``.
+
+    Args:
+        molecules: A list of the molecule (or SMILES representation of the molecules) to
+            label.
+        label_func: A function that should take a molecule or SMILES pattern as input
+            and return a dictionary of labels.
+
+            The labels **must** contain a ``'smiles'`` key that corresponds to the
+            **mapped** SMILES representation of the molecule that was labelled.
+
+            Each additional key should map to a 2D numpy array with ``shape=(n, m)``
+            where ``n`` is the number of labelled elements (e.g. atoms, bonds, angles).
+        metadata: Metadata to store in the table, such as provenance information.
+        guess_stereo: Whether to guess the stereochemistry of SMILES patterns that
+            do not contain full information.
+        progress_iterator: An iterator (e.g. a ``tqdm`` or rich ``ProgressBar``) to
+            loop over all molecules using. This is useful if you wish to display a
+            progress bar for example.
+        n_processes: The number of processes to parallelize the labelling over.
+    Returns:
+        A pyarrow table containing the labels, and a list of errors for molecules
+        that could not be labelled.
     """
 
     molecules = molecules if progress_iterator is None else progress_iterator(molecules)
-    results = []
+
+    results = defaultdict(list)
+    errors = []
+
+    label_molecule_func = functools.partial(
+        _label_molecule, label_func=label_func, guess_stereo=guess_stereo
+    )
 
     with capture_toolkit_warnings():
+        with _get_map_func(n_processes) as map_func:
+            labels_and_errors = map_func(label_molecule_func, molecules)
 
-        for molecule in molecules:
+    for labels, error in labels_and_errors:
 
-            result = None
-            error = None
+        if error is not None:
+            errors.append(error)
+            continue
 
-            try:
-                result = compute_charges(
-                    molecule, methods, n_conformers, rms_cutoff, guess_stereo
-                )
-            except BaseException as e:
+        smiles = labels.pop("smiles")
+        results["smiles"].append(smiles)
 
-                formatted_traceback = traceback.format_exception(
-                    type(e), e, e.__traceback__
-                )
-                error = f"Failed to process {str(molecule)}: {formatted_traceback}"
+        for label, values in labels.items():
+            assert values.ndim == 2, "labels must be arrays with 2 dimensions"
+            results[label].append(values.tolist())
 
-            results.append((result, error))
+    column_names = ["smiles"] + sorted(
+        label for label in results if label.lower() != "smiles"
+    )
+    columns = [] if len(results) == 0 else [results[label] for label in column_names]
 
-    return results
+    table = pyarrow.table(columns, column_names, metadata=metadata)
+    return table, errors
