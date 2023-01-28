@@ -1,8 +1,14 @@
+import dataclasses
+import hashlib
+import json
+import logging
 import pathlib
+import subprocess
 import tempfile
 import typing
 
 import pyarrow.parquet
+import pydantic
 import pytorch_lightning as pl
 import torch
 import torch.nn
@@ -18,12 +24,15 @@ from nagl.config import Config
 from nagl.config.data import Dataset as DatasetConfig
 from nagl.config.model import ActivationFunction
 from nagl.datasets import DGLMoleculeDataset, collate_dgl_molecules
+from nagl.features import AtomFeature, BondFeature
 from nagl.molecules import DGLMolecule, DGLMoleculeBatch, MoleculeToDGLFunc
 from nagl.training.metrics import get_metric
 
 _BatchType = typing.Tuple[
     typing.Union[DGLMolecule, DGLMoleculeBatch], typing.Dict[str, torch.Tensor]
 ]
+
+_logger = logging.getLogger(__name__)
 
 
 def _get_activation(
@@ -35,6 +44,57 @@ def _get_activation(
         if types is None
         else [nagl.nn.get_activation_func(type_)() for type_ in types]
     )
+
+
+def _hash_featurized_dataset(
+    dataset_config: DatasetConfig,
+    atom_features: typing.List[AtomFeature],
+    bond_features: typing.List[BondFeature],
+) -> str:
+    """A quick and dirty way to hash a 'featurized' dataset.
+
+    Args:
+        dataset_config: The dataset configuration.
+        atom_features: The atom feature set.
+        bond_features: The bond feature set.
+
+    Returns:
+        The dataset hash.
+    """
+
+    @pydantic.dataclasses.dataclass
+    class DatasetHash:
+
+        atom_features: typing.List[AtomFeature]
+        bond_features: typing.List[BondFeature]
+
+        columns: typing.List[str]
+        source_hashes: typing.List[str]
+
+    source_hashes = []
+
+    if dataset_config.sources is not None:
+
+        for source in dataset_config.sources:
+
+            result = subprocess.run(
+                ["openssl", "sha256", source], capture_output=True, text=True
+            )
+            result.check_returncode()
+
+            source_hashes.append(result.stdout)
+
+    columns = sorted({target.column for target in dataset_config.targets})
+
+    dataset_hash = DatasetHash(
+        atom_features=atom_features,
+        bond_features=bond_features,
+        source_hashes=source_hashes,
+        columns=columns,
+    )
+    dataset_hash_json = json.dumps(dataclasses.asdict(dataset_hash), sort_keys=True)
+
+    return hashlib.sha256(dataset_hash_json.encode()).hexdigest()
 
 
 class DGLMoleculeLightningModel(pl.LightningModule):
@@ -278,6 +338,25 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
             dataset_config = self._data_set_configs[stage]
             columns = sorted({target.column for target in dataset_config.targets})
 
+            hash_string = (
+                None
+                if self._cache_dir is None
+                else _hash_featurized_dataset(
+                    dataset_config,
+                    self._config.model.atom_features,
+                    self._config.model.bond_features,
+                )
+            )
+            cached_path: pathlib.Path = (
+                None
+                if self._cache_dir is None
+                else self._cache_dir / f"{stage}-{hash_string}.parquet"
+            )
+
+            if self._cache_dir is not None and cached_path.is_file():
+                _logger.info(f"found cached featurized dataset at {cached_path}")
+                continue
+
             dataset = DGLMoleculeDataset.from_unfeaturized(
                 [pathlib.Path(path) for path in stage_paths],
                 columns=columns,
@@ -290,9 +369,7 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
                 self._data_sets[stage] = dataset
             else:
                 self._cache_dir.mkdir(parents=True, exist_ok=True)
-
-                table = dataset.to_table()
-                pyarrow.parquet.write_table(table, self._cache_dir / f"{stage}.parquet")
+                pyarrow.parquet.write_table(dataset.to_table(), cached_path)
 
     def setup(self, stage: typing.Optional[str] = None):
 
@@ -301,6 +378,12 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
 
         for stage in self._data_set_paths:
 
+            hash_string = _hash_featurized_dataset(
+                self._data_set_configs[stage],
+                self._config.model.atom_features,
+                self._config.model.bond_features,
+            )
+
             self._data_sets[stage] = DGLMoleculeDataset.from_featurized(
-                self._cache_dir / f"{stage}.parquet", columns=None
+                self._cache_dir / f"{stage}-{hash_string}.parquet", columns=None
             )
