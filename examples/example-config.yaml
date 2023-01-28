@@ -1,0 +1,47 @@
+model:
+  atom_features:
+    - type: element
+      values: [C, H]
+    - type: connectivity
+      values: [1, 2, 3, 4]
+  bond_features: [ ]
+  convolution:
+    type: SAGEConv
+    hidden_feats: [128,     128,    128,    128]
+    activation:   ["ReLU", "ReLU", "ReLU", "ReLU"]
+  readouts:
+    charges:
+      pooling: atom
+      forward:
+        hidden_feats: [64,      64,     64,     2]
+        activation:   ["ReLU", "ReLU", "ReLU", "Identity"]
+      postprocess: charges
+
+data:
+  training:
+    sources:
+      - 000-label-data/train.parquet
+    targets:
+      - column: charges-am1bcc
+        metric: rmse
+        readout: charges
+    batch_size: null
+  validation:
+    batch_size: null
+    sources:
+      - 000-label-data/val.parquet
+    targets:
+      - column: charges-am1bcc
+        metric: rmse
+        readout: charges
+  test:
+    sources:
+      - 000-label-data/test.parquet
+    targets:
+      - column: charges-am1bcc
+        metric: rmse
+        readout: charges
+
+optimizer:
+  lr: 0.001
+  type: Adam

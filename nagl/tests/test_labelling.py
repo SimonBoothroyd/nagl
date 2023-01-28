@@ -2,28 +2,40 @@ import numpy
 import pytest
 from openff.toolkit.topology import Molecule
 
-from nagl.labelling import compute_batch_charges, compute_charges
+from nagl.labelling import _get_map_func, compute_charges_func, label_molecules
 
 
-@pytest.mark.parametrize("molecule", ["C", Molecule.from_smiles("C")])
-def test_compute_charges(molecule):
+def test_compute_charges():
 
-    charges_per_method = compute_charges(molecule, "am1bcc")
-    assert set(charges_per_method) == {"smiles", "am1bcc"}
+    molecule = Molecule.from_smiles("C")
 
-    charges = charges_per_method["am1bcc"]
-    assert charges.shape == (5,)
+    func = compute_charges_func("am1bcc", n_conformers=1)
+
+    charges_per_method = func(molecule)
+    assert set(charges_per_method) == {"smiles", "charges-am1bcc"}
+
+    charges = charges_per_method["charges-am1bcc"]
+    assert charges.shape == (5, 1)
     assert not numpy.allclose(charges, 0.0)
 
 
-def test_compute_batch_charges():
+@pytest.mark.parametrize("n_processes, expected_name", [(1, "imap"), (0, "map")])
+def test_get_map_func(n_processes, expected_name):
 
-    [(record_1, error_1), (record_2, error_2)] = compute_batch_charges(
-        ["C", "ClC=CCl"], "am1", guess_stereo=False
+    with _get_map_func(n_processes) as map_func:
+        assert map_func.__name__ == expected_name
+
+
+def test_label_molecules():
+
+    table, errors = label_molecules(
+        ["C", "ClC=CCl"],
+        compute_charges_func("am1", n_conformers=1),
+        guess_stereo=False,
     )
 
-    assert {*record_1} == {"smiles", "am1"}
-    assert error_1 is None
+    assert len(table) == 1
+    assert table.column_names == ["smiles", "charges-am1"]
 
-    assert record_2 is None
-    assert "UndefinedStereo" in error_2
+    assert len(errors) == 1
+    assert "UndefinedStereo" in errors[0]

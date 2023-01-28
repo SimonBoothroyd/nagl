@@ -24,7 +24,7 @@ def _get_optional_dependency_version(import_path: str) -> typing.Optional[str]:
         return None
 
 
-def get_labelling_software_provenance() -> typing.Dict[str, str]:
+def default_software_provenance() -> typing.Dict[str, str]:
     """Returns the versions of the core dependencies used when labelling a set of
     molecules."""
 
