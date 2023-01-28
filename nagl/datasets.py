@@ -299,7 +299,7 @@ class DGLMoleculeDataset(Dataset):
                     smiles,
                     atom_features,
                     bond_features,
-                    *[labels[column].numpy() for column in label_columns],
+                    *[labels[column].numpy().tolist() for column in label_columns],
                 )
             )
 

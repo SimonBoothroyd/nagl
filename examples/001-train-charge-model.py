@@ -101,12 +101,10 @@ def main():
     # Define an MLFlow experiment to store the outputs of training this model. This
     # Will include the usual statistics as well as useful artifacts highlighting
     # the models weak spots.
-    logger = MLFlowLogger(
-        experiment_name="am1bcc-charge-model", save_dir=str(output_dir / "mlflow")
-    )
+    logger = MLFlowLogger(experiment_name="am1bcc-charge-model")
 
     # Train the model
-    n_epochs = 20
+    n_epochs = 100
 
     n_gpus = 0 if not torch.cuda.is_available() else 1
     print(f"Using {n_gpus} GPUs")
