@@ -128,3 +128,19 @@ class TestDGLMoleculeBatch:
 
         assert batch.n_atoms_per_molecule == (5, 8)
         assert batch.n_representations_per_molecule == (1, 1)
+
+    def test_unbatch(self):
+
+        original_smiles = ["C", "CC"]
+
+        batch = DGLMoleculeBatch(
+            *(DGLMolecule.from_smiles(smiles, [], []) for smiles in original_smiles)
+        )
+
+        unbatched = batch.unbatch()
+
+        unbatched_smiles = [
+            molecule.to_openff().to_smiles(explicit_hydrogens=False)
+            for molecule in unbatched
+        ]
+        assert unbatched_smiles == original_smiles

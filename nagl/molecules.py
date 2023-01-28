@@ -258,3 +258,11 @@ class DGLMoleculeBatch(_BaseDGLModel):
         self._n_representations = tuple(
             molecule.n_representations for molecule in molecules
         )
+
+    def unbatch(self) -> typing.List[DGLMolecule]:
+        """Split this batch back into individual molecules."""
+
+        return [
+            DGLMolecule(graph, n_repr)
+            for graph, n_repr in zip(dgl.unbatch(self._graph), self._n_representations)
+        ]

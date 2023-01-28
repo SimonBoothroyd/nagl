@@ -1,10 +1,12 @@
 import pathlib
+import tempfile
 import typing
 
 import pyarrow.parquet
 import pytorch_lightning as pl
 import torch
 import torch.nn
+from pytorch_lightning.loggers import MLFlowLogger
 from torch.utils.data import DataLoader
 
 import nagl.nn
@@ -18,6 +20,10 @@ from nagl.config.model import ActivationFunction
 from nagl.datasets import DGLMoleculeDataset, collate_dgl_molecules
 from nagl.molecules import DGLMolecule, DGLMoleculeBatch, MoleculeToDGLFunc
 from nagl.training.metrics import get_metric
+
+_BatchType = typing.Tuple[
+    typing.Union[DGLMolecule, DGLMoleculeBatch], typing.Dict[str, torch.Tensor]
+]
 
 
 def _get_activation(
@@ -89,7 +95,7 @@ class DGLMoleculeLightningModel(pl.LightningModule):
 
     def _default_step(
         self,
-        batch: typing.Tuple[DGLMolecule, typing.Dict[str, torch.Tensor]],
+        batch: _BatchType,
         step_type: typing.Literal["train", "val", "test"],
     ):
 
@@ -116,11 +122,11 @@ class DGLMoleculeLightningModel(pl.LightningModule):
             metric_function = get_metric(target.metric)
 
             target_metric = metric_function(target_y_pred, target_labels)
-            self.log(f"{step_type}-{target.column}-{target.metric}", target_metric)
+            self.log(f"{step_type}/{target.column}/{target.metric}", target_metric)
 
             metric += target_metric
 
-        self.log(f"{step_type}-loss", metric)
+        self.log(f"{step_type}/loss", metric)
         return metric
 
     def training_step(self, train_batch, batch_idx):
@@ -130,7 +136,59 @@ class DGLMoleculeLightningModel(pl.LightningModule):
         return self._default_step(val_batch, "val")
 
     def test_step(self, test_batch, batch_idx):
-        return self._default_step(test_batch, "test")
+
+        metric = self._default_step(test_batch, "test")
+
+        if isinstance(self.logger, MLFlowLogger):
+            self._log_report_artifact(test_batch)
+
+        return metric
+
+    def _log_report_artifact(self, batch_and_labels: _BatchType):
+
+        # prevent circular import
+        from nagl.reporting import create_atom_label_report
+
+        batch, labels = batch_and_labels
+
+        if isinstance(batch, DGLMoleculeBatch):
+            molecules = batch.unbatch()
+        else:
+            molecules = [batch]
+
+        n_atoms_per_mol = [molecule.n_atoms for molecule in molecules]
+
+        prediction = self.forward(batch)
+
+        targets = self.config.data.test.targets
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_dir = pathlib.Path(tmp_dir)
+
+            for target in targets:
+
+                if labels[target.column] is None:
+                    continue
+
+                target_pred = torch.split(prediction[target.readout], n_atoms_per_mol)
+                target_ref = torch.split(labels[target.column], n_atoms_per_mol)
+
+                report_entries = [
+                    (molecule, target_pred[i], target_ref[i])
+                    for i, molecule in enumerate(molecules)
+                ]
+                report_path = tmp_dir / f"{target.column}.html"
+
+                create_atom_label_report(
+                    report_entries,
+                    metrics=["rmse"],
+                    rank_by="rmse",
+                    output_path=report_path,
+                )
+
+                self.logger.experiment.log_artifact(
+                    self.logger.run_id, local_path=str(report_path)
+                )
 
     def configure_optimizers(self):
 

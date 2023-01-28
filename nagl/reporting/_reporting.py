@@ -51,7 +51,7 @@ def _draw_molecule_with_atom_labels(
     ref_molecule: Chem = molecule.to_rdkit()
 
     for atom, label in zip(ref_molecule.GetAtoms(), ref.detach().numpy()):
-        atom.SetProp("atomNote", str(f"{label:.3f}"))
+        atom.SetProp("atomNote", str(f"{float(label):.3f}"))
 
     Draw.PrepareMolForDrawing(ref_molecule)
 
