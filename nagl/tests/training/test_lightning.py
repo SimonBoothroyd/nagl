@@ -1,5 +1,6 @@
 import numpy
 import pyarrow
+import pyarrow.parquet
 import pytest
 import torch
 import torch.optim
@@ -14,9 +15,13 @@ from nagl.config import Config, DataConfig, ModelConfig, OptimizerConfig
 from nagl.config.data import Dataset, Target
 from nagl.config.model import GCNConvolutionModule, ReadoutModule, Sequential
 from nagl.datasets import DGLMoleculeDataset
-from nagl.features import AtomConnectivity, AtomicElement, AtomIsInRing
+from nagl.features import AtomConnectivity, AtomicElement, AtomIsInRing, BondOrder
 from nagl.molecules import DGLMolecule
-from nagl.training.lightning import DGLMoleculeDataModule, DGLMoleculeLightningModel
+from nagl.training.lightning import (
+    DGLMoleculeDataModule,
+    DGLMoleculeLightningModel,
+    _hash_featurized_dataset,
+)
 
 
 @pytest.fixture()
@@ -61,6 +66,48 @@ def mock_config() -> Config:
 @pytest.fixture()
 def mock_lightning_model(mock_config) -> DGLMoleculeLightningModel:
     return DGLMoleculeLightningModel(mock_config)
+
+
+def test_hash_featurized_dataset(tmp_cwd):
+
+    labels = pyarrow.table([["C"]], ["smiles"])
+    source = str(tmp_cwd / "train.parquet")
+
+    pyarrow.parquet.write_table(labels, source)
+
+    config = Dataset(
+        sources=[source],
+        targets=[Target(column="label-col", readout="", metric="rmse")],
+    )
+
+    atom_features = [AtomicElement()]
+    bond_features = [BondOrder()]
+
+    hash_value_1 = _hash_featurized_dataset(config, atom_features, bond_features)
+    hash_value_2 = _hash_featurized_dataset(config, atom_features, bond_features)
+
+    assert hash_value_1 == hash_value_2
+
+    atom_features = []
+
+    hash_value_2 = _hash_featurized_dataset(config, atom_features, bond_features)
+    assert hash_value_1 != hash_value_2
+    hash_value_1 = _hash_featurized_dataset(config, atom_features, bond_features)
+    assert hash_value_1 == hash_value_2
+
+    bond_features = []
+
+    hash_value_2 = _hash_featurized_dataset(config, atom_features, bond_features)
+    assert hash_value_1 != hash_value_2
+    hash_value_1 = _hash_featurized_dataset(config, atom_features, bond_features)
+    assert hash_value_1 == hash_value_2
+
+    config.targets[0].column = "label-col-2"
+
+    hash_value_2 = _hash_featurized_dataset(config, atom_features, bond_features)
+    assert hash_value_1 != hash_value_2
+    hash_value_1 = _hash_featurized_dataset(config, atom_features, bond_features)
+    assert hash_value_1 == hash_value_2
 
 
 class TestDGLMoleculeLightningModel:
@@ -133,7 +180,13 @@ class TestDGLMoleculeDataModule:
         assert isinstance(loader, DataLoader)
         assert loader.batch_size == 4
 
-    def test_prepare(self, tmp_cwd, mock_config):
+    def test_prepare(self, tmp_cwd, mock_config, mocker):
+
+        mocker.patch(
+            "nagl.training.lightning._hash_featurized_dataset",
+            autospec=True,
+            return_value="hash-val",
+        )
 
         parquet_path = tmp_cwd / "unfeaturized.parquet"
         pyarrow.parquet.write_table(
@@ -155,7 +208,7 @@ class TestDGLMoleculeDataModule:
         data_module = DGLMoleculeDataModule(mock_config, cache_dir=tmp_cwd / "cache")
         data_module.prepare_data()
 
-        expected_path = tmp_cwd / "cache" / "train.parquet"
+        expected_path = tmp_cwd / "cache" / "train-hash-val.parquet"
         assert expected_path.is_file()
 
         table = pyarrow.parquet.read_table(expected_path)
