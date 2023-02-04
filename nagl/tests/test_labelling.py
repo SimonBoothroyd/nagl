@@ -5,7 +5,6 @@ from nagl.utilities.molecule import molecule_from_smiles
 
 
 def test_compute_charges():
-
     molecule = molecule_from_smiles("C")
 
     func = compute_charges_func("am1bcc", n_conformers=1)
@@ -19,7 +18,6 @@ def test_compute_charges():
 
 
 def test_label_molecules():
-
     table, errors = label_molecules(
         ["C", "ClC=CCl"],
         compute_charges_func("am1", n_conformers=1),

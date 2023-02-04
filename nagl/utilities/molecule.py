@@ -30,7 +30,6 @@ def stream_from_file(
     for molecule in Chem.SupplierFromFilename(
         str(file_path), removeHs=False, sanitize=True, strictParsing=True
     ):
-
         if molecule is None:
             continue
 
@@ -95,12 +94,10 @@ def normalize_molecule(
     old_smiles = original_smiles
 
     for pattern in reaction_smarts:
-
         reaction = rdChemReactions.ReactionFromSmarts(pattern)
         n_iterations = 0
 
         while True:
-
             products = reaction.RunReactants((molecule,), maxProducts=1)
 
             if len(products) == 0:
@@ -152,7 +149,6 @@ def molecule_from_smiles(smiles: str, guess_stereo: bool = True) -> Chem.Mol:
     molecule = Chem.AddHs(molecule)
 
     if guess_stereo:
-
         Chem.AssignStereochemistry(
             molecule, cleanIt=True, force=True, flagPossibleStereoCenters=True
         )

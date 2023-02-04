@@ -20,7 +20,6 @@ _CUSTOM_BOND_FEATURES = {}
 
 
 def one_hot_encode(item, elements):
-
     return torch.tensor(
         [int(i == elements.index(item)) for i in range(len(elements))]
     ).reshape(1, -1)
@@ -129,7 +128,6 @@ class AtomConnectivity(AtomFeature):
     )
 
     def __call__(self, molecule: Chem.Mol) -> torch.Tensor:
-
         return torch.vstack(
             [
                 one_hot_encode(len(atom.GetBonds()), self.values)
@@ -148,7 +146,6 @@ class AtomIsAromatic(AtomFeature):
     type: typing.Literal["is_aromatic"] = pydantic.Field("is_aromatic", const=True)
 
     def __call__(self, molecule: Chem.Mol) -> torch.Tensor:
-
         molecule = Chem.Mol(molecule)
         Chem.SetAromaticity(molecule, Chem.AROMATICITY_RDKIT)
 
@@ -167,7 +164,6 @@ class AtomIsInRing(AtomFeature):
     type: typing.Literal["is_in_ring"] = pydantic.Field("is_in_ring", const=True)
 
     def __call__(self, molecule: Chem.Mol) -> torch.Tensor:
-
         return torch.tensor(
             [int(atom.IsInRing()) for atom in molecule.GetAtoms()]
         ).reshape(-1, 1)
@@ -190,7 +186,6 @@ class AtomFormalCharge(AtomFeature):
     )
 
     def __call__(self, molecule: Chem.Mol) -> torch.Tensor:
-
         return torch.vstack(
             [
                 one_hot_encode(
@@ -231,7 +226,6 @@ class AtomAverageFormalCharge(AtomFeature):
     )
 
     def __call__(self, molecule: Chem.Mol) -> torch.Tensor:
-
         molecule = normalize_molecule(molecule)
 
         resonance_forms = enumerate_resonance_forms(
@@ -326,7 +320,6 @@ class BondIsAromatic(BondFeature):
 
     @classmethod
     def __call__(cls, molecule: Chem.Mol) -> torch.Tensor:
-
         molecule = Chem.Mol(molecule)
         Chem.SetAromaticity(molecule, Chem.AROMATICITY_RDKIT)
 
@@ -345,7 +338,6 @@ class BondIsInRing(BondFeature):
     type: typing.Literal["is_in_ring"] = pydantic.Field("is_in_ring", const=True)
 
     def __call__(self, molecule: Chem.Mol) -> torch.Tensor:
-
         return torch.tensor(
             [int(bond.IsInRing()) for bond in molecule.GetBonds()]
         ).reshape(-1, 1)
@@ -368,7 +360,6 @@ class BondOrder(BondFeature):
     )
 
     def __call__(self, molecule: Chem.Mol) -> torch.Tensor:
-
         return torch.vstack(
             [
                 one_hot_encode(BOND_TYPE_TO_ORDER[bond.GetBondType()], self.values)

@@ -12,11 +12,9 @@ from nagl.utilities.molecule import (
 
 
 def test_read_write_streams(tmp_cwd):
-
     molecules = [molecule_from_smiles("C"), molecule_from_smiles("CO")]
 
     with stream_to_file(tmp_cwd / "molecules.sdf") as writer:
-
         for molecule in molecules:
             writer(molecule)
 
@@ -29,7 +27,6 @@ def test_read_write_streams(tmp_cwd):
 
 
 def test_normalize_molecule():
-
     expected_smiles = "[H]C([H])([H])S(=O)(=O)C([H])([H])[H]"
 
     opts = Chem.SmilesWriteParams()
@@ -51,7 +48,6 @@ def test_normalize_molecule():
     ],
 )
 def test_molecule_from_smiles(smiles, guess_stereo, expected_smiles):
-
     molecule = molecule_from_smiles(smiles, guess_stereo)
     assert isinstance(molecule, Chem.Mol)
 
@@ -59,7 +55,6 @@ def test_molecule_from_smiles(smiles, guess_stereo, expected_smiles):
 
 
 def test_molecule_from_smiles_failed():
-
     with pytest.raises(ValueError, match="could not parse X"):
         molecule_from_smiles("X")
 
@@ -72,7 +67,6 @@ def test_molecule_from_smiles_failed():
     ],
 )
 def test_molecule_from_mapped_smiles(smiles, expected_atomic_num):
-
     molecule = molecule_from_mapped_smiles(smiles)
     assert isinstance(molecule, Chem.Mol)
 
@@ -81,13 +75,11 @@ def test_molecule_from_mapped_smiles(smiles, expected_atomic_num):
 
 @pytest.mark.parametrize("smiles", ["C", "[CH4:1]", "[Cl:1]Cl"])
 def test_molecule_from_mapped_smiles_failed(smiles):
-
     with pytest.raises(ValueError, match="all atoms must have a map index"):
         molecule_from_mapped_smiles(smiles)
 
 
 def test_molecule_to_mapped_smiles():
-
     expected_smiles = "[H:1][C:2]([F:3])([Cl:4])[Br:5]"
 
     molecule = molecule_from_mapped_smiles(expected_smiles)

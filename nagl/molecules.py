@@ -56,7 +56,6 @@ class _BaseDGLModel:
         self._graph: dgl.DGLGraph = graph
 
     def to(self: _T, device: str) -> _T:
-
         return_value = copy.copy(self)
         return_value._graph = self._graph.to(device)
 
@@ -261,7 +260,6 @@ class DGLMoleculeBatch(_BaseDGLModel):
         return self._n_representations
 
     def __init__(self, *molecules: DGLMolecule):
-
         super(DGLMoleculeBatch, self).__init__(
             dgl.batch([molecule.graph for molecule in molecules])
         )

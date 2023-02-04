@@ -26,7 +26,6 @@ from nagl.training.lightning import (
 
 @pytest.fixture()
 def mock_config() -> Config:
-
     return Config(
         model=ModelConfig(
             atom_features=[AtomicElement(), AtomConnectivity(), AtomIsInRing()],
@@ -69,7 +68,6 @@ def mock_lightning_model(mock_config) -> DGLMoleculeLightningModel:
 
 
 def test_hash_featurized_dataset(tmp_cwd):
-
     labels = pyarrow.table([["C"]], ["smiles"])
     source = str(tmp_cwd / "train.parquet")
 
@@ -112,7 +110,6 @@ def test_hash_featurized_dataset(tmp_cwd):
 
 class TestDGLMoleculeLightningModel:
     def test_init(self, mock_config):
-
         model = DGLMoleculeLightningModel(mock_config)
 
         assert isinstance(model.convolution_module, nagl.nn.convolution.SAGEConvStack)
@@ -130,7 +127,6 @@ class TestDGLMoleculeLightningModel:
         )
 
     def test_forward(self, mock_lightning_model, rdkit_methane):
-
         dgl_molecule = DGLMolecule.from_rdkit(
             rdkit_methane,
             mock_lightning_model.config.model.atom_features,
@@ -157,7 +153,6 @@ class TestDGLMoleculeLightningModel:
         assert torch.isclose(loss, torch.tensor([1.0]))
 
     def test_configure_optimizers(self, mock_lightning_model):
-
         optimizer = mock_lightning_model.configure_optimizers()
         assert isinstance(optimizer, torch.optim.Adam)
         assert torch.isclose(torch.tensor(optimizer.defaults["lr"]), torch.tensor(0.01))
@@ -165,7 +160,6 @@ class TestDGLMoleculeLightningModel:
 
 class TestDGLMoleculeDataModule:
     def test_init(self, tmp_cwd, mock_config):
-
         data_module = DGLMoleculeDataModule(mock_config, cache_dir=tmp_cwd / "cache")
 
         for stage in ["train", "val", "test"]:
@@ -181,7 +175,6 @@ class TestDGLMoleculeDataModule:
         assert loader.batch_size == 4
 
     def test_prepare(self, tmp_cwd, mock_config, mocker):
-
         mocker.patch(
             "nagl.training.lightning._hash_featurized_dataset",
             autospec=True,

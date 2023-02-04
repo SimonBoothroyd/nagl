@@ -11,10 +11,8 @@ from nagl.utilities.molecule import (
 
 
 def test_filter_cli(rdkit_methane, tmp_cwd, runner):
-
     # Create an SDF file to filter.
     with stream_to_file(tmp_cwd / "molecules.sdf") as writer:
-
         writer(molecule_from_smiles("C1(=C(C(=C(C(=C1Cl)Cl)Cl)Cl)Cl)[O-].[Na+]"))
         writer(molecule_from_smiles("CCC(C)(C)C(F)(F)CCCCC(F)(F)C(C)(C)CC"))
 

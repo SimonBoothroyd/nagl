@@ -20,15 +20,11 @@ dependencies:
 
   - pytorch
   - pytorch-lightning
-  - lightning-utilities =0.3
 
   - dgl >=0.7
 
   - pyarrow
   - mlflow
-
-  - pip:
-      - ray[tune]
 
   # Optional dependencies
 
@@ -39,7 +35,7 @@ dependencies:
     # Dev / Testing
   - pre-commit
   - isort
-  - black
+  - black >=23.1
   - flake8
 
   - pytest

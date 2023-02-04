@@ -102,7 +102,6 @@ def label_cli(
     unique_smiles = sorted({*all_smiles})
 
     if len(unique_smiles) != len(all_smiles):
-
         _logger.warning(
             f"{len(all_smiles) - len(unique_smiles)} duplicate molecules were ignored"
         )

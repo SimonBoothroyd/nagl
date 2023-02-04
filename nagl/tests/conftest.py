@@ -11,7 +11,6 @@ from nagl.utilities.molecule import molecule_from_smiles
 
 @pytest.fixture()
 def rdkit_methane() -> Chem.Mol:
-
     molecule = molecule_from_smiles("C")
     conformer = Chem.Conformer(molecule.GetNumAtoms())
 

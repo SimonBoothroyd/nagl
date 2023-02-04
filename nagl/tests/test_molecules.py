@@ -13,7 +13,6 @@ class TestBaseDGLModel:
         assert isinstance(dgl_methane.graph, dgl.DGLGraph)
 
     def test_features_property(self, dgl_methane):
-
         assert dgl_methane.atom_features.shape == (5, 4)
         assert numpy.allclose(
             dgl_methane.atom_features.numpy(),
@@ -34,7 +33,6 @@ class TestBaseDGLModel:
         )
 
     def test_to(self, dgl_methane):
-
         dgl_methane_to = dgl_methane.to("cpu")
 
         assert dgl_methane_to != dgl_methane
@@ -65,7 +63,6 @@ class TestDGLMolecule:
         ],
     )
     def test_from_xxx(self, from_function, input_object):
-
         # noinspection PyArgumentList
         dgl_molecule = from_function(
             input_object,
@@ -107,7 +104,6 @@ class TestDGLMolecule:
 
     @pytest.mark.parametrize("expected_smiles", ["C", "C[O-]", "C=O", "c1ccccc1"])
     def test_to_rdkit(self, expected_smiles):
-
         expected_smiles = Chem.MolToSmiles(molecule_from_smiles(expected_smiles))
 
         dgl_molecule = DGLMolecule.from_smiles(expected_smiles, [], [])
@@ -118,7 +114,6 @@ class TestDGLMolecule:
 
 class TestDGLMoleculeBatch:
     def test_init(self):
-
         batch = DGLMoleculeBatch(
             DGLMolecule.from_smiles("C", [], []),
             DGLMolecule.from_smiles("CC", [], []),
@@ -130,7 +125,6 @@ class TestDGLMoleculeBatch:
         assert batch.n_representations_per_molecule == (1, 1)
 
     def test_unbatch(self):
-
         original_smiles = ["[H]C([H])([H])[H]", "[H]C([H])([H])C([H])([H])[H]"]
 
         batch = DGLMoleculeBatch(

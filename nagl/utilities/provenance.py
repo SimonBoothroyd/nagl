@@ -15,7 +15,6 @@ def get_ambertools_version() -> typing.Optional[str]:
     package_versions = {}
 
     for output_line in lines[3:-1]:
-
         package_name, package_version, *_ = re.split(" +", output_line)
         package_versions[package_name] = package_version
 

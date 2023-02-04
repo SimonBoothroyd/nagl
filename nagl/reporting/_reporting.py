@@ -28,7 +28,6 @@ def _draw_molecule_with_atom_labels(
     highlight_atoms = None
 
     if highlight_outliers:
-
         delta_sq = torch.abs(pred.squeeze() - ref.squeeze())
 
         delta_mean = delta_sq.mean()
@@ -73,7 +72,6 @@ def _generate_per_atom_jinja_dicts(
     highlight_outliers: bool,
     outlier_threshold: float,
 ):
-
     metrics_funcs = {
         metric: nagl.training.metrics.get_metric(metric) for metric in metrics
     }
@@ -81,7 +79,6 @@ def _generate_per_atom_jinja_dicts(
     return_value = []
 
     for molecule, per_atom_pred, per_atom_ref in entries:
-
         if isinstance(molecule, DGLMolecule):
             molecule = molecule.to_rdkit()
 
@@ -138,7 +135,6 @@ def create_atom_label_report(
     rank_by_func = nagl.training.metrics.get_metric(rank_by)
 
     for entry in entries:
-
         _, per_atom_pred, per_atom_ref = entry
 
         metric = rank_by_func(per_atom_pred, per_atom_ref)

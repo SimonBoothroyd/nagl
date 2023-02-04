@@ -11,12 +11,10 @@ from nagl.utilities.molecule import (
 
 
 def test_enumerate_cli(rdkit_methane, tmp_cwd, runner):
-
     # Create an SDF file to enumerate.
     buteneol = molecule_from_smiles(r"C/C=C(/C)\O")
 
     with stream_to_file(tmp_cwd / "molecules.sdf") as writer:
-
         writer(buteneol)
         writer(buteneol)
 

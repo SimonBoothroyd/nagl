@@ -31,7 +31,6 @@ from nagl.utilities.resonance._conversion import (
     ],
 )
 def test_xxx_to_networkx(to_function, input_object):
-
     nx_graph = to_function(input_object)
     assert isinstance(nx_graph, networkx.Graph)
 
@@ -65,7 +64,6 @@ def test_xxx_to_networkx(to_function, input_object):
     "from_function", [rdkit_molecule_from_networkx, dgl_molecule_from_networkx]
 )
 def test_xxx_from_networkx(from_function):
-
     expected_smiles = "[C:1]([O-:2])(=[O:3])[H:4]"
 
     nx_graph = rdkit_molecule_to_networkx(molecule_from_mapped_smiles(expected_smiles))

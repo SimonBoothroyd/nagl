@@ -11,7 +11,6 @@ from nagl.utilities.provenance import default_software_provenance
 
 
 def main():
-
     console = rich.get_console()
 
     input_data = {
@@ -30,7 +29,6 @@ def main():
     }
 
     for stage, smiles_set in input_data.items():
-
         progress_bar = functools.partial(
             rich.progress.track, description=f"labelling {stage}"
         )
@@ -44,7 +42,6 @@ def main():
         )
 
         for error in errors:
-
             console.print(f"[WARNING] {error}")
             continue
 

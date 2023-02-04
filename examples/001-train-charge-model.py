@@ -21,7 +21,6 @@ def configure_model(
     n_am1_layers: int,
     n_am1_hidden_features: int,
 ) -> ModelConfig:
-
     return ModelConfig(
         atom_features=atom_features,
         bond_features=bond_features,
@@ -44,7 +43,6 @@ def configure_model(
 
 
 def configure_data() -> DataConfig:
-
     return DataConfig(
         training=Dataset(
             sources=["000-label-data/train.parquet"],
@@ -70,7 +68,6 @@ def configure_optimizer(lr: float) -> OptimizerConfig:
 
 
 def main():
-
     logging.basicConfig(level=logging.INFO)
     output_dir = pathlib.Path("001-train-charge-model")
 

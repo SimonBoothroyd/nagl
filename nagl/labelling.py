@@ -63,7 +63,6 @@ def compute_charges(
     return_value = {"smiles": molecule.to_smiles(mapped=True)}
 
     for method in methods:
-
         molecule.assign_partial_charges(
             _OPENFF_CHARGE_METHODS[method], use_conformers=molecule.conformers
         )
@@ -108,9 +107,7 @@ def _label_molecule(
     label_func: LabelFunction,
     guess_stereo: bool = True,
 ) -> typing.Tuple[typing.Optional[Labels], typing.Optional[str]]:
-
     try:
-
         molecule = (
             molecule
             if not isinstance(molecule, str)
@@ -119,7 +116,6 @@ def _label_molecule(
         return label_func(molecule), None
 
     except BaseException as e:
-
         smiles = None if molecule is None else Chem.MolToSmiles(molecule)
 
         formatted_traceback = traceback.format_exception(type(e), e, e.__traceback__)
@@ -172,7 +168,6 @@ def label_molecules(
         labels_and_errors = map_func(label_molecule_func, molecules)
 
     for labels, error in labels_and_errors:
-
         if error is not None:
             errors.append(error)
             continue

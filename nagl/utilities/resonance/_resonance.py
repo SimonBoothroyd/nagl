@@ -185,7 +185,6 @@ def enumerate_resonance_forms(
     ]
 
     if not as_dicts:
-
         return _graphs_to_molecules(
             type(molecule), original_nx_graph, resonance_sub_graphs
         )
@@ -204,7 +203,6 @@ def _graph_to_hash(nx_graph: networkx.Graph, include_bonds: bool) -> bytes:
     hash_dict = {"a": atom_resonance_types}
 
     if include_bonds:
-
         hash_dict["b"] = {
             i: nx_graph[index_a][index_b]["bond_order"]
             for i, (index_a, index_b) in enumerate(nx_graph.edges)
@@ -224,15 +222,12 @@ def _graphs_to_molecules(
     original_nx_graph: networkx.Graph,
     resonance_sub_graphs: typing.List[typing.Dict[bytes, networkx.Graph]],
 ) -> typing.List[_T]:
-
     found_resonance_forms = []
 
     for sub_graph_combinations in itertools.product(*resonance_sub_graphs):
-
         resonance_form = pickle.loads(pickle.dumps(original_nx_graph))
 
         for sub_graph_index, sub_graph_key in enumerate(sub_graph_combinations):
-
             sub_graph = resonance_sub_graphs[sub_graph_index][sub_graph_key]
 
             for atom_index in sub_graph.nodes:
@@ -268,11 +263,9 @@ def _graphs_to_molecules(
 def _graphs_to_dicts(
     resonance_sub_graphs: typing.List[typing.Dict[bytes, networkx.Graph]],
 ) -> typing.List[dict]:
-
     found_resonance_forms = []
 
     for resonance_graph_dicts in resonance_sub_graphs:
-
         resonance_graphs: typing.List[networkx.Graph] = [
             *resonance_graph_dicts.values()
         ]
@@ -353,11 +346,9 @@ def _enumerate_resonance_graphs(
     closed_list: typing.Dict[bytes, networkx.Graph] = {}
 
     while len(open_list) > 0:
-
         found_graphs: typing.Dict[bytes, networkx.Graph] = {}
 
         for current_key, current_graph in open_list.items():
-
             if current_key in closed_list:
                 continue
 
@@ -379,13 +370,11 @@ def _enumerate_resonance_graphs(
             for acceptor_index, donor_index in itertools.product(
                 acceptor_indices, donor_indices
             ):
-
                 transfer_paths = _find_transfer_paths(
                     current_graph, acceptor_index, donor_index, path_cache
                 )
 
                 for transfer_path in transfer_paths:
-
                     flipped_graph = _perform_electron_transfer(
                         current_graph, transfer_path
                     )
@@ -453,7 +442,6 @@ def _find_sub_graphs(nx_graph: networkx.Graph) -> typing.List[networkx.Graph]:
 
     # Discard any sub-graphs that don't have at least one donor and one acceptor.
     for sub_graph in original_sub_graphs:
-
         resonance_types = {*_find_donor_acceptors(sub_graph).values()}
 
         if resonance_types != {"A", "D"}:
@@ -482,7 +470,6 @@ def _find_donor_acceptors(
     atom_types: typing.Dict[int, typing.Literal["A", "D"]] = {}
 
     for atom_index in nx_graph:
-
         node_attributes = nx_graph.nodes[atom_index]
 
         node_features = ResonanceTypeKey(
@@ -531,13 +518,11 @@ def _find_transfer_paths(
     transfer_paths = []
 
     for path in all_paths:
-
         pairwise_path = networkx.utils.pairwise(path)
 
         previous_bond_order = None
 
         for bond_index, (atom_index_a, atom_index_b) in enumerate(pairwise_path):
-
             bond_order = nx_graph[atom_index_a][atom_index_b]["bond_order"]
 
             bond_order_delta = (
@@ -583,7 +568,6 @@ def _perform_electron_transfer(
     flipped_graph = pickle.loads(pickle.dumps(nx_graph))
 
     for node_index in [donor_index, acceptor_index]:
-
         node = flipped_graph.nodes[node_index]
 
         conjugate_key = _RESONANCE_KEYS_BY_ID[
@@ -597,7 +581,6 @@ def _perform_electron_transfer(
     pairwise_path = networkx.utils.pairwise(transfer_path)
 
     for bond_index, (atom_index_a, atom_index_b) in enumerate(pairwise_path):
-
         increment = 1 if (bond_index % 2 == 0) else -1
         flipped_graph[atom_index_a][atom_index_b]["bond_order"] += increment
 
@@ -619,7 +602,6 @@ def _select_lowest_energy_forms(
     }
 
     for graph_id, resonance_form in resonance_forms.items():
-
         resonance_keys = [
             ResonanceTypeKey(**resonance_form.nodes[atom_index])
             for atom_index in donor_acceptor_indices

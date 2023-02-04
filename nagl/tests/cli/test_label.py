@@ -10,11 +10,9 @@ from nagl.utilities.molecule import molecule_from_smiles, stream_to_file
 
 @pytest.fixture
 def mock_molecules(tmp_path) -> pathlib.Path:
-
     molecule_path = tmp_path / "molecules.sdf"
 
     with stream_to_file(molecule_path) as writer:
-
         writer(molecule_from_smiles("C"))
         writer(molecule_from_smiles("[Rn]"))
 
@@ -22,7 +20,6 @@ def mock_molecules(tmp_path) -> pathlib.Path:
 
 
 def test_label_cli(tmp_cwd, mock_molecules, runner, caplog):
-
     expected_output_path = tmp_cwd / "labelled.parquet"
 
     arguments = [

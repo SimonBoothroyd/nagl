@@ -21,7 +21,6 @@ def _enumerate_tautomers(
     enumerate_tautomers: bool,
     max_tautomers: int,
 ) -> typing.Set[str]:
-
     # normalize the input SMILES
     smiles = Chem.MolToSmiles(Chem.AddHs(Chem.MolFromSmiles(smiles)))
     found_forms = {smiles}
@@ -97,7 +96,6 @@ def enumerate_cli(
     max_tautomers: int,
     n_processes: int,
 ):
-
     print(f" - Enumerating {' tautomers' if enumerate_tautomers else ''}")
 
     unique_molecules = set()
@@ -109,17 +107,14 @@ def enumerate_cli(
     )
 
     with get_map_func(n_processes) as map_func:
-
         enumerated_smiles = map_func(
             enumerate_func,
             stream_from_file(input_path, as_smiles=True),
         )
 
         with stream_to_file(output_path) as writer:
-
             for smiles in rich.progress.track(enumerated_smiles):
                 for pattern in smiles:
-
                     molecule = molecule_from_smiles(pattern)
 
                     opts = Chem.SmilesWriteParams()

@@ -20,7 +20,6 @@ def label_function(molecule: Chem.Mol):
 
 class TestDGLMoleculeDataset:
     def test_from_molecules(self, rdkit_methane):
-
         data_set = DGLMoleculeDataset.from_molecules(
             [rdkit_methane], [AtomConnectivity()], [BondIsInRing()], label_function
         )
@@ -37,7 +36,6 @@ class TestDGLMoleculeDataset:
         assert label.numpy().shape == (5,)
 
     def test_from_unfeaturized(self, tmp_cwd):
-
         table = pyarrow.table(
             [
                 ["[O-:1][H:2]", "[H:1][H:2]"],
@@ -78,7 +76,6 @@ class TestDGLMoleculeDataset:
         assert labels["charges-am1bcc"] is None
 
     def test_from_featurized(self, tmp_cwd):
-
         table = pyarrow.table(
             [
                 ["[O-:1][H:2]", "[H:1][H:2]"],
@@ -116,7 +113,6 @@ class TestDGLMoleculeDataset:
         assert numpy.allclose(charges, numpy.array([-1.0, 0.0]))
 
     def test_to_table(self, tmp_cwd):
-
         dataset = DGLMoleculeDataset.from_molecules(
             [
                 molecule_from_mapped_smiles("[O-:1][H:2]"),
@@ -145,12 +141,10 @@ class TestDGLMoleculeDataset:
         actual_rows = actual_table.to_pylist()
 
         for expected_row, actual_row in zip(expected_rows, actual_rows):
-
             assert {*expected_row} == {*actual_row}
             assert expected_row.pop("smiles") == actual_row.pop("smiles")
 
             for column in expected_row:
-
                 assert (
                     expected_row[column].shape == numpy.array(actual_row[column]).shape
                 )
@@ -160,7 +154,6 @@ class TestDGLMoleculeDataset:
 
 
 def test_collate_dgl_molecules():
-
     dataset = DGLMoleculeDataset.from_molecules(
         [
             molecule_from_mapped_smiles("[O-:1][H:2]"),

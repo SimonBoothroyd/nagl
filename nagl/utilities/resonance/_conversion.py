@@ -47,7 +47,6 @@ def rdkit_molecule_to_networkx(molecule: Chem.Mol) -> networkx.Graph:
     )
 
     for bond in molecule.GetBonds():
-
         nx_graph.add_edge(
             bond.GetBeginAtomIdx(),
             bond.GetEndAtomIdx(),
@@ -81,7 +80,6 @@ def rdkit_molecule_from_networkx(nx_graph: networkx.Graph) -> Chem.Mol:
         molecule.AddAtom(atom)
 
     for atom_index_a, atom_index_b in nx_graph.edges:
-
         molecule.AddBond(
             atom_index_a,
             atom_index_b,
@@ -123,7 +121,6 @@ def dgl_molecule_to_networkx(molecule: "DGLMolecule") -> networkx.Graph:
         indices_b[dgl_graph.edata["mask"]],
         dgl_graph.edata["bond_order"][dgl_graph.edata["mask"]],
     ):
-
         per_atom_bond_orders[int(index_a)].append(bond_order)
         per_atom_bond_orders[int(index_b)].append(bond_order)
 
@@ -153,7 +150,6 @@ def dgl_molecule_to_networkx(molecule: "DGLMolecule") -> networkx.Graph:
         indices_b[dgl_graph.edata["mask"]],
         dgl_graph.edata["bond_order"][dgl_graph.edata["mask"]],
     ):
-
         nx_graph.add_edge(int(index_a), int(index_b), bond_order=int(bond_order))
 
     return nx_graph

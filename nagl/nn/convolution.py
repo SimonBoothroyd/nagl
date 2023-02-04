@@ -57,14 +57,12 @@ class GCNStack(torch.nn.ModuleList, typing.Generic[S, T], abc.ABC):
         lengths = [len(hidden_feats), len(activation), len(dropout), len(aggregator)]
 
         if len(set(lengths)) != 1:
-
             raise ValueError(
                 f"`hidden_feats`, `activation`, `dropout` and `aggregator` must "
                 f"be lists of the same length ({lengths})"
             )
 
         for i in range(n_layers):
-
             self.append(
                 self._gcn_factory(
                     in_feats,
@@ -147,7 +145,6 @@ class SAGEConvStack(GCNStack[dgl.nn.pytorch.SAGEConv, SAGEConvAggregatorType]):
         activation: ActivationFunction,
         **kwargs,
     ) -> dgl.nn.pytorch.SAGEConv:
-
         return dgl.nn.pytorch.SAGEConv(
             in_feats=in_feats,
             out_feats=out_feats,
@@ -163,7 +160,6 @@ ConvolutionModule = typing.Union[GCNStack]
 def get_convolution_layer(
     type_: typing.Literal["SAGEConv"],
 ) -> typing.Type[ConvolutionModule]:
-
     if type_.lower() == "sageconv":
         return SAGEConvStack
 

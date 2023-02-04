@@ -31,7 +31,6 @@ from nagl.utilities.molecule import molecule_from_mapped_smiles, molecule_from_s
 
 @pytest.fixture()
 def custom_atom_feature_registry(monkeypatch):
-
     import nagl.features
 
     feature_registry = {}
@@ -41,7 +40,6 @@ def custom_atom_feature_registry(monkeypatch):
 
 @pytest.fixture()
 def custom_bond_feature_registry(monkeypatch):
-
     import nagl.features
 
     feature_registry = {}
@@ -50,13 +48,11 @@ def custom_bond_feature_registry(monkeypatch):
 
 
 def test_one_hot_encode():
-
     encoding = one_hot_encode("b", ["a", "b", "c"]).numpy()
     assert numpy.allclose(encoding, numpy.array([0, 1, 0]))
 
 
 def test_atomic_element(rdkit_methane: Chem.Mol):
-
     feature = AtomicElement(values=["H", "C"])
     assert len(feature) == 2
 
@@ -72,7 +68,6 @@ def test_atomic_element(rdkit_methane: Chem.Mol):
 
 
 def test_atom_connectivity(rdkit_methane: Chem.Mol):
-
     feature = AtomConnectivity()
     assert len(feature) == 4
 
@@ -85,7 +80,6 @@ def test_atom_connectivity(rdkit_methane: Chem.Mol):
 
 
 def test_atom_formal_charge():
-
     molecule = molecule_from_smiles("[Cl-]")
 
     feature = AtomFormalCharge(values=[0, -1])
@@ -99,7 +93,6 @@ def test_atom_formal_charge():
 
 
 def test_atom_average_formal_charge():
-
     molecule = molecule_from_mapped_smiles("[H:1][C:2](=[O:3])[O-:4]")
 
     feature = AtomAverageFormalCharge()
@@ -114,7 +107,6 @@ def test_atom_average_formal_charge():
 
 def test_custom_atom_feature(custom_atom_feature_registry):
     class MyAtomFeature(AtomFeature):
-
         type: typing.Literal["some-type"] = "some-type"
 
         def __call__(self, molecule: Chem.Mol) -> torch.Tensor:
@@ -149,7 +141,6 @@ def test_discriminate_atom_feature():
 
 @pytest.mark.parametrize("feature_class", [AtomIsAromatic, BondIsAromatic])
 def test_is_aromatic(feature_class):
-
     molecule = molecule_from_smiles("c1ccccc1")
 
     feature = feature_class()
@@ -164,7 +155,6 @@ def test_is_aromatic(feature_class):
 
 @pytest.mark.parametrize("feature_class", [AtomIsInRing, BondIsInRing])
 def test_is_in_ring(feature_class):
-
     molecule = molecule_from_smiles("c1ccccc1")
 
     feature = feature_class()
@@ -178,7 +168,6 @@ def test_is_in_ring(feature_class):
 
 
 def test_bond_order():
-
     feature = BondOrder(values=[2, 1])
     assert len(feature) == 2
 
@@ -190,7 +179,6 @@ def test_bond_order():
 
 def test_custom_bond_feature(custom_bond_feature_registry):
     class MyBondFeature(BondFeature):
-
         type: typing.Literal["some-type"] = "some-type"
 
         def __call__(self, molecule: Chem.Mol) -> torch.Tensor:
@@ -241,7 +229,6 @@ def test_register_atom_feature(custom_atom_feature_registry):
 def test_register_atom_feature_raises(
     feature_cls, expected_raises, custom_atom_feature_registry
 ):
-
     with expected_raises:
         register_atom_feature(feature_cls)
 
@@ -266,7 +253,6 @@ def test_register_bond_feature(custom_bond_feature_registry):
 def test_register_bond_feature_raises(
     feature_cls, expected_raises, custom_bond_feature_registry
 ):
-
     with expected_raises:
         register_bond_feature(feature_cls)
 

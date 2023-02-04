@@ -46,7 +46,6 @@ class PathCache:
         for path_generator in networkx.all_simple_paths(
             self._nx_graph, index_a, index_b, cutoff=self._max_path_length
         ):
-
             path = tuple(path_generator)
 
             if len(path) == 0 or len(path) % 2 == 0:

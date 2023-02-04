@@ -10,7 +10,6 @@ from nagl.utilities.molecule import molecule_from_smiles
 
 
 def test_draw_molecule_with_atom_labels():
-
     molecule = molecule_from_smiles("[Cl-]")
 
     svg = _draw_molecule_with_atom_labels(
@@ -20,7 +19,6 @@ def test_draw_molecule_with_atom_labels():
 
 
 def test_generate_per_atom_jinja_dicts():
-
     entries = [
         (molecule_from_smiles("[H]Cl"), torch.zeros(2), torch.zeros(2)),
         (DGLMolecule.from_smiles("[H]Br", [], []), torch.zeros(2), torch.zeros(2)),
@@ -35,7 +33,6 @@ def test_generate_per_atom_jinja_dicts():
 
 
 def test_create_atom_label_report(tmp_cwd):
-
     entries = [
         (molecule_from_smiles("[H]Cl"), torch.zeros(2), torch.ones(2)),
         (molecule_from_smiles("[H]Br"), torch.zeros(2), torch.zeros(2)),

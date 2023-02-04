@@ -81,7 +81,6 @@ def test_enumerate_resonance_forms(
     lowest_energy_only,
     include_all_transfer_pathways,
 ):
-
     input_molecule = molecule_from_smiles(input_smiles)
 
     actual_molecules = enumerate_resonance_forms(
@@ -102,7 +101,6 @@ def test_enumerate_resonance_forms(
 
 
 def test_graphs_to_dicts():
-
     sub_graphs = [
         rdkit_molecule_to_networkx(molecule_from_mapped_smiles(smiles))
         for smiles in [
@@ -143,7 +141,6 @@ def test_graphs_to_dicts():
     ],
 )
 def test_find_sub_graphs(smiles, expected_groups):
-
     nx_graph = rdkit_molecule_to_networkx(molecule_from_mapped_smiles(smiles))
     sub_graphs = _find_sub_graphs(nx_graph)
 
@@ -158,7 +155,6 @@ def test_find_donor_acceptors(nx_carboxylate):
 
 
 def test_find_transfer_paths():
-
     molecule = molecule_from_smiles("[NH2+:1]=[C:2]1[C:3]=[C:4][N:5][C:6]=[C:7]1")
 
     (acceptor_index,) = [
@@ -189,7 +185,6 @@ def test_find_transfer_paths():
 
 
 def test_perform_electron_transfer(nx_carboxylate):
-
     final_graph = _perform_electron_transfer(nx_carboxylate, [1, 0, 2])
 
     assert final_graph.nodes[1]["formal_charge"] == 0
@@ -204,7 +199,6 @@ def test_perform_electron_transfer(nx_carboxylate):
 
 
 def test_select_lowest_energy_forms():
-
     input_molecules = [
         molecule_from_mapped_smiles("[N:1]([H:2])([H:3])[C:4](=[O:5])[H:6]"),
         molecule_from_mapped_smiles("[N+:1]([H:2])([H:3])=[C:4]([O-:5])[H:6]"),

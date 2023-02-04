@@ -22,7 +22,6 @@ def get_map_func(
     """
 
     if n_processes > 0:
-
         with multiprocessing.Pool(n_processes) as pool:
             yield pool.imap
 

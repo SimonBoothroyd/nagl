@@ -90,14 +90,12 @@ class DGLMoleculeDataset(Dataset):
         bond_features: typing.List[BondFeature],
         molecule_to_dgl: typing.Optional[MoleculeToDGLFunc] = None,
     ):
-
         smiles = labels.pop("smiles")
 
         molecule = molecule_from_mapped_smiles(smiles)
         dgl_molecule = molecule_to_dgl(molecule, atom_features, bond_features)
 
         for label, value in labels.items():
-
             if value is None:
                 continue
 
@@ -161,7 +159,6 @@ class DGLMoleculeDataset(Dataset):
 
     @classmethod
     def _entry_from_featurized(cls, labels: typing.Dict[str, typing.Any]):
-
         smiles = labels.pop("smiles")
 
         atom_features = labels.pop("atom_features")
@@ -187,7 +184,6 @@ class DGLMoleculeDataset(Dataset):
         )
 
         for label, value in labels.items():
-
             if value is None:
                 continue
 
@@ -252,7 +248,6 @@ class DGLMoleculeDataset(Dataset):
         label_columns = [] if len(self._entries) == 0 else [*self._entries[0][1]]
 
         for dgl_molecule, labels in self._entries:
-
             rdkit_molecule = dgl_molecule.to_rdkit()
             smiles = molecule_to_mapped_smiles(rdkit_molecule)
 
@@ -294,7 +289,6 @@ def collate_dgl_molecules(
         typing.List[typing.Tuple[dgl.DGLGraph, typing.List[DGLMoleculeDatasetEntry]]],
     ]
 ) -> typing.Tuple[DGLMoleculeBatch, typing.Dict[str, torch.Tensor]]:
-
     if isinstance(entries[0], (dgl.DGLGraph, DGLMolecule)):
         entries = [entries]
 
@@ -304,7 +298,6 @@ def collate_dgl_molecules(
     batched_labels = {}
 
     for label_name in labels[0]:
-
         batched_labels[label_name] = torch.vstack(
             [label[label_name].reshape(-1, 1) for label in labels]
         )

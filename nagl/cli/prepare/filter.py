@@ -22,14 +22,11 @@ _logger = logging.getLogger(__name__)
 def apply_filter(
     molecule: Chem.Mol, retain_largest: bool
 ) -> typing.Tuple[Chem.Mol, bool]:
-
     try:
-
         split_smiles = Chem.MolToSmiles(molecule).split(".")
         n_sub_molecules = len(split_smiles)
 
         if retain_largest and n_sub_molecules > 1:
-
             largest_smiles = max(split_smiles, key=len)
             molecule = molecule_from_smiles(largest_smiles)
 
@@ -109,20 +106,16 @@ def filter_cli(
     n_processes: int,
     strip_ions: bool,
 ):
-
     print(" - Filtering molecules")
 
     with stream_to_file(output_path) as writer:
-
         with multiprocessing.Pool(processes=n_processes) as pool:
-
             for molecule, should_include in rich.progress.track(
                 pool.imap(
                     functools.partial(apply_filter, retain_largest=strip_ions),
                     stream_from_file(input_path),
                 ),
             ):
-
                 if not should_include:
                     continue
 
