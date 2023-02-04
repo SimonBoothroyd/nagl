@@ -37,7 +37,6 @@ class Sequential(torch.nn.Sequential):
         lengths = [len(hidden_feats), len(activation), len(dropout)]
 
         if len({*lengths}) != 1:
-
             raise ValueError(
                 f"`hidden_feats`, `activation`, and `dropout` must be lists of the "
                 f"same length ({lengths})"

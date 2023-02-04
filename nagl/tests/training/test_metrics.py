@@ -5,7 +5,6 @@ from nagl.training import metrics
 
 
 def test_rmse():
-
     actual = metrics.rmse(
         torch.tensor([0.0, 3.0]),
         torch.tensor([0.0, 4.0]),

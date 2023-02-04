@@ -1,19 +1,20 @@
 import os
 
-from openff.toolkit.topology import Molecule
-from openff.toolkit.utils import RDKitToolkitWrapper
+from rdkit import Chem
 
 from nagl.cli.prepare.enumerate import enumerate_cli
-from nagl.utilities.toolkits import stream_from_file, stream_to_file
+from nagl.utilities.molecule import (
+    molecule_from_smiles,
+    stream_from_file,
+    stream_to_file,
+)
 
 
-def test_enumerate_cli(openff_methane: Molecule, runner):
-
+def test_enumerate_cli(rdkit_methane, tmp_cwd, runner):
     # Create an SDF file to enumerate.
-    buteneol = Molecule.from_smiles(r"C/C=C(/C)\O")
+    buteneol = molecule_from_smiles(r"C/C=C(/C)\O")
 
-    with stream_to_file("molecules.sdf") as writer:
-
+    with stream_to_file(tmp_cwd / "molecules.sdf") as writer:
         writer(buteneol)
         writer(buteneol)
 
@@ -26,12 +27,12 @@ def test_enumerate_cli(openff_methane: Molecule, runner):
 
     assert os.path.isfile("tautomers.sdf")
 
-    tautomers = [molecule for molecule in stream_from_file("tautomers.sdf")]
-    assert len(tautomers) == 4
+    tautomers = [molecule for molecule in stream_from_file(tmp_cwd / "tautomers.sdf")]
+    assert len(tautomers) == 3
 
-    assert {
-        tautomer.to_smiles(
-            explicit_hydrogens=False, toolkit_registry=RDKitToolkitWrapper()
-        )
-        for tautomer in tautomers
-    } == {"C/C=C(/C)O", "C=C(O)CC", "CCC(C)=O", "CC=C(C)O"}
+    actual_smiles = {
+        Chem.MolToSmiles(Chem.RemoveHs(tautomer)) for tautomer in tautomers
+    }
+
+    expected_smiles = {"C/C=C(/C)O", "C=C(O)CC", "CCC(C)=O"}
+    assert actual_smiles == expected_smiles

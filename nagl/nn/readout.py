@@ -42,7 +42,6 @@ class ReadoutModule(torch.nn.Module):
     def forward(
         self, molecule: typing.Union[DGLMolecule, DGLMoleculeBatch]
     ) -> torch.Tensor:
-
         x = self.pooling_layer.forward(molecule)
         x = self.forward_layers.forward(x)
 

@@ -6,12 +6,11 @@ import pathlib
 import click
 import rich.progress
 from click_option_group import optgroup
-from openff.utilities import requires_package
 
 import nagl
 from nagl.labelling import compute_charges_func, label_molecules
+from nagl.utilities.molecule import stream_from_file
 from nagl.utilities.provenance import default_software_provenance
-from nagl.utilities.toolkits import capture_toolkit_warnings, stream_from_file
 
 _logger = logging.getLogger("nagl.label")
 
@@ -79,8 +78,6 @@ _OUTPUT_PATH = click.Path(
     default=0,
     show_default=True,
 )
-@requires_package("openff.toolkit")
-@requires_package("pyarrow")
 def label_cli(
     input_path: pathlib.Path,
     output_path: pathlib.Path,
@@ -94,20 +91,17 @@ def label_cli(
     logging.basicConfig(level=logging.INFO)
     _logger.info(f"Labeling molecules using nagl version {nagl.__version__}")
 
-    with capture_toolkit_warnings():
-
-        all_smiles = [
-            smiles
-            for smiles in rich.progress.track(
-                stream_from_file(input_path, as_smiles=True),
-                description="loading molecules",
-            )
-        ]
+    all_smiles = [
+        smiles
+        for smiles in rich.progress.track(
+            stream_from_file(input_path, as_smiles=True),
+            description="loading molecules",
+        )
+    ]
 
     unique_smiles = sorted({*all_smiles})
 
     if len(unique_smiles) != len(all_smiles):
-
         _logger.warning(
             f"{len(all_smiles) - len(unique_smiles)} duplicate molecules were ignored"
         )

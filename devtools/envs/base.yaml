@@ -8,12 +8,11 @@ dependencies:
   - python >3.8
   - pip
 
-  - openff-utilities >=0.1.5
   - pydantic
   - jinja2
   - openssl
+  - rich
 
-  - openff-toolkit-base >=0.11.0
   - rdkit
 
   - click
@@ -21,22 +20,22 @@ dependencies:
 
   - pytorch
   - pytorch-lightning
+
   - dgl >=0.7
+
   - pyarrow
   - mlflow
 
-  - tqdm
-  - rich
-
   # Optional dependencies
 
-  ### Computing charges
+  ### Computing AM1 charges
+  - openff-toolkit-base >=0.11.0
   - ambertools
 
     # Dev / Testing
   - pre-commit
   - isort
-  - black
+  - black >=23.1
   - flake8
 
   - pytest

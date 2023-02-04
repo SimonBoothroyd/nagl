@@ -11,14 +11,11 @@ import nagl.training.metrics
 from nagl.config.data import MetricType
 from nagl.molecules import DGLMolecule
 
-if typing.TYPE_CHECKING:
-    from openff.toolkit import Molecule
-
 _TEMPLATE_DIR = pathlib.Path(__file__).parent
 
 
 def _draw_molecule_with_atom_labels(
-    molecule: "Molecule",
+    molecule: Chem.Mol,
     pred: torch.Tensor,
     ref: torch.Tensor,
     highlight_outliers: bool = False,
@@ -31,7 +28,6 @@ def _draw_molecule_with_atom_labels(
     highlight_atoms = None
 
     if highlight_outliers:
-
         delta_sq = torch.abs(pred.squeeze() - ref.squeeze())
 
         delta_mean = delta_sq.mean()
@@ -41,14 +37,14 @@ def _draw_molecule_with_atom_labels(
 
         highlight_atoms = [i for i, outlier in enumerate(should_highlight) if outlier]
 
-    pred_molecule: Chem = molecule.to_rdkit()
+    pred_molecule = Chem.Mol(molecule)
 
     for atom, label in zip(pred_molecule.GetAtoms(), pred.detach().numpy()):
         atom.SetProp("atomNote", str(f"{float(label):.3f}"))
 
     Draw.PrepareMolForDrawing(pred_molecule)
 
-    ref_molecule: Chem = molecule.to_rdkit()
+    ref_molecule = Chem.Mol(molecule)
 
     for atom, label in zip(ref_molecule.GetAtoms(), ref.detach().numpy()):
         atom.SetProp("atomNote", str(f"{float(label):.3f}"))
@@ -71,12 +67,11 @@ def _draw_molecule_with_atom_labels(
 
 
 def _generate_per_atom_jinja_dicts(
-    entries: typing.List[typing.Tuple["Molecule", torch.Tensor, torch.Tensor]],
+    entries: typing.List[typing.Tuple[Chem.Mol, torch.Tensor, torch.Tensor]],
     metrics: typing.List[MetricType],
     highlight_outliers: bool,
     outlier_threshold: float,
 ):
-
     metrics_funcs = {
         metric: nagl.training.metrics.get_metric(metric) for metric in metrics
     }
@@ -84,9 +79,8 @@ def _generate_per_atom_jinja_dicts(
     return_value = []
 
     for molecule, per_atom_pred, per_atom_ref in entries:
-
         if isinstance(molecule, DGLMolecule):
-            molecule = molecule.to_openff()
+            molecule = molecule.to_rdkit()
 
         entry_metrics = {
             metric.upper(): f"{metrics_func(per_atom_pred, per_atom_ref):.4f}"
@@ -106,7 +100,7 @@ def _generate_per_atom_jinja_dicts(
 
 
 def create_atom_label_report(
-    entries: typing.List[typing.Tuple["Molecule", torch.Tensor, torch.Tensor]],
+    entries: typing.List[typing.Tuple[Chem.Mol, torch.Tensor, torch.Tensor]],
     metrics: typing.List[MetricType],
     rank_by: MetricType,
     output_path: pathlib.Path,
@@ -141,8 +135,7 @@ def create_atom_label_report(
     rank_by_func = nagl.training.metrics.get_metric(rank_by)
 
     for entry in entries:
-
-        molecule, per_atom_pred, per_atom_ref = entry
+        _, per_atom_pred, per_atom_ref = entry
 
         metric = rank_by_func(per_atom_pred, per_atom_ref)
         entries_and_ranks.append((entry, metric))

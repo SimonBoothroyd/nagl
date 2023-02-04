@@ -1,10 +1,11 @@
 import dgl
 import numpy
 import pytest
-from openff.toolkit.topology import Molecule
+from rdkit import Chem
 
 from nagl.features import AtomConnectivity, BondOrder
 from nagl.molecules import DGLMolecule, DGLMoleculeBatch
+from nagl.utilities.molecule import molecule_from_mapped_smiles, molecule_from_smiles
 
 
 class TestBaseDGLModel:
@@ -12,7 +13,6 @@ class TestBaseDGLModel:
         assert isinstance(dgl_methane.graph, dgl.DGLGraph)
 
     def test_features_property(self, dgl_methane):
-
         assert dgl_methane.atom_features.shape == (5, 4)
         assert numpy.allclose(
             dgl_methane.atom_features.numpy(),
@@ -33,7 +33,6 @@ class TestBaseDGLModel:
         )
 
     def test_to(self, dgl_methane):
-
         dgl_methane_to = dgl_methane.to("cpu")
 
         assert dgl_methane_to != dgl_methane
@@ -57,14 +56,13 @@ class TestDGLMolecule:
         "from_function, input_object",
         [
             (
-                DGLMolecule.from_openff,
-                Molecule.from_mapped_smiles("[H:1][C:2](=[O:3])[O-:4]"),
+                DGLMolecule.from_rdkit,
+                molecule_from_mapped_smiles("[H:1][C:2](=[O:3])[O-:4]"),
             ),
             (DGLMolecule.from_smiles, "[H:1][C:2](=[O:3])[O-:4]"),
         ],
     )
     def test_from_xxx(self, from_function, input_object):
-
         # noinspection PyArgumentList
         dgl_molecule = from_function(
             input_object,
@@ -104,21 +102,18 @@ class TestDGLMolecule:
             forward_features[:], numpy.zeros_like(forward_features[:])
         )
 
-    @pytest.mark.parametrize("expected_smiles", ["C", "C[O-]", "C=O", "C1=CC=CC=C1"])
-    def test_to_openff(self, expected_smiles):
-
-        # add explicit H's
-        expected_smiles = Molecule.from_smiles(expected_smiles).to_smiles()
+    @pytest.mark.parametrize("expected_smiles", ["C", "C[O-]", "C=O", "c1ccccc1"])
+    def test_to_rdkit(self, expected_smiles):
+        expected_smiles = Chem.MolToSmiles(molecule_from_smiles(expected_smiles))
 
         dgl_molecule = DGLMolecule.from_smiles(expected_smiles, [], [])
 
-        openff_molecule = dgl_molecule.to_openff()
-        assert openff_molecule.to_smiles() == expected_smiles
+        rdkit_molecule = dgl_molecule.to_rdkit()
+        assert Chem.MolToSmiles(rdkit_molecule) == expected_smiles
 
 
 class TestDGLMoleculeBatch:
     def test_init(self):
-
         batch = DGLMoleculeBatch(
             DGLMolecule.from_smiles("C", [], []),
             DGLMolecule.from_smiles("CC", [], []),
@@ -130,8 +125,7 @@ class TestDGLMoleculeBatch:
         assert batch.n_representations_per_molecule == (1, 1)
 
     def test_unbatch(self):
-
-        original_smiles = ["C", "CC"]
+        original_smiles = ["[H]C([H])([H])[H]", "[H]C([H])([H])C([H])([H])[H]"]
 
         batch = DGLMoleculeBatch(
             *(DGLMolecule.from_smiles(smiles, [], []) for smiles in original_smiles)
@@ -140,7 +134,6 @@ class TestDGLMoleculeBatch:
         unbatched = batch.unbatch()
 
         unbatched_smiles = [
-            molecule.to_openff().to_smiles(explicit_hydrogens=False)
-            for molecule in unbatched
+            Chem.MolToSmiles(molecule.to_rdkit()) for molecule in unbatched
         ]
         assert unbatched_smiles == original_smiles

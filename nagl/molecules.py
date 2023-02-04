@@ -3,16 +3,19 @@ import typing
 
 import dgl.function
 import torch
+from rdkit import Chem
 
 from nagl.features import AtomFeature, AtomFeaturizer, BondFeature, BondFeaturizer
-
-if typing.TYPE_CHECKING:
-    from openff.toolkit.topology import Molecule
+from nagl.utilities.molecule import (
+    BOND_ORDER_TO_TYPE,
+    BOND_TYPE_TO_ORDER,
+    molecule_from_smiles,
+)
 
 _T = typing.TypeVar("_T")
 
 MoleculeToDGLFunc = typing.Callable[
-    ["Molecule", typing.List[AtomFeature], typing.List[BondFeature]], "DGLMolecule"
+    [Chem.Mol, typing.List[AtomFeature], typing.List[BondFeature]], "DGLMolecule"
 ]
 
 
@@ -53,7 +56,6 @@ class _BaseDGLModel:
         self._graph: dgl.DGLGraph = graph
 
     def to(self: _T, device: str) -> _T:
-
         return_value = copy.copy(self)
         return_value._graph = self._graph.to(device)
 
@@ -95,15 +97,15 @@ class DGLMolecule(_BaseDGLModel):
         self._n_representations = n_representations
 
     @classmethod
-    def from_openff(
+    def from_rdkit(
         cls,
-        molecule: "Molecule",
-        atom_features: typing.Optional[typing.List[AtomFeature]],
-        bond_features: typing.Optional[typing.List[BondFeature]],
+        molecule: Chem.Mol,
+        atom_features: typing.Optional[typing.List[AtomFeature]] = None,
+        bond_features: typing.Optional[typing.List[BondFeature]] = None,
         atom_feature_tensor: typing.Optional[torch.Tensor] = None,
         bond_feature_tensor: typing.Optional[torch.Tensor] = None,
     ) -> "DGLMolecule":
-        """Creates a new DGL graph molecule representation from an OpenFF molecule
+        """Creates a new DGL graph molecule representation from an RDKit molecule
         object.
 
         Args:
@@ -119,8 +121,6 @@ class DGLMolecule(_BaseDGLModel):
             The constructed graph.
         """
 
-        from openff.units import unit
-
         assert (
             atom_features is None or atom_feature_tensor is None
         ), "``atom_features`` and ``atom_feature_tensor`` are mutually exclusive."
@@ -128,13 +128,16 @@ class DGLMolecule(_BaseDGLModel):
             bond_features is None or bond_feature_tensor is None
         ), "``bond_features`` and ``bond_feature_tensor`` are mutually exclusive."
 
+        molecule = Chem.Mol(molecule)
+        Chem.Kekulize(molecule)
+
         # Create the bond tensors.
         indices_a = []
         indices_b = []
 
-        for bond in molecule.bonds:
-            indices_a.append(bond.atom1_index)
-            indices_b.append(bond.atom2_index)
+        for bond in molecule.GetBonds():
+            indices_a.append(bond.GetBeginAtomIdx())
+            indices_b.append(bond.GetEndAtomIdx())
 
         indices_a = torch.tensor(indices_a, dtype=torch.int32)
         indices_b = torch.tensor(indices_b, dtype=torch.int32)
@@ -149,7 +152,8 @@ class DGLMolecule(_BaseDGLModel):
         # Track which edges correspond to an original bond and which were added to
         # make the graph undirected.
         bond_mask = torch.tensor(
-            [True] * molecule.n_bonds + [False] * molecule.n_bonds, dtype=torch.bool
+            [True] * molecule.GetNumBonds() + [False] * molecule.GetNumBonds(),
+            dtype=torch.bool,
         )
         graph.edata["mask"] = bond_mask
 
@@ -165,18 +169,16 @@ class DGLMolecule(_BaseDGLModel):
             graph.edata["feat"] = torch.cat([bond_feature_tensor, bond_feature_tensor])
 
         graph.ndata["formal_charge"] = torch.tensor(
-            [
-                atom.formal_charge.m_as(unit.elementary_charge)
-                for atom in molecule.atoms
-            ],
+            [atom.GetFormalCharge() for atom in molecule.GetAtoms()],
             dtype=torch.int8,
         )
         graph.ndata["atomic_number"] = torch.tensor(
-            [atom.atomic_number for atom in molecule.atoms], dtype=torch.uint8
+            [atom.GetAtomicNum() for atom in molecule.GetAtoms()], dtype=torch.uint8
         )
 
         bond_orders = torch.tensor(
-            [bond.bond_order for bond in molecule.bonds], dtype=torch.uint8
+            [BOND_TYPE_TO_ORDER[bond.GetBondType()] for bond in molecule.GetBonds()],
+            dtype=torch.uint8,
         )
         graph.edata["bond_order"] = torch.cat([bond_orders, bond_orders])
 
@@ -200,26 +202,28 @@ class DGLMolecule(_BaseDGLModel):
             The constructed graph.
         """
 
-        from openff.toolkit.topology import Molecule
-
-        return cls.from_openff(
-            Molecule.from_smiles(smiles),
+        return cls.from_rdkit(
+            molecule_from_smiles(smiles),
             atom_features,
             bond_features,
         )
 
-    def to_openff(self) -> "Molecule":
-        """Converts this DGL molecule into an OpenFF molecule object."""
+    def to_rdkit(self) -> Chem.Mol:
+        """Converts this DGL molecule into an RDkit molecule object."""
 
-        from openff.toolkit import Molecule
-
-        molecule = Molecule()
+        molecule = Chem.RWMol()
 
         atomic_numbers = self.graph.ndata["atomic_number"].detach().numpy().tolist()
         formal_charges = self.graph.ndata["formal_charge"].detach().numpy().tolist()
 
-        for atomic_num, formal_charge in zip(atomic_numbers, formal_charges):
-            molecule.add_atom(int(atomic_num), int(formal_charge), False)
+        for i, (atomic_num, formal_charge) in enumerate(
+            zip(atomic_numbers, formal_charges)
+        ):
+            atom = Chem.Atom(int(atomic_num))
+            atom.SetFormalCharge(int(formal_charge))
+
+            index = molecule.AddAtom(atom)
+            assert index == i
 
         indices_a, indices_b = self.graph.all_edges()
 
@@ -228,7 +232,14 @@ class DGLMolecule(_BaseDGLModel):
             indices_b[self.graph.edata["mask"]],
             self.graph.edata["bond_order"][self.graph.edata["mask"]],
         ):
-            molecule.add_bond(int(index_a), int(index_b), int(bond_order), False)
+            molecule.AddBond(
+                int(index_a), int(index_b), BOND_ORDER_TO_TYPE[int(bond_order)]
+            )
+
+        molecule = Chem.Mol(molecule)
+
+        Chem.SanitizeMol(molecule)
+        Chem.SetAromaticity(molecule, Chem.AROMATICITY_RDKIT)
 
         return molecule
 
@@ -249,7 +260,6 @@ class DGLMoleculeBatch(_BaseDGLModel):
         return self._n_representations
 
     def __init__(self, *molecules: DGLMolecule):
-
         super(DGLMoleculeBatch, self).__init__(
             dgl.batch([molecule.graph for molecule in molecules])
         )

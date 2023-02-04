@@ -8,7 +8,6 @@ from nagl.nn.convolution import SAGEConvStack, get_convolution_layer
 
 class TestGCNStack:
     def test_init(self):
-
         conv_stack = SAGEConvStack(
             in_feats=1,
             hidden_feats=[2, 3],
@@ -38,7 +37,6 @@ class TestGCNStack:
 
 class TestSAGEConvStack:
     def test_init(self):
-
         conv_stack = SAGEConvStack(
             in_feats=2,
             hidden_feats=[3],
@@ -56,7 +54,6 @@ class TestSAGEConvStack:
         assert isinstance(conv_stack[0].activation, torch.nn.LeakyReLU)
 
     def test_init_invalid(self):
-
         with pytest.raises(
             ValueError,
             match="`hidden_feats`, `activation`, `dropout` and `aggregator` must",

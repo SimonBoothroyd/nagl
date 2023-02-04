@@ -10,7 +10,6 @@ from nagl.nn.readout import ReadoutModule
 
 class TestDGLMoleculeModel:
     def test_init(self):
-
         model = DGLMoleculeModel(
             convolution_module=SAGEConvStack(in_feats=1, hidden_feats=[2, 2]),
             readout_modules={
@@ -39,7 +38,6 @@ class TestDGLMoleculeModel:
         assert isinstance(model.readout_modules["bond"].pooling_layer, BondPoolingLayer)
 
     def test_forward(self, dgl_methane):
-
         model = DGLMoleculeModel(
             convolution_module=SAGEConvStack(in_feats=4, hidden_feats=[4]),
             readout_modules={

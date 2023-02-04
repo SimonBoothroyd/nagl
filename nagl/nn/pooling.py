@@ -66,7 +66,6 @@ class BondPoolingLayer(PoolingLayer):
     def forward(
         self, molecule: typing.Union[DGLMolecule, DGLMoleculeBatch]
     ) -> torch.Tensor:
-
         graph = molecule.graph
 
         graph.apply_edges(self._apply_edges)
@@ -78,7 +77,6 @@ class BondPoolingLayer(PoolingLayer):
 
 
 def get_pooling_layer(type_: PoolingType) -> typing.Type[PoolingLayer]:
-
     if type_.lower() == "atom":
         return AtomPoolingLayer
     if type_.lower() == "bond":

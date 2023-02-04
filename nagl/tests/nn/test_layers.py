@@ -7,7 +7,6 @@ from nagl.nn.layers import Sequential
 
 class TestSequential:
     def test_init_default(self):
-
         sequential = Sequential(in_feats=1, hidden_feats=[2])
 
         assert len(sequential) == 3
@@ -18,7 +17,6 @@ class TestSequential:
         assert numpy.isclose(sequential[2].p, 0.0)
 
     def test_init(self):
-
         sequential_layers = Sequential(
             in_feats=1,
             hidden_feats=[2, 1],
@@ -39,11 +37,9 @@ class TestSequential:
         assert numpy.isclose(sequential_layers[5].p, 0.5)
 
     def test_init_invalid_inputs(self):
-
         with pytest.raises(
             ValueError, match="`hidden_feats`, `activation`, and `dropout` must be"
         ):
-
             Sequential(
                 in_feats=1,
                 hidden_feats=[2],

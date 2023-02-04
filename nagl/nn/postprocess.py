@@ -70,7 +70,6 @@ class PartialChargeLayer(PostprocessLayer):
         molecule: typing.Union[DGLMolecule, DGLMoleculeBatch],
         inputs: torch.Tensor,
     ) -> torch.Tensor:
-
         charges = []
         counter = 0
 
@@ -90,7 +89,6 @@ class PartialChargeLayer(PostprocessLayer):
         for n_atoms, n_representations in zip(
             n_atoms_per_molecule, n_representations_per_molecule
         ):
-
             atom_slices = [
                 slice(counter + i * n_atoms, counter + (i + 1) * n_atoms)
                 for i in range(n_representations)
@@ -114,7 +112,6 @@ class PartialChargeLayer(PostprocessLayer):
 
 
 def get_postprocess_layer(type_: PostprocessType) -> typing.Type[PostprocessLayer]:
-
     if type_.lower() == "charges":
         return PartialChargeLayer
 

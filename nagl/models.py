@@ -17,7 +17,6 @@ class DGLMoleculeModel(torch.nn.Module):
         convolution_module: ConvolutionModule,
         readout_modules: typing.Dict[str, ReadoutModule],
     ):
-
         super(DGLMoleculeModel, self).__init__()
 
         self.convolution_module = convolution_module
@@ -26,7 +25,6 @@ class DGLMoleculeModel(torch.nn.Module):
     def forward(
         self, molecule: typing.Union[DGLMolecule, DGLMoleculeBatch]
     ) -> typing.Dict[str, torch.Tensor]:
-
         molecule.graph.ndata["h"] = self.convolution_module(
             molecule.graph, molecule.atom_features
         )

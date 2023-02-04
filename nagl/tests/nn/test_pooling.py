@@ -10,7 +10,6 @@ from nagl.nn.pooling import AtomPoolingLayer, BondPoolingLayer, get_pooling_laye
 
 
 def test_pool_atom_features(dgl_methane):
-
     dgl_methane.graph.ndata["h"] = torch.from_numpy(numpy.arange(5))
     atom_features = AtomPoolingLayer().forward(dgl_methane)
 
@@ -18,7 +17,6 @@ def test_pool_atom_features(dgl_methane):
 
 
 def test_pool_bond_features(dgl_methane):
-
     molecule_a = dgl_methane
 
     molecule_b = copy.deepcopy(molecule_a)

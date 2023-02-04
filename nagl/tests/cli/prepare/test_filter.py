@@ -1,19 +1,20 @@
 import os
 
-from openff.toolkit.topology import Molecule
-from openff.toolkit.utils import RDKitToolkitWrapper
+from rdkit import Chem
 
 from nagl.cli.prepare.filter import filter_cli
-from nagl.utilities.toolkits import stream_from_file, stream_to_file
+from nagl.utilities.molecule import (
+    molecule_from_smiles,
+    stream_from_file,
+    stream_to_file,
+)
 
 
-def test_filter_cli(openff_methane: Molecule, runner):
-
+def test_filter_cli(rdkit_methane, tmp_cwd, runner):
     # Create an SDF file to filter.
-    with stream_to_file("molecules.sdf") as writer:
-
-        writer(Molecule.from_smiles("C1(=C(C(=C(C(=C1Cl)Cl)Cl)Cl)Cl)[O-].[Na+]"))
-        writer(Molecule.from_smiles("CCC(C)(C)C(F)(F)CCCCC(F)(F)C(C)(C)CC"))
+    with stream_to_file(tmp_cwd / "molecules.sdf") as writer:
+        writer(molecule_from_smiles("C1(=C(C(=C(C(=C1Cl)Cl)Cl)Cl)Cl)[O-].[Na+]"))
+        writer(molecule_from_smiles("CCC(C)(C)C(F)(F)CCCCC(F)(F)C(C)(C)CC"))
 
     arguments = ["--input", "molecules.sdf", "--output", "filtered.sdf", "--strip-ions"]
 
@@ -24,12 +25,14 @@ def test_filter_cli(openff_methane: Molecule, runner):
 
     assert os.path.isfile("filtered.sdf")
 
-    filtered_molecules = [molecule for molecule in stream_from_file("filtered.sdf")]
+    filtered_molecules = [
+        molecule for molecule in stream_from_file(tmp_cwd / "filtered.sdf")
+    ]
     assert len(filtered_molecules) == 1
 
     filtered_molecule = filtered_molecules[0]
 
-    assert (
-        filtered_molecule.to_smiles(toolkit_registry=RDKitToolkitWrapper())
-        == "[O-][c]1[c]([Cl])[c]([Cl])[c]([Cl])[c]([Cl])[c]1[Cl]"
+    expected_smiles = Chem.MolToSmiles(
+        Chem.MolFromSmiles("[O-][c]1[c]([Cl])[c]([Cl])[c]([Cl])[c]([Cl])[c]1[Cl]")
     )
+    assert Chem.MolToSmiles(filtered_molecule) == expected_smiles
