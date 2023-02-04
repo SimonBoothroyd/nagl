@@ -7,6 +7,8 @@ dependencies:
 
   - python >3.8
   - pip
+  - setuptools <67  # needed otherwise mlflow import check
+                    # errors about RIGHT_PARENTHESIS
 
   - pydantic
   - jinja2
@@ -25,6 +27,9 @@ dependencies:
 
   - pyarrow
   - mlflow
+
+  - pip:
+      - ray[tune]
 
   # Optional dependencies
 
