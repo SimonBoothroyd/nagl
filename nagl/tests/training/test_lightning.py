@@ -129,10 +129,10 @@ class TestDGLMoleculeLightningModel:
             nagl.nn.postprocess.PartialChargeLayer,
         )
 
-    def test_forward(self, mock_lightning_model, openff_methane):
+    def test_forward(self, mock_lightning_model, rdkit_methane):
 
-        dgl_molecule = DGLMolecule.from_openff(
-            openff_methane,
+        dgl_molecule = DGLMolecule.from_rdkit(
+            rdkit_methane,
             mock_lightning_model.config.model.atom_features,
             mock_lightning_model.config.model.bond_features,
         )
@@ -214,6 +214,7 @@ class TestDGLMoleculeDataModule:
         table = pyarrow.parquet.read_table(expected_path)
         assert len(table) == 2
 
+        del data_module._data_sets["train"]
         assert "train" not in data_module._data_sets
         data_module.setup("train")
         assert isinstance(data_module._data_sets["train"], DGLMoleculeDataset)

@@ -4,13 +4,10 @@ import typing
 
 import pydantic
 import torch
+from rdkit import Chem
 
+from nagl.utilities.molecule import BOND_TYPE_TO_ORDER, normalize_molecule
 from nagl.utilities.resonance import enumerate_resonance_forms
-from nagl.utilities.toolkits import normalize_molecule
-
-if typing.TYPE_CHECKING:
-    from openff.toolkit.topology import Molecule
-
 
 _DEFAULT_ELEMENTS = ["H", "C", "N", "O", "F", "Cl", "Br", "S", "P"]
 _DEFAULT_CONNECTIVITIES = [1, 2, 3, 4]
@@ -34,7 +31,7 @@ class _Feature(abc.ABC):
     """The base class for features of molecules."""
 
     @abc.abstractmethod
-    def __call__(self, molecule: "Molecule") -> torch.Tensor:
+    def __call__(self, molecule: Chem.Mol) -> torch.Tensor:
         """A function which should generate the relevant feature tensor for the
         molecule.
         """
@@ -77,7 +74,7 @@ T = typing.TypeVar("T", bound=_Feature)
 @pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
 class _Featurizer(typing.Generic[T], abc.ABC):
     @classmethod
-    def featurize(cls, molecule: "Molecule", features: typing.List[T]) -> torch.Tensor:
+    def featurize(cls, molecule: Chem.Mol, features: typing.List[T]) -> torch.Tensor:
         """Featurizes a given molecule based on a given feature list."""
         return torch.hstack([feature(molecule) for feature in features])
 
@@ -100,13 +97,16 @@ class AtomicElement(AtomFeature):
         f"{_DEFAULT_ELEMENTS} will be used.",
     )
 
-    def __call__(self, molecule: "Molecule") -> torch.Tensor:
+    def __call__(self, molecule: Chem.Mol) -> torch.Tensor:
         """A function which should generate the relevant feature tensor for the
         molecule.
         """
 
         return torch.vstack(
-            [one_hot_encode(atom.symbol, self.values) for atom in molecule.atoms]
+            [
+                one_hot_encode(atom.GetSymbol(), self.values)
+                for atom in molecule.GetAtoms()
+            ]
         )
 
     def __len__(self):
@@ -128,10 +128,13 @@ class AtomConnectivity(AtomFeature):
         f"are provided, the default set of {_DEFAULT_CONNECTIVITIES} will be used.",
     )
 
-    def __call__(self, molecule: "Molecule") -> torch.Tensor:
+    def __call__(self, molecule: Chem.Mol) -> torch.Tensor:
 
         return torch.vstack(
-            [one_hot_encode(len(atom.bonds), self.values) for atom in molecule.atoms]
+            [
+                one_hot_encode(len(atom.GetBonds()), self.values)
+                for atom in molecule.GetAtoms()
+            ]
         )
 
     def __len__(self):
@@ -144,11 +147,14 @@ class AtomIsAromatic(AtomFeature):
 
     type: typing.Literal["is_aromatic"] = pydantic.Field("is_aromatic", const=True)
 
-    def __call__(self, molecule: "Molecule") -> torch.Tensor:
+    def __call__(self, molecule: Chem.Mol) -> torch.Tensor:
 
-        return torch.tensor([int(atom.is_aromatic) for atom in molecule.atoms]).reshape(
-            -1, 1
-        )
+        molecule = Chem.Mol(molecule)
+        Chem.SetAromaticity(molecule, Chem.AROMATICITY_RDKIT)
+
+        return torch.tensor(
+            [int(atom.GetIsAromatic()) for atom in molecule.GetAtoms()]
+        ).reshape(-1, 1)
 
     def __len__(self):
         return 1
@@ -160,13 +166,10 @@ class AtomIsInRing(AtomFeature):
 
     type: typing.Literal["is_in_ring"] = pydantic.Field("is_in_ring", const=True)
 
-    def __call__(self, molecule: "Molecule") -> torch.Tensor:
+    def __call__(self, molecule: Chem.Mol) -> torch.Tensor:
 
-        ring_atoms = {
-            index for index, in molecule.chemical_environment_matches("[*r:1]")
-        }
         return torch.tensor(
-            [int(i in ring_atoms) for i in range(molecule.n_atoms)]
+            [int(atom.IsInRing()) for atom in molecule.GetAtoms()]
         ).reshape(-1, 1)
 
     def __len__(self):
@@ -186,17 +189,15 @@ class AtomFormalCharge(AtomFeature):
         f"{_DEFAULT_CHARGES} will be used.",
     )
 
-    def __call__(self, molecule: "Molecule") -> torch.Tensor:
-
-        from openff.units import unit
+    def __call__(self, molecule: Chem.Mol) -> torch.Tensor:
 
         return torch.vstack(
             [
                 one_hot_encode(
-                    atom.formal_charge.m_as(unit.elementary_charges),
+                    atom.GetFormalCharge(),
                     self.values,
                 )
-                for atom in molecule.atoms
+                for atom in molecule.GetAtoms()
             ]
         )
 
@@ -229,7 +230,7 @@ class AtomAverageFormalCharge(AtomFeature):
         "charges but have different arrangements of bond orders.",
     )
 
-    def __call__(self, molecule: "Molecule") -> torch.Tensor:
+    def __call__(self, molecule: Chem.Mol) -> torch.Tensor:
 
         molecule = normalize_molecule(molecule)
 
@@ -248,7 +249,7 @@ class AtomAverageFormalCharge(AtomFeature):
                 if i in resonance_form["atoms"]
                 for atom in resonance_form["atoms"][i]
             ]
-            for i in range(molecule.n_atoms)
+            for i in range(molecule.GetNumAtoms())
         ]
 
         feature_tensor = torch.tensor(
@@ -258,7 +259,7 @@ class AtomAverageFormalCharge(AtomFeature):
                     if len(formal_charges[i]) > 0
                     else 0.0
                 ]
-                for i in range(molecule.n_atoms)
+                for i in range(molecule.GetNumAtoms())
             ]
         )
 
@@ -274,7 +275,7 @@ class CustomAtomFeature(AtomFeature):
 
     type: str = pydantic.Field(..., description="The custom feature type.")
 
-    def __call__(self, molecule: "Molecule") -> torch.Tensor:
+    def __call__(self, molecule: Chem.Mol) -> torch.Tensor:
         feature = _get_custom_feature(self, _CUSTOM_ATOM_FEATURES)
         return feature(molecule)
 
@@ -324,11 +325,14 @@ class BondIsAromatic(BondFeature):
     type: typing.Literal["is_aromatic"] = pydantic.Field("is_aromatic", const=True)
 
     @classmethod
-    def __call__(cls, molecule: "Molecule") -> torch.Tensor:
+    def __call__(cls, molecule: Chem.Mol) -> torch.Tensor:
 
-        return torch.tensor([int(bond.is_aromatic) for bond in molecule.bonds]).reshape(
-            -1, 1
-        )
+        molecule = Chem.Mol(molecule)
+        Chem.SetAromaticity(molecule, Chem.AROMATICITY_RDKIT)
+
+        return torch.tensor(
+            [int(bond.GetIsAromatic()) for bond in molecule.GetBonds()]
+        ).reshape(-1, 1)
 
     def __len__(self):
         return 1
@@ -340,33 +344,10 @@ class BondIsInRing(BondFeature):
 
     type: typing.Literal["is_in_ring"] = pydantic.Field("is_in_ring", const=True)
 
-    def __call__(self, molecule: "Molecule") -> torch.Tensor:
+    def __call__(self, molecule: Chem.Mol) -> torch.Tensor:
 
-        ring_bonds = {
-            tuple(sorted(match))
-            for match in molecule.chemical_environment_matches("[*:1]@[*:2]")
-        }
         return torch.tensor(
-            [
-                int(tuple(sorted((bond.atom1_index, bond.atom2_index))) in ring_bonds)
-                for bond in molecule.bonds
-            ]
-        ).reshape(-1, 1)
-
-    def __len__(self):
-        return 1
-
-
-@pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
-class WibergBondOrder(BondFeature):
-    """Encodes the fractional Wiberg bond order of all of the bonds in a molecule."""
-
-    type: typing.Literal["wbo"] = pydantic.Field("wbo", const=True)
-
-    @classmethod
-    def __call__(cls, molecule: "Molecule") -> torch.Tensor:
-        return torch.tensor(
-            [bond.fractional_bond_order for bond in molecule.bonds]
+            [int(bond.IsInRing()) for bond in molecule.GetBonds()]
         ).reshape(-1, 1)
 
     def __len__(self):
@@ -386,12 +367,12 @@ class BondOrder(BondFeature):
         f"{_DEFAULT_BOND_ORDERS} will be used.",
     )
 
-    def __call__(self, molecule: "Molecule") -> torch.Tensor:
+    def __call__(self, molecule: Chem.Mol) -> torch.Tensor:
 
         return torch.vstack(
             [
-                one_hot_encode(int(bond.bond_order), self.values)
-                for bond in molecule.bonds
+                one_hot_encode(BOND_TYPE_TO_ORDER[bond.GetBondType()], self.values)
+                for bond in molecule.GetBonds()
             ]
         )
 
@@ -405,7 +386,7 @@ class CustomBondFeature(BondFeature):
 
     type: str = pydantic.Field(..., description="The custom feature type.")
 
-    def __call__(self, molecule: "Molecule") -> torch.Tensor:
+    def __call__(self, molecule: Chem.Mol) -> torch.Tensor:
         feature = _get_custom_feature(self, _CUSTOM_BOND_FEATURES)
         return feature(molecule)
 

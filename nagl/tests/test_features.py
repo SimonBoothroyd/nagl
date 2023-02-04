@@ -4,7 +4,7 @@ import numpy
 import pydantic
 import pytest
 import torch
-from openff.toolkit.topology import Molecule
+from rdkit import Chem
 
 from nagl.features import (
     AtomAverageFormalCharge,
@@ -22,11 +22,11 @@ from nagl.features import (
     BondOrder,
     CustomAtomFeature,
     CustomBondFeature,
-    WibergBondOrder,
     one_hot_encode,
     register_atom_feature,
     register_bond_feature,
 )
+from nagl.utilities.molecule import molecule_from_mapped_smiles, molecule_from_smiles
 
 
 @pytest.fixture()
@@ -55,12 +55,12 @@ def test_one_hot_encode():
     assert numpy.allclose(encoding, numpy.array([0, 1, 0]))
 
 
-def test_atomic_element(openff_methane: Molecule):
+def test_atomic_element(rdkit_methane: Chem.Mol):
 
     feature = AtomicElement(values=["H", "C"])
     assert len(feature) == 2
 
-    encoding = feature(openff_methane).numpy()
+    encoding = feature(rdkit_methane).numpy()
 
     assert encoding.shape == (5, 2)
 
@@ -71,12 +71,12 @@ def test_atomic_element(openff_methane: Molecule):
     assert numpy.isclose(encoding[0, 1], 1.0)
 
 
-def test_atom_connectivity(openff_methane: Molecule):
+def test_atom_connectivity(rdkit_methane: Chem.Mol):
 
     feature = AtomConnectivity()
     assert len(feature) == 4
 
-    encoding = feature(openff_methane).numpy()
+    encoding = feature(rdkit_methane).numpy()
 
     assert encoding.shape == (5, 4)
 
@@ -86,7 +86,7 @@ def test_atom_connectivity(openff_methane: Molecule):
 
 def test_atom_formal_charge():
 
-    molecule = Molecule.from_smiles("[Cl-]")
+    molecule = molecule_from_smiles("[Cl-]")
 
     feature = AtomFormalCharge(values=[0, -1])
     assert len(feature) == 2
@@ -100,7 +100,7 @@ def test_atom_formal_charge():
 
 def test_atom_average_formal_charge():
 
-    molecule = Molecule.from_mapped_smiles("[H:1][C:2](=[O:3])[O-:4]")
+    molecule = molecule_from_mapped_smiles("[H:1][C:2](=[O:3])[O-:4]")
 
     feature = AtomAverageFormalCharge()
     assert len(feature) == 1
@@ -117,7 +117,7 @@ def test_custom_atom_feature(custom_atom_feature_registry):
 
         type: typing.Literal["some-type"] = "some-type"
 
-        def __call__(self, molecule: "Molecule") -> torch.Tensor:
+        def __call__(self, molecule: Chem.Mol) -> torch.Tensor:
             return torch.unsqueeze(torch.arange(start=1, end=5), 1)
 
         def __len__(self):
@@ -150,7 +150,7 @@ def test_discriminate_atom_feature():
 @pytest.mark.parametrize("feature_class", [AtomIsAromatic, BondIsAromatic])
 def test_is_aromatic(feature_class):
 
-    molecule = Molecule.from_smiles("c1ccccc1")
+    molecule = molecule_from_smiles("c1ccccc1")
 
     feature = feature_class()
     assert len(feature) == 1
@@ -165,7 +165,7 @@ def test_is_aromatic(feature_class):
 @pytest.mark.parametrize("feature_class", [AtomIsInRing, BondIsInRing])
 def test_is_in_ring(feature_class):
 
-    molecule = Molecule.from_smiles("c1ccccc1")
+    molecule = molecule_from_smiles("c1ccccc1")
 
     feature = feature_class()
     assert len(feature) == 1
@@ -182,24 +182,10 @@ def test_bond_order():
     feature = BondOrder(values=[2, 1])
     assert len(feature) == 2
 
-    encoding = feature(Molecule.from_smiles("C=O")).numpy()
+    encoding = feature(molecule_from_smiles("C=O")).numpy()
     assert encoding.shape == (3, 2)
 
     assert numpy.allclose(encoding, numpy.array([[1, 0], [0, 1], [0, 1]]))
-
-
-def test_wiberg_bond_order(openff_methane):
-
-    for i, bond in enumerate(openff_methane.bonds):
-        bond.fractional_bond_order = float(i)
-
-    feature = WibergBondOrder()
-    assert len(feature) == 1
-
-    encoding = feature(openff_methane).numpy()
-    assert encoding.shape == (4, 1)
-
-    assert numpy.allclose(encoding, numpy.arange(4).reshape(-1, 1))
 
 
 def test_custom_bond_feature(custom_bond_feature_registry):
@@ -207,7 +193,7 @@ def test_custom_bond_feature(custom_bond_feature_registry):
 
         type: typing.Literal["some-type"] = "some-type"
 
-        def __call__(self, molecule: "Molecule") -> torch.Tensor:
+        def __call__(self, molecule: Chem.Mol) -> torch.Tensor:
             return torch.unsqueeze(torch.arange(start=1, end=5), 1)
 
         def __len__(self):

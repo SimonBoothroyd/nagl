@@ -1,31 +1,28 @@
 import numpy
 import pyarrow
 import torch
-from openff.toolkit.topology import Molecule
-from openff.units import unit
+from rdkit import Chem
 
 from nagl.datasets import DGLMoleculeDataset, collate_dgl_molecules
 from nagl.features import AtomConnectivity, AtomicElement, BondIsInRing
 from nagl.molecules import DGLMolecule, DGLMoleculeBatch
+from nagl.utilities.molecule import molecule_from_mapped_smiles
 
 
-def label_function(molecule: Molecule):
+def label_function(molecule: Chem.Mol):
     return {
         "formal_charges": torch.tensor(
-            [
-                atom.formal_charge.m_as(unit.elementary_charge)
-                for atom in molecule.atoms
-            ],
+            [atom.GetFormalCharge() for atom in molecule.GetAtoms()],
             dtype=torch.float,
         ),
     }
 
 
 class TestDGLMoleculeDataset:
-    def test_from_molecules(self, openff_methane):
+    def test_from_molecules(self, rdkit_methane):
 
         data_set = DGLMoleculeDataset.from_molecules(
-            [openff_methane], [AtomConnectivity()], [BondIsInRing()], label_function
+            [rdkit_methane], [AtomConnectivity()], [BondIsInRing()], label_function
         )
         assert len(data_set) == 1
 
@@ -122,8 +119,8 @@ class TestDGLMoleculeDataset:
 
         dataset = DGLMoleculeDataset.from_molecules(
             [
-                Molecule.from_mapped_smiles("[O-:1][H:2]"),
-                Molecule.from_mapped_smiles("[H:1][H:2]"),
+                molecule_from_mapped_smiles("[O-:1][H:2]"),
+                molecule_from_mapped_smiles("[H:1][H:2]"),
             ],
             [AtomicElement(values=["H", "O"])],
             [BondIsInRing()],
@@ -166,8 +163,8 @@ def test_collate_dgl_molecules():
 
     dataset = DGLMoleculeDataset.from_molecules(
         [
-            Molecule.from_mapped_smiles("[O-:1][H:2]"),
-            Molecule.from_mapped_smiles("[H:1][H:2]"),
+            molecule_from_mapped_smiles("[O-:1][H:2]"),
+            molecule_from_mapped_smiles("[H:1][H:2]"),
         ],
         [AtomicElement(values=["H", "O"])],
         [],

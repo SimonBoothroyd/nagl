@@ -1,65 +1,58 @@
 import functools
 import logging
 import multiprocessing
+import pathlib
 import typing
 
 import click
+import rich.progress
 from click_option_group import optgroup
-from openff.utilities import requires_package
-from tqdm import tqdm
+from rdkit import Chem
+from rdkit.Chem import rdMolDescriptors
 
-from nagl.utilities.toolkits import (
-    capture_toolkit_warnings,
+from nagl.utilities.molecule import (
+    molecule_from_smiles,
     stream_from_file,
     stream_to_file,
 )
-
-if typing.TYPE_CHECKING:
-    from openff.toolkit.topology import Molecule
 
 _logger = logging.getLogger(__name__)
 
 
 def apply_filter(
-    molecule: "Molecule", retain_largest: bool
-) -> typing.Tuple["Molecule", bool]:
+    molecule: Chem.Mol, retain_largest: bool
+) -> typing.Tuple[Chem.Mol, bool]:
 
-    with capture_toolkit_warnings():
+    try:
 
-        try:
-            from openff.toolkit.topology import Molecule
-            from openff.units import unit as openff_unit
+        split_smiles = Chem.MolToSmiles(molecule).split(".")
+        n_sub_molecules = len(split_smiles)
 
-            split_smiles = molecule.to_smiles().split(".")
-            n_sub_molecules = len(split_smiles)
+        if retain_largest and n_sub_molecules > 1:
 
-            if retain_largest and n_sub_molecules > 1:
+            largest_smiles = max(split_smiles, key=len)
+            molecule = molecule_from_smiles(largest_smiles)
 
-                largest_smiles = max(split_smiles, key=len)
-                molecule = Molecule.from_smiles(
-                    largest_smiles, allow_undefined_stereo=True
+        # Retain H, C, N, O, F, P, S, Cl, Br, I
+        allowed_elements = [1, 6, 7, 8, 9, 15, 16, 17, 35, 53]
+
+        mass = sum(atom.GetMass() for atom in molecule.GetAtoms())
+
+        return (
+            molecule,
+            (
+                all(
+                    atom.GetAtomicNum() in allowed_elements
+                    for atom in molecule.GetAtoms()
                 )
+                and (250.0 < mass < 350.0)
+                and (rdMolDescriptors.CalcNumRotatableBonds(molecule) <= 7)
+            ),
+        )
 
-            # Retain H, C, N, O, F, P, S, Cl, Br, I
-            allowed_elements = [1, 6, 7, 8, 9, 15, 16, 17, 35, 53]
-
-            mass = sum(atom.mass.m_as(openff_unit.dalton) for atom in molecule.atoms)
-
-            return (
-                molecule,
-                (
-                    all(
-                        atom.atomic_number in allowed_elements
-                        for atom in molecule.atoms
-                    )
-                    and (250.0 < mass < 350.0)
-                    and (len(molecule.find_rotatable_bonds()) <= 7)
-                ),
-            )
-
-        except BaseException:
-            _logger.exception("failed to apply filter")
-            return molecule, False
+    except BaseException:
+        _logger.exception("failed to apply filter")
+        return molecule, False
 
 
 @click.command(
@@ -79,7 +72,9 @@ def apply_filter(
     "input_path",
     help="The path to the input molecules. This should either be an SDF or a GZipped "
     "SDF file.",
-    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    type=click.Path(
+        exists=True, file_okay=True, dir_okay=False, path_type=pathlib.Path
+    ),
     required=True,
 )
 @click.option(
@@ -87,7 +82,9 @@ def apply_filter(
     "output_path",
     help="The path to save the filtered molecules to. This should either be an SDF or "
     "a GZipped SDF file.",
-    type=click.Path(exists=False, file_okay=True, dir_okay=False),
+    type=click.Path(
+        exists=False, file_okay=True, dir_okay=False, path_type=pathlib.Path
+    ),
     required=True,
 )
 @click.option(
@@ -106,29 +103,27 @@ def apply_filter(
     default=1,
     show_default=True,
 )
-@requires_package("openff.toolkit")
 def filter_cli(
-    input_path: str,
-    output_path: str,
+    input_path: pathlib.Path,
+    output_path: pathlib.Path,
     n_processes: int,
     strip_ions: bool,
 ):
 
     print(" - Filtering molecules")
 
-    with capture_toolkit_warnings():
-        with stream_to_file(output_path) as writer:
+    with stream_to_file(output_path) as writer:
 
-            with multiprocessing.Pool(processes=n_processes) as pool:
+        with multiprocessing.Pool(processes=n_processes) as pool:
 
-                for molecule, should_include in tqdm(
-                    pool.imap(
-                        functools.partial(apply_filter, retain_largest=strip_ions),
-                        stream_from_file(input_path),
-                    ),
-                ):
+            for molecule, should_include in rich.progress.track(
+                pool.imap(
+                    functools.partial(apply_filter, retain_largest=strip_ions),
+                    stream_from_file(input_path),
+                ),
+            ):
 
-                    if not should_include:
-                        continue
+                if not should_include:
+                    continue
 
-                    writer(molecule)
+                writer(molecule)

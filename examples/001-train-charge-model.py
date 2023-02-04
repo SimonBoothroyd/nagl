@@ -101,7 +101,15 @@ def main():
     # Define an MLFlow experiment to store the outputs of training this model. This
     # Will include the usual statistics as well as useful artifacts highlighting
     # the models weak spots.
-    logger = MLFlowLogger(experiment_name="am1bcc-charge-model")
+    logger = MLFlowLogger(
+        experiment_name="am1bcc-charge-model", save_dir=str(output_dir / "mlruns")
+    )
+
+    # The MLFlow UI can be opened by running:
+    #
+    #    mlflow ui --backend-store-uri     ./001-train-charge-model/mlruns \
+    #              --default-artifact-root ./001-train-charge-model/mlruns
+    #
 
     # Train the model
     n_epochs = 100
@@ -110,7 +118,11 @@ def main():
     print(f"Using {n_gpus} GPUs")
 
     trainer = pl.Trainer(
-        gpus=n_gpus, min_epochs=n_epochs, max_epochs=n_epochs, logger=logger
+        gpus=n_gpus,
+        min_epochs=n_epochs,
+        max_epochs=n_epochs,
+        logger=logger,
+        log_every_n_steps=1,
     )
 
     trainer.fit(model, datamodule=data)

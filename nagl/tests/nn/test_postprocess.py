@@ -2,24 +2,24 @@ import dgl
 import numpy
 import pytest
 import torch
-from openff.toolkit.topology import Molecule
 
 from nagl.molecules import DGLMolecule, DGLMoleculeBatch
 from nagl.nn.postprocess import PartialChargeLayer, get_postprocess_layer
+from nagl.utilities.molecule import molecule_from_mapped_smiles
 from nagl.utilities.resonance import enumerate_resonance_forms
 
 
 @pytest.fixture()
 def dgl_carboxylate():
 
-    molecule: Molecule = Molecule.from_mapped_smiles("[H:1][C:2](=[O:3])[O-:4]")
+    molecule = molecule_from_mapped_smiles("[H:1][C:2](=[O:3])[O-:4]")
 
     resonance_forms = enumerate_resonance_forms(
         molecule, lowest_energy_only=True, as_dicts=False
     )
 
     graphs = [
-        DGLMolecule.from_openff(resonance_form, [], []).graph
+        DGLMolecule.from_rdkit(resonance_form, [], []).graph
         for resonance_form in resonance_forms
     ]
 

@@ -1,5 +1,4 @@
 import torch
-from openff.toolkit import Molecule
 
 from nagl.molecules import DGLMolecule
 from nagl.reporting._reporting import (
@@ -7,11 +6,12 @@ from nagl.reporting._reporting import (
     _generate_per_atom_jinja_dicts,
     create_atom_label_report,
 )
+from nagl.utilities.molecule import molecule_from_smiles
 
 
 def test_draw_molecule_with_atom_labels():
 
-    molecule = Molecule.from_smiles("[Cl-]")
+    molecule = molecule_from_smiles("[Cl-]")
 
     svg = _draw_molecule_with_atom_labels(
         molecule, torch.tensor([9.87]), torch.tensor([1.23])
@@ -22,7 +22,7 @@ def test_draw_molecule_with_atom_labels():
 def test_generate_per_atom_jinja_dicts():
 
     entries = [
-        (Molecule.from_smiles("[H]Cl"), torch.zeros(2), torch.zeros(2)),
+        (molecule_from_smiles("[H]Cl"), torch.zeros(2), torch.zeros(2)),
         (DGLMolecule.from_smiles("[H]Br", [], []), torch.zeros(2), torch.zeros(2)),
     ]
 
@@ -37,9 +37,9 @@ def test_generate_per_atom_jinja_dicts():
 def test_create_atom_label_report(tmp_cwd):
 
     entries = [
-        (Molecule.from_smiles("[H]Cl"), torch.zeros(2), torch.ones(2)),
-        (Molecule.from_smiles("[H]Br"), torch.zeros(2), torch.zeros(2)),
-        (Molecule.from_smiles("[H]O[H]"), torch.zeros(3), torch.zeros(3)),
+        (molecule_from_smiles("[H]Cl"), torch.zeros(2), torch.ones(2)),
+        (molecule_from_smiles("[H]Br"), torch.zeros(2), torch.zeros(2)),
+        (molecule_from_smiles("[H]O[H]"), torch.zeros(3), torch.zeros(3)),
     ]
 
     report_path = tmp_cwd / "report.html"

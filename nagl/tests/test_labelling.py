@@ -1,13 +1,12 @@
 import numpy
-import pytest
-from openff.toolkit.topology import Molecule
 
-from nagl.labelling import _get_map_func, compute_charges_func, label_molecules
+from nagl.labelling import compute_charges_func, label_molecules
+from nagl.utilities.molecule import molecule_from_smiles
 
 
 def test_compute_charges():
 
-    molecule = Molecule.from_smiles("C")
+    molecule = molecule_from_smiles("C")
 
     func = compute_charges_func("am1bcc", n_conformers=1)
 
@@ -17,13 +16,6 @@ def test_compute_charges():
     charges = charges_per_method["charges-am1bcc"]
     assert charges.shape == (5, 1)
     assert not numpy.allclose(charges, 0.0)
-
-
-@pytest.mark.parametrize("n_processes, expected_name", [(1, "imap"), (0, "map")])
-def test_get_map_func(n_processes, expected_name):
-
-    with _get_map_func(n_processes) as map_func:
-        assert map_func.__name__ == expected_name
 
 
 def test_label_molecules():

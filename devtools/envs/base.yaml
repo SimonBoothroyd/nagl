@@ -8,12 +8,11 @@ dependencies:
   - python >3.8
   - pip
 
-  - openff-utilities >=0.1.5
   - pydantic
   - jinja2
   - openssl
+  - rich
 
-  - openff-toolkit-base >=0.11.0
   - rdkit
 
   - click
@@ -21,16 +20,20 @@ dependencies:
 
   - pytorch
   - pytorch-lightning
+  - lightning-utilities =0.3
+
   - dgl >=0.7
+
   - pyarrow
   - mlflow
 
-  - tqdm
-  - rich
+  - pip:
+      - ray[tune]
 
   # Optional dependencies
 
-  ### Computing charges
+  ### Computing AM1 charges
+  - openff-toolkit-base >=0.11.0
   - ambertools
 
     # Dev / Testing

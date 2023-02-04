@@ -1,15 +1,16 @@
 import networkx
 import pytest
-from openff.toolkit.topology import Molecule
+from rdkit import Chem
 
-from nagl.utilities.resonance._conversion import openff_molecule_to_networkx
-
-
-@pytest.fixture()
-def openff_carboxylate() -> Molecule:
-    return Molecule.from_mapped_smiles("[C:1]([O-:2])(=[O:3])([H:4])")
+from nagl.utilities.molecule import molecule_from_mapped_smiles
+from nagl.utilities.resonance._conversion import rdkit_molecule_to_networkx
 
 
 @pytest.fixture()
-def nx_carboxylate(openff_carboxylate) -> networkx.Graph:
-    return openff_molecule_to_networkx(openff_carboxylate)
+def rdkit_carboxylate() -> Chem.Mol:
+    return molecule_from_mapped_smiles("[C:1]([O-:2])(=[O:3])([H:4])")
+
+
+@pytest.fixture()
+def nx_carboxylate(rdkit_carboxylate) -> networkx.Graph:
+    return rdkit_molecule_to_networkx(rdkit_carboxylate)

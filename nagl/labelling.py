@@ -1,37 +1,31 @@
-import contextlib
-import copy
 import functools
-import multiprocessing
 import traceback
 import typing
 from collections import defaultdict
 
 import numpy
 import pyarrow
+from rdkit import Chem
 
-from nagl.utilities.smiles import smiles_to_molecule
-from nagl.utilities.toolkits import capture_toolkit_warnings
-
-if typing.TYPE_CHECKING:
-    from openff.toolkit.topology import Molecule
-
+from nagl.utilities import get_map_func
+from nagl.utilities.molecule import molecule_from_smiles
 
 _OPENFF_CHARGE_METHODS = {"am1": "am1-mulliken", "am1bcc": "am1bcc"}
-_OPENFF_WBO_METHODS = {"am1": "am1-wiberg"}
+
 
 ChargeMethod = typing.Literal["am1", "am1bcc"]
 
 Labels = typing.Dict[str, numpy.ndarray]
-LabelFunction = typing.Callable[["Molecule"], Labels]
+LabelFunction = typing.Callable[[Chem.Mol], Labels]
 
 ProgressIterator = typing.Callable[
-    [typing.Iterable[typing.Union[str, "Molecule"]]],
-    typing.Iterable[typing.Union[str, "Molecule"]],
+    [typing.Iterable[typing.Union[str, Chem.Mol]]],
+    typing.Iterable[typing.Union[str, Chem.Mol]],
 ]
 
 
 def compute_charges(
-    molecule: "Molecule",
+    molecule: Chem.Mol,
     methods: typing.Optional[typing.Union[ChargeMethod, typing.List[ChargeMethod]]],
     n_conformers: int = 500,
     rms_cutoff: float = 0.05,
@@ -53,9 +47,10 @@ def compute_charges(
         The labelled molecule stored in a record object
     """
 
+    from openff.toolkit.topology import Molecule
     from openff.units import unit
 
-    molecule = copy.deepcopy(molecule)
+    molecule = Molecule.from_rdkit(molecule)
 
     methods = [methods] if isinstance(methods, str) else methods
     methods = methods if methods is not None else [*_OPENFF_CHARGE_METHODS]
@@ -108,22 +103,8 @@ def compute_charges_func(
     )
 
 
-@contextlib.contextmanager
-def _get_map_func(
-    n_processes: int,
-) -> typing.Callable[[typing.Callable, typing.Iterable], typing.Any]:
-
-    if n_processes > 0:
-
-        with multiprocessing.Pool(n_processes) as pool:
-            yield pool.imap
-
-    else:
-        yield map
-
-
 def _label_molecule(
-    molecule: typing.Union[str, "Molecule"],
+    molecule: typing.Union[str, Chem.Mol],
     label_func: LabelFunction,
     guess_stereo: bool = True,
 ) -> typing.Tuple[typing.Optional[Labels], typing.Optional[str]]:
@@ -133,18 +114,20 @@ def _label_molecule(
         molecule = (
             molecule
             if not isinstance(molecule, str)
-            else smiles_to_molecule(molecule, guess_stereo)
+            else molecule_from_smiles(molecule, guess_stereo)
         )
         return label_func(molecule), None
 
     except BaseException as e:
 
+        smiles = None if molecule is None else Chem.MolToSmiles(molecule)
+
         formatted_traceback = traceback.format_exception(type(e), e, e.__traceback__)
-        return None, f"Failed to process {str(molecule)}: {formatted_traceback}"
+        return None, f"Failed to process {str(smiles)}: {formatted_traceback}"
 
 
 def label_molecules(
-    molecules: typing.List[typing.Union[str, "Molecule"]],
+    molecules: typing.List[typing.Union[str, Chem.Mol]],
     label_func: LabelFunction,
     metadata: typing.Optional[typing.Dict[str, str]] = None,
     guess_stereo: bool = True,
@@ -185,9 +168,8 @@ def label_molecules(
         _label_molecule, label_func=label_func, guess_stereo=guess_stereo
     )
 
-    with capture_toolkit_warnings():
-        with _get_map_func(n_processes) as map_func:
-            labels_and_errors = map_func(label_molecule_func, molecules)
+    with get_map_func(n_processes) as map_func:
+        labels_and_errors = map_func(label_molecule_func, molecules)
 
     for labels, error in labels_and_errors:
 

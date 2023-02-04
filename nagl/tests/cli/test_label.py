@@ -3,10 +3,9 @@ import pathlib
 
 import pyarrow.parquet
 import pytest
-from openff.toolkit.topology import Molecule
 
 from nagl.cli.label import label_cli
-from nagl.utilities.toolkits import stream_to_file
+from nagl.utilities.molecule import molecule_from_smiles, stream_to_file
 
 
 @pytest.fixture
@@ -14,10 +13,10 @@ def mock_molecules(tmp_path) -> pathlib.Path:
 
     molecule_path = tmp_path / "molecules.sdf"
 
-    with stream_to_file(str(molecule_path)) as writer:
+    with stream_to_file(molecule_path) as writer:
 
-        writer(Molecule.from_smiles("C"))
-        writer(Molecule.from_smiles("C(Cl)(Br)(F)", allow_undefined_stereo=True))
+        writer(molecule_from_smiles("C"))
+        writer(molecule_from_smiles("[Rn]"))
 
     return molecule_path
 
@@ -42,7 +41,7 @@ def test_label_cli(tmp_cwd, mock_molecules, runner, caplog):
         print(result.stdout, flush=True)
         raise result.exception
 
-    assert "Failed to process [H]C(F)(Cl)Br" in caplog.text
+    assert "Failed to process [Rn]" in caplog.text
 
     assert expected_output_path.is_file()
 

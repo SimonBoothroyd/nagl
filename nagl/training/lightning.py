@@ -1,4 +1,5 @@
 import dataclasses
+import functools
 import hashlib
 import json
 import logging
@@ -10,6 +11,7 @@ import typing
 import pyarrow.parquet
 import pydantic
 import pytorch_lightning as pl
+import rich.progress
 import torch
 import torch.nn
 from pytorch_lightning.loggers import MLFlowLogger
@@ -80,6 +82,12 @@ def _hash_featurized_dataset(
             result = subprocess.run(
                 ["openssl", "sha256", source], capture_output=True, text=True
             )
+
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"openssl failed: {pathlib.Path.cwd()} {result.stdout} {result.stderr}"
+                )
+
             result.check_returncode()
 
             source_hashes.append(result.stdout)
@@ -102,22 +110,26 @@ class DGLMoleculeLightningModel(pl.LightningModule):
     pooling and readout steps.
     """
 
-    def __init__(self, config: Config):
+    def __init__(self, config: typing.Union[Config, typing.Dict[str, typing.Any]]):
 
         super().__init__()
+        self.save_hyperparameters({"config": dataclasses.asdict(config)})
+
+        if not isinstance(config, Config):
+            config = Config(**config)
 
         self.config = config
 
         n_input_feats = sum(len(feature) for feature in self.config.model.atom_features)
 
         convolution_class = nagl.nn.convolution.get_convolution_layer(
-            config.model.convolution.type
+            self.config.model.convolution.type
         )
         self.convolution_module = convolution_class(
             n_input_feats,
-            config.model.convolution.hidden_feats,
-            _get_activation(config.model.convolution.activation),
-            config.model.convolution.dropout,
+            self.config.model.convolution.hidden_feats,
+            _get_activation(self.config.model.convolution.activation),
+            self.config.model.convolution.dropout,
         )
         self.readout_modules = torch.nn.ModuleDict(
             {
@@ -126,7 +138,7 @@ class DGLMoleculeLightningModel(pl.LightningModule):
                         readout_config.pooling
                     )(),
                     forward_layers=nagl.nn.Sequential(
-                        config.model.convolution.hidden_feats[-1],
+                        self.config.model.convolution.hidden_feats[-1],
                         readout_config.forward.hidden_feats,
                         _get_activation(readout_config.forward.activation),
                         readout_config.forward.dropout,
@@ -135,7 +147,7 @@ class DGLMoleculeLightningModel(pl.LightningModule):
                         readout_config.postprocess
                     )(),
                 )
-                for readout_name, readout_config in config.model.readouts.items()
+                for readout_name, readout_config in self.config.model.readouts.items()
             }
         )
 
@@ -266,8 +278,10 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
     def __init__(
         self,
         config: Config,
-        cache_dir: typing.Optional[pathlib.Path] = None,
         molecule_to_dgl: typing.Optional[MoleculeToDGLFunc] = None,
+        cache_dir: typing.Optional[pathlib.Path] = None,
+        n_workers: int = 0,
+        progress_bar: bool = True,
     ):
         """
 
@@ -276,16 +290,23 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
             cache_dir: The (optional) directory to store and load cached featurized data
                 in. **No validation is done to ensure the loaded data matches the input
                 config so be extra careful when using this option**.
-            molecule_to_dgl: A (optional) callable to use when converting an OpenFF
+            n_workers: The number of workers to distribute the data set preparation /
+                setup over. A value of 0 indicates no multiprocessing should be used.
+            molecule_to_dgl: A (optional) callable to use when converting an RDKit
                 ``Molecule`` object to a ``DGLMolecule`` object. By default, the
-                ``DGLMolecule.from_openff`` class method is used.
+                ``DGLMolecule.from_rdkit`` class method is used.
+            progress_bar: Whether to show a progress bar when preparing / setting up the
+                data.
         """
         super().__init__()
 
         self._config = config
         self._cache_dir = cache_dir
 
+        self._n_workers = n_workers
         self._molecule_to_dgl = molecule_to_dgl
+
+        self._progress_bar = progress_bar
 
         self._data_sets: typing.Dict[str, DGLMoleculeDataset] = {}
 
@@ -335,6 +356,8 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
 
         for stage, stage_paths in self._data_set_paths.items():
 
+            _logger.info(f"preparing {stage}")
+
             dataset_config = self._data_set_configs[stage]
             columns = sorted({target.column for target in dataset_config.targets})
 
@@ -357,17 +380,23 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
                 _logger.info(f"found cached featurized dataset at {cached_path}")
                 continue
 
+            progress_bar = functools.partial(
+                rich.progress.track, description=f"featurizing {stage} set"
+            )
+
             dataset = DGLMoleculeDataset.from_unfeaturized(
                 [pathlib.Path(path) for path in stage_paths],
                 columns=columns,
                 atom_features=self._config.model.atom_features,
                 bond_features=self._config.model.bond_features,
                 molecule_to_dgl=self._molecule_to_dgl,
+                progress_iterator=None if not self._progress_bar else progress_bar,
+                n_processes=self._n_workers,
             )
 
-            if self._cache_dir is None:
-                self._data_sets[stage] = dataset
-            else:
+            self._data_sets[stage] = dataset
+
+            if self._cache_dir is not None:
                 self._cache_dir.mkdir(parents=True, exist_ok=True)
                 pyarrow.parquet.write_table(dataset.to_table(), cached_path)
 
@@ -378,12 +407,22 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
 
         for stage in self._data_set_paths:
 
+            if stage in self._data_sets and self._data_sets[stage] is not None:
+                continue
+
             hash_string = _hash_featurized_dataset(
                 self._data_set_configs[stage],
                 self._config.model.atom_features,
                 self._config.model.bond_features,
             )
 
+            progress_bar = functools.partial(
+                rich.progress.track, description=f"loading cached {stage} set"
+            )
+
             self._data_sets[stage] = DGLMoleculeDataset.from_featurized(
-                self._cache_dir / f"{stage}-{hash_string}.parquet", columns=None
+                self._cache_dir / f"{stage}-{hash_string}.parquet",
+                columns=None,
+                progress_iterator=None if not self._progress_bar else progress_bar,
+                n_processes=self._n_workers,
             )

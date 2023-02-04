@@ -1,6 +1,7 @@
 import pytest
-from openff.toolkit.topology import Molecule
+from rdkit import Chem
 
+from nagl.utilities.molecule import molecule_from_mapped_smiles, molecule_from_smiles
 from nagl.utilities.resonance._resonance import (
     PathCache,
     _find_donor_acceptors,
@@ -11,8 +12,8 @@ from nagl.utilities.resonance._resonance import (
     _perform_electron_transfer,
     _select_lowest_energy_forms,
     enumerate_resonance_forms,
-    openff_molecule_from_networkx,
-    openff_molecule_to_networkx,
+    rdkit_molecule_from_networkx,
+    rdkit_molecule_to_networkx,
 )
 
 
@@ -81,7 +82,7 @@ def test_enumerate_resonance_forms(
     include_all_transfer_pathways,
 ):
 
-    input_molecule: Molecule = Molecule.from_smiles(input_smiles)
+    input_molecule = molecule_from_smiles(input_smiles)
 
     actual_molecules = enumerate_resonance_forms(
         input_molecule,
@@ -91,20 +92,19 @@ def test_enumerate_resonance_forms(
     )
     assert len(actual_molecules) == n_expected
 
-    assert (
-        # Handle differences in OE and RDKit SMILES
-        {molecule.to_smiles() for molecule in actual_molecules}
-        == {
-            Molecule.from_smiles(smiles, allow_undefined_stereo=True).to_smiles()
-            for smiles in expected_smiles
-        }
-    )
+    expected_smiles = {
+        Chem.MolToSmiles(Chem.AddHs(Chem.MolFromSmiles(smiles)))
+        for smiles in expected_smiles
+    }
+    assert {
+        Chem.MolToSmiles(molecule) for molecule in actual_molecules
+    } == expected_smiles
 
 
 def test_graphs_to_dicts():
 
     sub_graphs = [
-        openff_molecule_to_networkx(Molecule.from_mapped_smiles(smiles))
+        rdkit_molecule_to_networkx(molecule_from_mapped_smiles(smiles))
         for smiles in [
             "[N:1]([H:2])([H:3])[C:4](=[O:5])[H:6]",
             "[N+:1]([H:2])([H:3])=[C:4]([O-:5])[H:6]",
@@ -144,7 +144,7 @@ def test_graphs_to_dicts():
 )
 def test_find_sub_graphs(smiles, expected_groups):
 
-    nx_graph = openff_molecule_to_networkx(Molecule.from_mapped_smiles(smiles))
+    nx_graph = rdkit_molecule_to_networkx(molecule_from_mapped_smiles(smiles))
     sub_graphs = _find_sub_graphs(nx_graph)
 
     assert (
@@ -159,16 +159,27 @@ def test_find_donor_acceptors(nx_carboxylate):
 
 def test_find_transfer_paths():
 
-    molecule: Molecule = Molecule.from_smiles("[NH2+]=C1C=CNC=C1")
+    molecule = molecule_from_smiles("[NH2+:1]=[C:2]1[C:3]=[C:4][N:5][C:6]=[C:7]1")
 
-    [(acceptor_index,)] = molecule.chemical_environment_matches("[#7+1:1]")
-    [(donor_index,)] = molecule.chemical_environment_matches("[#7+0:1]")
+    (acceptor_index,) = [
+        atom.GetIdx() for atom in molecule.GetAtoms() if atom.GetAtomMapNum() == 1
+    ]
+    (donor_index,) = [
+        atom.GetIdx() for atom in molecule.GetAtoms() if atom.GetAtomMapNum() == 5
+    ]
 
-    expected_paths = molecule.chemical_environment_matches(
-        "[#7+0:1]~[*:2]~[*:3]~[*:4]~[#7+1:5]"
-    )
+    map_idx_to_idx = {
+        atom.GetAtomMapNum(): atom.GetIdx()
+        for atom in molecule.GetAtoms()
+        if atom.GetAtomMapNum() > 0
+    }
 
-    nx_graph = openff_molecule_to_networkx(molecule)
+    expected_paths = [
+        tuple(map_idx_to_idx[map_idx] for map_idx in expected_path)
+        for expected_path in [(5, 4, 3, 2, 1), (5, 6, 7, 2, 1)]
+    ]
+
+    nx_graph = rdkit_molecule_to_networkx(molecule)
 
     transfer_paths = _find_transfer_paths(
         nx_graph, acceptor_index, donor_index, PathCache(nx_graph)
@@ -195,19 +206,19 @@ def test_perform_electron_transfer(nx_carboxylate):
 def test_select_lowest_energy_forms():
 
     input_molecules = [
-        Molecule.from_mapped_smiles("[N:1]([H:2])([H:3])[C:4](=[O:5])[H:6]"),
-        Molecule.from_mapped_smiles("[N+:1]([H:2])([H:3])=[C:4]([O-:5])[H:6]"),
+        molecule_from_mapped_smiles("[N:1]([H:2])([H:3])[C:4](=[O:5])[H:6]"),
+        molecule_from_mapped_smiles("[N+:1]([H:2])([H:3])=[C:4]([O-:5])[H:6]"),
     ]
 
     lowest_energy_forms = _select_lowest_energy_forms(
         {
-            str(i).encode(): openff_molecule_to_networkx(molecule)
+            str(i).encode(): rdkit_molecule_to_networkx(molecule)
             for i, molecule in enumerate(input_molecules)
         }
     )
     assert len(lowest_energy_forms) == 1
 
-    lowest_energy_form = openff_molecule_from_networkx(lowest_energy_forms[b"0"])
-    assert Molecule.are_isomorphic(lowest_energy_form, input_molecules[0])[0]
-
-    print(lowest_energy_forms)
+    lowest_energy_form = rdkit_molecule_from_networkx(lowest_energy_forms[b"0"])
+    assert Chem.MolToSmiles(Chem.AddHs(lowest_energy_form)) == Chem.MolToSmiles(
+        input_molecules[0]
+    )

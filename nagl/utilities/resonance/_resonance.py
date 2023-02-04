@@ -6,14 +6,14 @@ import typing
 
 import networkx
 import numpy
-from openff.toolkit.topology import Molecule
+from rdkit import Chem
 
 from nagl.utilities.resonance._caching import PathCache
 from nagl.utilities.resonance._conversion import (
     dgl_molecule_from_networkx,
     dgl_molecule_to_networkx,
-    openff_molecule_from_networkx,
-    openff_molecule_to_networkx,
+    rdkit_molecule_from_networkx,
+    rdkit_molecule_to_networkx,
 )
 
 if typing.TYPE_CHECKING:
@@ -66,12 +66,12 @@ _RESONANCE_KEYS_BY_ID = {value.id: key for key, value in _RESONANCE_TYPES.items(
 
 @typing.overload
 def enumerate_resonance_forms(
-    molecule: Molecule,
+    molecule: Chem.Mol,
     lowest_energy_only: bool = True,
     max_path_length: typing.Optional[int] = None,
     as_dicts: typing.Literal[False] = False,
     include_all_transfer_pathways: bool = False,
-) -> typing.List[Molecule]:
+) -> typing.List[Chem.Mol]:
     ...
 
 
@@ -88,7 +88,7 @@ def enumerate_resonance_forms(
 
 @typing.overload
 def enumerate_resonance_forms(
-    molecule: typing.Union[Molecule, "DGLMolecule"],
+    molecule: typing.Union[Chem.Mol, "DGLMolecule"],
     lowest_energy_only: bool = True,
     max_path_length: typing.Optional[int] = None,
     as_dicts: typing.Literal[True] = True,
@@ -160,8 +160,8 @@ def enumerate_resonance_forms(
 
     from nagl.molecules import DGLMolecule
 
-    if isinstance(molecule, Molecule):
-        original_nx_graph = openff_molecule_to_networkx(molecule)
+    if isinstance(molecule, Chem.Mol):
+        original_nx_graph = rdkit_molecule_to_networkx(molecule)
     elif isinstance(molecule, DGLMolecule):
         original_nx_graph = dgl_molecule_to_networkx(molecule)
     else:
@@ -249,9 +249,9 @@ def _graphs_to_molecules(
 
         found_resonance_forms.append(resonance_form)
 
-    if issubclass(expected_type, Molecule):
+    if issubclass(expected_type, Chem.Mol):
         resonance_forms = [
-            openff_molecule_from_networkx(resonance_graph)
+            rdkit_molecule_from_networkx(resonance_graph)
             for resonance_graph in found_resonance_forms
         ]
     elif issubclass(expected_type, DGLMolecule):

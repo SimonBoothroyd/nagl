@@ -4,55 +4,61 @@ import typing
 import dgl
 import networkx
 import torch
-from openff.toolkit.topology import Molecule
+from rdkit import Chem
+
+from nagl.utilities.molecule import BOND_ORDER_TO_TYPE, BOND_TYPE_TO_ORDER
 
 if typing.TYPE_CHECKING:
     from nagl.molecules import DGLMolecule
 
 
-def openff_molecule_to_networkx(molecule: Molecule) -> networkx.Graph:
-    """Attempts to create a networkx graph representation from an OpenFF molecule
+def rdkit_molecule_to_networkx(molecule: Chem.Mol) -> networkx.Graph:
+    """Attempts to create a networkx graph representation from an RDKit molecule
     object.
 
     Args:
-        molecule: The OpenFF molecule object.
+        molecule: The RDKit molecule object.
 
     Returns:
         The graph representation.
     """
 
-    from openff.units import unit as openff_unit
+    molecule = Chem.Mol(molecule)
+    Chem.Kekulize(molecule)
 
     nx_graph = networkx.Graph()
     nx_graph.add_nodes_from(
         [
             (
-                atom_index,
+                atom.GetIdx(),
                 {
-                    "element": atom.symbol,
-                    "formal_charge": atom.formal_charge.m_as(
-                        openff_unit.elementary_charge
-                    ),
+                    "element": atom.GetSymbol(),
+                    "formal_charge": atom.GetFormalCharge(),
                     "bond_orders": tuple(
-                        sorted(bond.bond_order for bond in atom.bonds)
+                        sorted(
+                            BOND_TYPE_TO_ORDER[bond.GetBondType()]
+                            for bond in atom.GetBonds()
+                        )
                     ),
                 },
             )
-            for atom_index, atom in enumerate(molecule.atoms)
+            for atom in molecule.GetAtoms()
         ]
     )
 
-    for bond in molecule.bonds:
+    for bond in molecule.GetBonds():
 
         nx_graph.add_edge(
-            bond.atom1_index, bond.atom2_index, bond_order=bond.bond_order
+            bond.GetBeginAtomIdx(),
+            bond.GetEndAtomIdx(),
+            bond_order=BOND_TYPE_TO_ORDER[bond.GetBondType()],
         )
 
     return nx_graph
 
 
-def openff_molecule_from_networkx(nx_graph: networkx.Graph) -> Molecule:
-    """Attempts to create an OpenFF molecule from a networkx graph representation.
+def rdkit_molecule_from_networkx(nx_graph: networkx.Graph) -> Chem.Mol:
+    """Attempts to create an RDKit molecule from a networkx graph representation.
 
     Notes:
         This method will strip all stereochemistry and aromaticity information.
@@ -61,32 +67,30 @@ def openff_molecule_from_networkx(nx_graph: networkx.Graph) -> Molecule:
         nx_graph: The graph representation.
 
     Returns:
-        The OpenFF molecule object.
+        The RDKit molecule object.
     """
 
-    from openff.units.elements import SYMBOLS
-
-    molecule = Molecule()
-
-    symbol_to_num = {v: k for k, v in SYMBOLS.items()}
+    molecule = Chem.RWMol()
 
     for node_index in nx_graph.nodes:
         node = nx_graph.nodes[node_index]
 
-        molecule.add_atom(
-            symbol_to_num[node["element"]],
-            node["formal_charge"],
-            False,
-        )
+        atom = Chem.Atom(node["element"])
+        atom.SetFormalCharge(node["formal_charge"])
+
+        molecule.AddAtom(atom)
 
     for atom_index_a, atom_index_b in nx_graph.edges:
 
-        molecule.add_bond(
+        molecule.AddBond(
             atom_index_a,
             atom_index_b,
-            nx_graph[atom_index_a][atom_index_b]["bond_order"],
-            False,
+            BOND_ORDER_TO_TYPE[nx_graph[atom_index_a][atom_index_b]["bond_order"]],
         )
+
+    molecule = Chem.Mol(molecule)
+    Chem.SanitizeMol(molecule)
+    Chem.SetAromaticity(molecule, Chem.AROMATICITY_RDKIT)
 
     return molecule
 
@@ -102,12 +106,10 @@ def dgl_molecule_to_networkx(molecule: "DGLMolecule") -> networkx.Graph:
         The graph representation.
     """
 
-    from openff.units.elements import SYMBOLS
-
     dgl_graph = molecule.graph
 
     elements = [
-        SYMBOLS[int(atomic_number)]
+        Chem.Atom(int(atomic_number)).GetSymbol()
         for atomic_number in dgl_graph.ndata["atomic_number"]
     ]
     formal_charges = dgl_graph.ndata["formal_charge"]
@@ -170,11 +172,7 @@ def dgl_molecule_from_networkx(nx_graph: networkx.Graph) -> "DGLMolecule":
         The DGL heterograph object.
     """
 
-    from openff.units.elements import SYMBOLS
-
     from nagl.molecules import DGLMolecule
-
-    symbol_to_num = {v: k for k, v in SYMBOLS.items()}
 
     indices_a, indices_b = zip(*nx_graph.edges)
 
@@ -191,7 +189,7 @@ def dgl_molecule_from_networkx(nx_graph: networkx.Graph) -> "DGLMolecule":
     )
     dgl_graph.ndata["atomic_number"] = torch.tensor(
         [
-            symbol_to_num[nx_graph.nodes[node_index]["element"]]
+            Chem.Atom(nx_graph.nodes[node_index]["element"]).GetAtomicNum()
             for node_index in nx_graph.nodes
         ],
         dtype=torch.uint8,

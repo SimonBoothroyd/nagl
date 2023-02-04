@@ -29,22 +29,8 @@ To make the full use of the framework, it is recommended to install the followin
 #### [OpenFF Toolkit](https://github.com/openforcefield/openff-toolkit):
 
 ```
-# Molecule loading and featurization
+# Molecule labelling
 conda install -c conda-forge openff-toolkit
-```
-
-#### [PyTorch Lightning](https://github.com/PyTorchLightning/pytorch-lightning):
-
-```
-# Cleaner, distributed model training
-conda install -c conda-forge pytorch-lightning
-```
-
-#### [Dask](https://github.com/dask/distributed):
-
-```
-# Distributed molecule processing / labelling.
-conda install -c conda-forge distributed dask-jobqueue
 ```
 
 ## License

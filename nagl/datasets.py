@@ -1,3 +1,4 @@
+import functools
 import logging
 import pathlib
 import typing
@@ -5,14 +6,16 @@ import typing
 import dgl
 import pyarrow.parquet
 import torch
+from rdkit import Chem
 from torch.utils.data import Dataset
 
 from nagl.features import AtomFeature, BondFeature
 from nagl.molecules import DGLMolecule, DGLMoleculeBatch, MoleculeToDGLFunc
-from nagl.utilities.toolkits import capture_toolkit_warnings
-
-if typing.TYPE_CHECKING:
-    from openff.toolkit.topology import Molecule
+from nagl.utilities import get_map_func
+from nagl.utilities.molecule import (
+    molecule_from_mapped_smiles,
+    molecule_to_mapped_smiles,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,15 +43,14 @@ class DGLMoleculeDataset(Dataset):
     @classmethod
     def from_molecules(
         cls: typing.Type["DGLMoleculeDataset"],
-        molecules: typing.Collection["Molecule"],
+        molecules: typing.Collection[Chem.Mol],
         atom_features: typing.List[AtomFeature],
         bond_features: typing.List[BondFeature],
-        label_function: typing.Callable[["Molecule"], typing.Dict[str, torch.Tensor]],
+        label_function: typing.Callable[[Chem.Mol], typing.Dict[str, torch.Tensor]],
         molecule_to_dgl: typing.Optional[MoleculeToDGLFunc] = None,
         progress_iterator: typing.Optional[typing.Any] = None,
     ) -> "DGLMoleculeDataset":
         """Creates a data set from a specified list of molecule objects.
-
         Args:
             molecules: The molecules to load into the set.
             atom_features: The atom features to compute for each molecule.
@@ -56,15 +58,15 @@ class DGLMoleculeDataset(Dataset):
             label_function: A function which will return a label for a given molecule.
                 The function should take a molecule as input, and return and tensor
                 with shape=(n_atoms,) containing the label of each atom.
-            molecule_to_dgl: A (optional) callable to use when converting an OpenFF
+            molecule_to_dgl: A (optional) callable to use when converting an RDkit
                 ``Molecule`` object to a ``DGLMolecule`` object. By default, the
-                ``DGLMolecule.from_openff`` class method is used.
+                ``DGLMolecule.from_rdkit`` class method is used.
             progress_iterator: An iterator (each a ``tqdm``) to loop over all molecules
                 using. This is useful if you wish to display a progress bar for example.
         """
 
         molecule_to_dgl = (
-            DGLMolecule.from_openff if molecule_to_dgl is None else molecule_to_dgl
+            DGLMolecule.from_rdkit if molecule_to_dgl is None else molecule_to_dgl
         )
 
         molecules = (
@@ -73,7 +75,6 @@ class DGLMoleculeDataset(Dataset):
         entries = []
 
         for molecule in molecules:
-
             label = label_function(molecule)
             dgl_molecule = molecule_to_dgl(molecule, atom_features, bond_features)
 
@@ -82,44 +83,27 @@ class DGLMoleculeDataset(Dataset):
         return cls(entries)
 
     @classmethod
-    def from_smiles(
-        cls: typing.Type["DGLMoleculeDataset"],
-        smiles: typing.Collection[str],
+    def _entry_from_unfeaturized(
+        cls,
+        labels: typing.Dict[str, typing.Any],
         atom_features: typing.List[AtomFeature],
         bond_features: typing.List[BondFeature],
-        label_function: typing.Callable[["Molecule"], typing.Dict[str, torch.Tensor]],
         molecule_to_dgl: typing.Optional[MoleculeToDGLFunc] = None,
-        progress_iterator: typing.Optional[typing.Any] = None,
-    ) -> "DGLMoleculeDataset":
-        """Creates a data set from a specified list of SMILES patterns.
+    ):
 
-        Args:
-            smiles: The SMILES representations of the molecules to load into the set.
-            atom_features: The atom features to compute for each molecule.
-            bond_features: The bond features to compute for each molecule.
-            label_function: A function which will return a label for a given molecule.
-                The function should take a molecule as input, and return and tensor
-                with shape=(n_atoms,) containing the label of each atom.
-            molecule_to_dgl: A (optional) callable to use when converting an OpenFF
-                ``Molecule`` object to a ``DGLMolecule`` object. By default, the
-                ``DGLMolecule.from_openff`` class method is used.
-            progress_iterator: An iterator (each a ``tqdm``) to loop over all molecules
-                using. This is useful if you wish to display a progress bar for example.
-        """
+        smiles = labels.pop("smiles")
 
-        from openff.toolkit.topology import Molecule
+        molecule = molecule_from_mapped_smiles(smiles)
+        dgl_molecule = molecule_to_dgl(molecule, atom_features, bond_features)
 
-        return cls.from_molecules(
-            [
-                Molecule.from_smiles(pattern, allow_undefined_stereo=True)
-                for pattern in smiles
-            ],
-            atom_features,
-            bond_features,
-            label_function,
-            molecule_to_dgl,
-            progress_iterator=progress_iterator,
-        )
+        for label, value in labels.items():
+
+            if value is None:
+                continue
+
+            labels[label] = torch.tensor(value)
+
+        return DGLMoleculeDatasetEntry(dgl_molecule, labels)
 
     @classmethod
     def from_unfeaturized(
@@ -130,6 +114,7 @@ class DGLMoleculeDataset(Dataset):
         bond_features: typing.List[BondFeature],
         molecule_to_dgl: typing.Optional[MoleculeToDGLFunc] = None,
         progress_iterator: typing.Optional[typing.Any] = None,
+        n_processes: int = 0,
     ) -> "DGLMoleculeDataset":
         """Creates a data set from unfeaturized data stored in parquet file.
 
@@ -141,45 +126,74 @@ class DGLMoleculeDataset(Dataset):
             columns: The columns (in addition to ``smiles``) to load from the file.
             atom_features: The atom features to compute for each molecule.
             bond_features: The bond features to compute for each molecule.
-            molecule_to_dgl: A (optional) callable to use when converting an OpenFF
+            molecule_to_dgl: A (optional) callable to use when converting an RDKit
                 ``Molecule`` object to a ``DGLMolecule`` object. By default, the
-                ``DGLMolecule.from_openff`` class method is used.
+                ``DGLMolecule.from_rdkit`` class method is used.
             progress_iterator: An iterator (each a ``tqdm``) to loop over all molecules
                 using. This is useful if you wish to display a progress bar for example.
+            n_processes: The number of processes to distribute the creation over.
         """
-
-        from openff.toolkit.topology import Molecule
 
         columns = None if columns is None else ["smiles"] + columns
 
         molecule_to_dgl = (
-            DGLMolecule.from_openff if molecule_to_dgl is None else molecule_to_dgl
+            DGLMolecule.from_rdkit if molecule_to_dgl is None else molecule_to_dgl
         )
 
         table = pyarrow.parquet.read_table(paths, columns=columns)
-        entries = []
 
         label_list = table.to_pylist()
-        label_list = label_list if progress_iterator is None else label_list
+        label_list = (
+            label_list if progress_iterator is None else progress_iterator(label_list)
+        )
 
-        for labels in label_list:
+        featurize_func = functools.partial(
+            cls._entry_from_unfeaturized,
+            atom_features=atom_features,
+            bond_features=bond_features,
+            molecule_to_dgl=molecule_to_dgl,
+        )
 
-            smiles = labels.pop("smiles")
-
-            with capture_toolkit_warnings():
-                molecule = Molecule.from_smiles(smiles, allow_undefined_stereo=True)
-                dgl_molecule = molecule_to_dgl(molecule, atom_features, bond_features)
-
-            for label, value in labels.items():
-
-                if value is None:
-                    continue
-
-                labels[label] = torch.tensor(value)
-
-            entries.append(DGLMoleculeDatasetEntry(dgl_molecule, labels))
+        with get_map_func(n_processes) as map_func:
+            entries = list(map_func(featurize_func, label_list))
 
         return DGLMoleculeDataset(entries)
+
+    @classmethod
+    def _entry_from_featurized(cls, labels: typing.Dict[str, typing.Any]):
+
+        smiles = labels.pop("smiles")
+
+        atom_features = labels.pop("atom_features")
+        bond_features = labels.pop("bond_features")
+
+        molecule = molecule_from_mapped_smiles(smiles)
+
+        atom_features = (
+            None
+            if atom_features is None
+            else torch.tensor(atom_features).float().reshape(molecule.GetNumAtoms(), -1)
+        )
+        bond_features = (
+            None
+            if bond_features is None
+            else torch.tensor(bond_features).float().reshape(molecule.GetNumBonds(), -1)
+        )
+
+        dgl_molecule = DGLMolecule.from_rdkit(
+            molecule,
+            atom_feature_tensor=atom_features,
+            bond_feature_tensor=bond_features,
+        )
+
+        for label, value in labels.items():
+
+            if value is None:
+                continue
+
+            labels[label] = torch.tensor(value)
+
+        return DGLMoleculeDatasetEntry(dgl_molecule, labels)
 
     @classmethod
     def from_featurized(
@@ -187,6 +201,7 @@ class DGLMoleculeDataset(Dataset):
         paths: typing.Union[pathlib.Path, typing.List[pathlib.Path]],
         columns: typing.Optional[typing.List[str]],
         progress_iterator: typing.Optional[typing.Any] = None,
+        n_processes: int = 0,
     ) -> "DGLMoleculeDataset":
         """Creates a data set from unfeaturized data stored in parquet file.
 
@@ -202,61 +217,21 @@ class DGLMoleculeDataset(Dataset):
                 ``bond_features``) to load from the file.
             progress_iterator: An iterator (each a ``tqdm``) to loop over all molecules
                 using. This is useful if you wish to display a progress bar for example.
+            n_processes: The number of processes to distribute the creation over.
         """
-
-        from openff.toolkit.topology import Molecule
 
         required_columns = ["smiles", "atom_features", "bond_features"]
         columns = None if columns is None else required_columns + columns
 
         table = pyarrow.parquet.read_table(paths, columns=columns)
-        entries = []
 
         label_list = table.to_pylist()
-        label_list = label_list if progress_iterator is None else label_list
+        label_list = (
+            label_list if progress_iterator is None else progress_iterator(label_list)
+        )
 
-        for labels in label_list:
-
-            smiles = labels.pop("smiles")
-
-            atom_features = labels.pop("atom_features")
-            bond_features = labels.pop("bond_features")
-
-            with capture_toolkit_warnings():
-
-                molecule = Molecule.from_smiles(smiles, allow_undefined_stereo=True)
-
-                atom_features = (
-                    None
-                    if atom_features is None
-                    else torch.tensor(atom_features)
-                    .float()
-                    .reshape(molecule.n_atoms, -1)
-                )
-                bond_features = (
-                    None
-                    if bond_features is None
-                    else torch.tensor(bond_features)
-                    .float()
-                    .reshape(molecule.n_bonds, -1)
-                )
-
-                dgl_molecule = DGLMolecule.from_openff(
-                    molecule,
-                    atom_features=None,
-                    bond_features=None,
-                    atom_feature_tensor=atom_features,
-                    bond_feature_tensor=bond_features,
-                )
-
-            for label, value in labels.items():
-
-                if value is None:
-                    continue
-
-                labels[label] = torch.tensor(value)
-
-            entries.append(DGLMoleculeDatasetEntry(dgl_molecule, labels))
+        with get_map_func(n_processes) as map_func:
+            entries = list(map_func(cls._entry_from_featurized, label_list))
 
         return DGLMoleculeDataset(entries)
 
@@ -278,8 +253,8 @@ class DGLMoleculeDataset(Dataset):
 
         for dgl_molecule, labels in self._entries:
 
-            openff_molecule = dgl_molecule.to_openff()
-            smiles = openff_molecule.to_smiles(mapped=True)
+            rdkit_molecule = dgl_molecule.to_rdkit()
+            smiles = molecule_to_mapped_smiles(rdkit_molecule)
 
             atom_features = (
                 None
