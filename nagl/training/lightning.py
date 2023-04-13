@@ -28,7 +28,7 @@ from nagl.config.model import ActivationFunction
 from nagl.datasets import DGLMoleculeDataset, collate_dgl_molecules
 from nagl.features import AtomFeature, BondFeature
 from nagl.molecules import DGLMolecule, DGLMoleculeBatch, MoleculeToDGLFunc
-from nagl.training.metrics import get_metric
+from nagl.training.loss import get_loss_function
 
 _BatchType = typing.Tuple[
     typing.Union[DGLMolecule, DGLMoleculeBatch], typing.Dict[str, torch.Tensor]
@@ -171,7 +171,10 @@ class DGLMoleculeLightningModel(pl.LightningModule):
             "val": self.config.data.validation,
             "test": self.config.data.test,
         }
-        targets = dataset_configs[step_type].targets
+        targets = [
+            get_loss_function(target.__class__.__name__)(**dataclasses.asdict(target))
+            for target in dataset_configs[step_type].targets
+        ]
 
         y_pred = self.forward(molecule)
         metric = torch.zeros(1).type_as(next(iter(y_pred.values())))
@@ -180,13 +183,17 @@ class DGLMoleculeLightningModel(pl.LightningModule):
             if labels[target.column] is None:
                 continue
 
-            target_labels = labels[target.column]
-            target_y_pred = y_pred[target.readout]
-
-            metric_function = get_metric(target.metric)
-
-            target_metric = metric_function(target_y_pred, target_labels)
-            self.log(f"{step_type}/{target.column}/{target.metric}", target_metric)
+            # target_labels = labels[target.column]
+            # target_y_pred = y_pred[target.readout]
+            #
+            # metric_function = get_metric(target.metric)
+            #
+            # target_metric = metric_function(target_y_pred, target_labels)
+            target_metric = target.evaluate_loss(labels=labels, prediction=y_pred)
+            self.log(
+                f"{step_type}/{target.column}/{target.metric}/{target.weight}/{target.denominator}",
+                target_metric,
+            )
 
             metric += target_metric
 

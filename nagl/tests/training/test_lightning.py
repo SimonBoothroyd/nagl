@@ -2,6 +2,7 @@ import numpy
 import pyarrow
 import pyarrow.parquet
 import pytest
+import rdkit.Chem
 import torch
 import torch.optim
 from torch.utils.data import DataLoader
@@ -12,7 +13,7 @@ import nagl.nn.pooling
 import nagl.nn.postprocess
 import nagl.nn.readout
 from nagl.config import Config, DataConfig, ModelConfig, OptimizerConfig
-from nagl.config.data import Dataset, Target
+from nagl.config.data import Dataset, DipoleTarget, ReadoutTarget
 from nagl.config.model import GCNConvolutionModule, ReadoutModule, Sequential
 from nagl.datasets import DGLMoleculeDataset
 from nagl.features import AtomConnectivity, AtomicElement, AtomIsInRing, BondOrder
@@ -44,17 +45,82 @@ def mock_config() -> Config:
         data=DataConfig(
             training=Dataset(
                 sources=[""],
-                targets=[Target(column="charges-am1", readout="atom", metric="rmse")],
+                targets=[
+                    ReadoutTarget(column="charges-am1", readout="atom", metric="rmse")
+                ],
                 batch_size=4,
             ),
             validation=Dataset(
                 sources=[""],
-                targets=[Target(column="charges-am1", readout="atom", metric="rmse")],
+                targets=[
+                    ReadoutTarget(column="charges-am1", readout="atom", metric="rmse")
+                ],
                 batch_size=5,
             ),
             test=Dataset(
                 sources=[""],
-                targets=[Target(column="charges-am1", readout="atom", metric="rmse")],
+                targets=[
+                    ReadoutTarget(column="charges-am1", readout="atom", metric="rmse")
+                ],
+                batch_size=6,
+            ),
+        ),
+        optimizer=OptimizerConfig(type="Adam", lr=0.01),
+    )
+
+
+@pytest.fixture()
+def mock_config_dipole() -> Config:
+    return Config(
+        model=ModelConfig(
+            atom_features=[AtomicElement(), AtomConnectivity(), AtomIsInRing()],
+            bond_features=[],
+            convolution=GCNConvolutionModule(
+                type="SAGEConv", hidden_feats=[4, 4], activation=["ReLU", "ReLU"]
+            ),
+            readouts={
+                "atom": ReadoutModule(
+                    pooling="atom",
+                    forward=Sequential(hidden_feats=[2], activation=["Identity"]),
+                    postprocess="charges",
+                )
+            },
+        ),
+        data=DataConfig(
+            training=Dataset(
+                sources=[""],
+                targets=[
+                    DipoleTarget(
+                        column="dipole",
+                        charge_label="charges-am1",
+                        conformation_label="conformation",
+                        metric="rmse",
+                    )
+                ],
+                batch_size=4,
+            ),
+            validation=Dataset(
+                sources=[""],
+                targets=[
+                    DipoleTarget(
+                        column="dipole",
+                        charge_label="charges-am1",
+                        conformation_label="conformation",
+                        metric="rmse",
+                    )
+                ],
+                batch_size=5,
+            ),
+            test=Dataset(
+                sources=[""],
+                targets=[
+                    DipoleTarget(
+                        column="dipole",
+                        charge_label="charges-am1",
+                        conformation_label="conformation",
+                        metric="rmse",
+                    )
+                ],
                 batch_size=6,
             ),
         ),
@@ -75,7 +141,7 @@ def test_hash_featurized_dataset(tmp_cwd):
 
     config = Dataset(
         sources=[source],
-        targets=[Target(column="label-col", readout="", metric="rmse")],
+        targets=[ReadoutTarget(column="label-col", readout="", metric="rmse")],
     )
 
     atom_features = [AtomicElement()]
@@ -141,16 +207,52 @@ class TestDGLMoleculeLightningModel:
     @pytest.mark.parametrize(
         "method_name", ["training_step", "validation_step", "test_step"]
     )
-    def test_step(self, mock_lightning_model, method_name, dgl_methane, monkeypatch):
+    def test_step_readout(
+        self, mock_lightning_model, method_name, dgl_methane, monkeypatch
+    ):
         def mock_forward(_):
-            return {"atom": torch.tensor([[1.0, 2.0, 3.0, 4.0, 5.0]])}
+            return {"atom": torch.tensor([[1.0], [2.0], [3.0], [4.0], [5.0]])}
 
         monkeypatch.setattr(mock_lightning_model, "forward", mock_forward)
 
         loss = getattr(mock_lightning_model, method_name)(
-            (dgl_methane, {"charges-am1": torch.tensor([[2.0, 3.0, 4.0, 5.0, 6.0]])}), 0
+            (
+                dgl_methane,
+                {"charges-am1": torch.tensor([[2.0], [3.0], [4.0], [5.0], [6.0]])},
+            ),
+            0,
         )
         assert torch.isclose(loss, torch.tensor([1.0]))
+
+    def test_step_dipole(self, mock_config_dipole, rdkit_methane, monkeypatch):
+        "Make sure the dipole error is correctly calculated"
+        from openff.units import unit
+
+        mock_model = DGLMoleculeLightningModel(mock_config_dipole)
+
+        def mock_forward(_):
+            return {"charges-am1": torch.tensor([[1.0], [2.0], [3.0], [4.0], [5.0]])}
+
+        monkeypatch.setattr(mock_model, "forward", mock_forward)
+        dgl_methane = DGLMolecule.from_rdkit(
+            molecule=rdkit_methane, atom_features=[AtomicElement()]
+        )
+        # coords in angstrom
+        conformer = rdkit_methane.GetConformer().GetPositions() * unit.angstrom
+        print(conformer)
+        print(conformer.m_as(unit.bohr))
+        loss = mock_model.training_step(
+            (
+                dgl_methane,
+                {
+                    "charges-am1": torch.tensor([[2.0], [3.0], [4.0], [5.0], [6.0]]),
+                    "dipole": torch.Tensor([[0.0, 0.0, 0.0]]),
+                    "conformation": torch.Tensor([conformer.m_as(unit.bohr)]),
+                },
+            ),
+            0,
+        )
+        print(loss)
 
     def test_configure_optimizers(self, mock_lightning_model):
         optimizer = mock_lightning_model.configure_optimizers()

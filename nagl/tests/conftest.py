@@ -4,7 +4,7 @@ import numpy
 import pytest
 from rdkit import Chem, Geometry
 
-from nagl.features import AtomConnectivity, BondIsInRing
+from nagl.features import AtomConnectivity, AtomicElement, AtomIsInRing, BondIsInRing
 from nagl.molecules import DGLMolecule
 from nagl.utilities.molecule import molecule_from_smiles
 
@@ -33,7 +33,11 @@ def rdkit_methane() -> Chem.Mol:
 
 @pytest.fixture()
 def dgl_methane(rdkit_methane) -> DGLMolecule:
-    return DGLMolecule.from_rdkit(rdkit_methane, [AtomConnectivity()], [BondIsInRing()])
+    return DGLMolecule.from_rdkit(
+        rdkit_methane,
+        [AtomicElement(), AtomConnectivity(), AtomIsInRing()],
+        [BondIsInRing()],
+    )
 
 
 @pytest.fixture
