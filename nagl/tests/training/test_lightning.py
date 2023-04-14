@@ -211,48 +211,51 @@ class TestDGLMoleculeLightningModel:
         self, mock_lightning_model, method_name, dgl_methane, monkeypatch
     ):
         def mock_forward(_):
-            return {"atom": torch.tensor([[1.0], [2.0], [3.0], [4.0], [5.0]])}
+            return {"atom": torch.tensor([[1.0, 2.0, 3.0, 4.0, 5.0]])}
 
         monkeypatch.setattr(mock_lightning_model, "forward", mock_forward)
 
         loss = getattr(mock_lightning_model, method_name)(
             (
                 dgl_methane,
-                {"charges-am1": torch.tensor([[2.0], [3.0], [4.0], [5.0], [6.0]])},
+                {"charges-am1": torch.tensor([[2.0, 3.0, 4.0, 5.0, 6.0]])},
             ),
             0,
         )
         assert torch.isclose(loss, torch.tensor([1.0]))
 
     def test_step_dipole(self, mock_config_dipole, rdkit_methane, monkeypatch):
-        "Make sure the dipole error is correctly calculated"
+        """Make sure the dipole error is correctly calculated"""
         from openff.units import unit
 
         mock_model = DGLMoleculeLightningModel(mock_config_dipole)
 
         def mock_forward(_):
-            return {"charges-am1": torch.tensor([[1.0], [2.0], [3.0], [4.0], [5.0]])}
+            return {"charges-am1": torch.tensor([[1.0, 2.0, 3.0, 4.0, 5.0]])}
 
         monkeypatch.setattr(mock_model, "forward", mock_forward)
         dgl_methane = DGLMolecule.from_rdkit(
             molecule=rdkit_methane, atom_features=[AtomicElement()]
         )
-        # coords in angstrom
+        # coordinates in angstrom
         conformer = rdkit_methane.GetConformer().GetPositions() * unit.angstrom
-        print(conformer)
-        print(conformer.m_as(unit.bohr))
         loss = mock_model.training_step(
             (
                 dgl_methane,
                 {
-                    "charges-am1": torch.tensor([[2.0], [3.0], [4.0], [5.0], [6.0]]),
+                    "charges-am1": torch.tensor([[2.0, 3.0, 4.0, 5.0, 6.0]]),
                     "dipole": torch.Tensor([[0.0, 0.0, 0.0]]),
                     "conformation": torch.Tensor([conformer.m_as(unit.bohr)]),
                 },
             ),
             0,
         )
-        print(loss)
+        # calculate the loss and compare with numpy
+        numpy_dipole = numpy.dot(
+            numpy.array([1.0, 2.0, 3.0, 4.0, 5.0]), conformer.m_as(unit.bohr)
+        )
+        ref_loss = numpy.sqrt(numpy.mean((numpy_dipole - numpy.array([0, 0, 0])) ** 2))
+        assert numpy.isclose(loss.numpy(), ref_loss)
 
     def test_configure_optimizers(self, mock_lightning_model):
         optimizer = mock_lightning_model.configure_optimizers()
