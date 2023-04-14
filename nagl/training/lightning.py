@@ -108,10 +108,10 @@ class DGLMoleculeLightningModel(pl.LightningModule):
 
     def __init__(self, config: typing.Union[Config, typing.Dict[str, typing.Any]]):
         super().__init__()
-        self.save_hyperparameters({"config": dataclasses.asdict(config)})
-
         if not isinstance(config, Config):
             config = Config(**config)
+
+        self.save_hyperparameters({"config": dataclasses.asdict(config)})
 
         self.config = config
 
@@ -158,6 +158,23 @@ class DGLMoleculeLightningModel(pl.LightningModule):
         }
 
         return readouts
+
+    def to_yaml_file(self, file_name: str):
+        """Export the model config to a yaml file"""
+        import yaml
+
+        with open(file_name, "w") as f:
+            yaml.dump(self.hparams["config"], f)
+
+    @classmethod
+    def from_yaml_file(cls, file_name: str):
+        """Load the model from a yaml file containing the config"""
+        import yaml
+
+        with open(file_name, "r") as f:
+            dct = yaml.load(f, Loader=yaml.Loader)
+
+        return cls(config=dct)
 
     def _default_step(
         self,

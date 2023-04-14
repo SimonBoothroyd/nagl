@@ -2,7 +2,6 @@ import numpy
 import pyarrow
 import pyarrow.parquet
 import pytest
-import rdkit.Chem
 import torch
 import torch.optim
 from torch.utils.data import DataLoader
@@ -29,7 +28,7 @@ from nagl.training.lightning import (
 def mock_config() -> Config:
     return Config(
         model=ModelConfig(
-            atom_features=[AtomicElement(), AtomConnectivity(), AtomIsInRing()],
+            atom_features=[AtomConnectivity()],
             bond_features=[],
             convolution=GCNConvolutionModule(
                 type="SAGEConv", hidden_feats=[4, 4], activation=["ReLU", "ReLU"]
@@ -73,7 +72,7 @@ def mock_config() -> Config:
 def mock_config_dipole() -> Config:
     return Config(
         model=ModelConfig(
-            atom_features=[AtomicElement(), AtomConnectivity(), AtomIsInRing()],
+            atom_features=[AtomConnectivity()],
             bond_features=[],
             convolution=GCNConvolutionModule(
                 type="SAGEConv", hidden_feats=[4, 4], activation=["ReLU", "ReLU"]
