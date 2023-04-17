@@ -89,7 +89,7 @@ def _hash_featurized_dataset(
 
             source_hashes.append(result.stdout)
 
-    columns = sorted({target.column for target in dataset_config.targets})
+    columns = _get_target_columns(targets=dataset_config.targets)
 
     dataset_hash = DatasetHash(
         atom_features=atom_features,
@@ -100,6 +100,16 @@ def _hash_featurized_dataset(
     dataset_hash_json = json.dumps(dataclasses.asdict(dataset_hash), sort_keys=True)
 
     return hashlib.sha256(dataset_hash_json.encode()).hexdigest()
+
+
+def _get_target_columns(targets) -> typing.List[str]:
+    """Get a list of unique column names to extract from the dataset based on if column is in the name"""
+    columns = set()
+    for target in targets:
+        for field, value in target.__dict__.items():
+            if "column" in field:
+                columns.add(value)
+    return sorted(columns)
 
 
 class DGLMoleculeLightningModel(pl.LightningModule):
@@ -197,7 +207,9 @@ class DGLMoleculeLightningModel(pl.LightningModule):
             if labels[target.target_column()] is None:
                 continue
 
-            target_metric = target.evaluate_loss(labels=labels, prediction=y_pred)
+            target_metric = target.evaluate_loss(
+                labels=labels, prediction=y_pred, molecules=molecule
+            )
             self.log(
                 f"{step_type}/{target.target_column()}/{target.metric}/{target.weight}/{target.denominator}",
                 target_metric,
@@ -359,7 +371,7 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
             _logger.info(f"preparing {stage}")
 
             dataset_config = self._data_set_configs[stage]
-            columns = sorted({target.column for target in dataset_config.targets})
+            columns = _get_target_columns(targets=dataset_config.targets)
 
             hash_string = (
                 None

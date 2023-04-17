@@ -4,6 +4,7 @@ import typing
 
 import torch
 
+from nagl.molecules import DGLMolecule, DGLMoleculeBatch
 from nagl.training.metrics import MetricType, get_metric
 
 
@@ -18,6 +19,7 @@ class _BaseTarget(abc.ABC):
     @abc.abstractmethod
     def evaluate_loss(
         self,
+        molecules: typing.Union[DGLMolecule, DGLMoleculeBatch],
         labels: typing.Dict[str, torch.Tensor],
         prediction: typing.Dict[str, torch.Tensor],
     ) -> torch.Tensor:
@@ -25,6 +27,7 @@ class _BaseTarget(abc.ABC):
 
     @abc.abstractmethod
     def target_column(self) -> str:
+        """The name of the column in the data we are calculating the loss against"""
         ...
 
 
@@ -45,6 +48,7 @@ class ReadoutTarget(_BaseTarget):
 
     def evaluate_loss(
         self,
+        molecules: typing.Union[DGLMolecule, DGLMoleculeBatch],
         labels: typing.Dict[str, torch.Tensor],
         prediction: typing.Dict[str, torch.Tensor],
     ) -> torch.Tensor:
@@ -87,19 +91,37 @@ class DipoleTarget(_BaseTarget):
 
     def evaluate_loss(
         self,
+        molecules: typing.Union[DGLMolecule, DGLMoleculeBatch],
         labels: typing.Dict[str, torch.Tensor],
         prediction: typing.Dict[str, torch.Tensor],
     ) -> torch.Tensor:
         """Evaluate the difference in the predicted and target dipole"""
 
         metric_func = get_metric(self.metric)
-        target_dipole = labels[self.dipole_column]
-        predicted_charges = prediction[self.charge_label]
-        # get the conformation in bohr
-        conformation = labels[self.conformation_column]
-        predicted_dipole = torch.matmul(predicted_charges, conformation)
+        target_dipole = labels[self.dipole_column].squeeze()
+        n_atoms_per_molecule = (
+            (molecules.n_atoms,)
+            if isinstance(molecules, DGLMolecule)
+            else molecules.n_atoms_per_molecule
+        )
+        atom_count = 0
+        # reshape the array incase it is flat
+        conformation = torch.reshape(labels[self.conformation_column], (-1, 3))
+        predicted_dipoles = []
+        for n_atoms in n_atoms_per_molecule:
+            charge_slice = prediction[self.charge_label][
+                atom_count : atom_count + n_atoms
+            ].squeeze()
+            # conformer in bohr
+            conformation_slice = conformation[atom_count : atom_count + n_atoms]
+            predicted_dipole = torch.matmul(charge_slice, conformation_slice)
+            predicted_dipoles.extend(predicted_dipole)
+            atom_count += n_atoms
+        predicted_dipoles = torch.Tensor(predicted_dipoles).squeeze()
+
+        # get the error across all dipoles
         return (
-            metric_func(predicted_dipole, target_dipole)
+            metric_func(torch.Tensor(predicted_dipoles), target_dipole)
             * self.weight
             / self.denominator
         )
