@@ -8,12 +8,9 @@ from nagl.training.metrics import MetricType, get_metric
 
 
 class _BaseTarget(abc.ABC):
-    """A general target class used to evaluate the Loss of a model"""
+    """A general target class used to evaluate the loss of a model"""
 
-    def __init__(
-        self, column: str, metric: MetricType, denominator: float, weight: float
-    ):
-        self.column = column
+    def __init__(self, metric: MetricType, denominator: float, weight: float):
         self.metric = metric
         self.denominator = denominator
         self.weight = weight
@@ -26,20 +23,25 @@ class _BaseTarget(abc.ABC):
     ) -> torch.Tensor:
         ...
 
+    @abc.abstractmethod
+    def target_column(self) -> str:
+        ...
+
 
 class ReadoutTarget(_BaseTarget):
     """A basic loss function acting on a single readout property"""
 
     def __init__(
         self,
-        column: str,
         metric: MetricType,
         denominator: float,
         weight: float,
+        column: str,
         readout: str,
     ):
-        super().__init__(column, metric, denominator, weight)
+        super().__init__(metric, denominator, weight)
         self.readout = readout
+        self.column = column
 
     def evaluate_loss(
         self,
@@ -55,6 +57,9 @@ class ReadoutTarget(_BaseTarget):
             metric_func(target_y_pred, target_labels) * self.weight / self.denominator
         )
 
+    def target_column(self) -> str:
+        return self.column
+
 
 class DipoleTarget(_BaseTarget):
     """Calculate the dipole loss based on some predicted charges.
@@ -68,15 +73,16 @@ class DipoleTarget(_BaseTarget):
 
     def __init__(
         self,
-        column: str,
         metric: MetricType,
         denominator: float,
         weight: float,
-        conformation_label: str,
+        dipole_column: str,
+        conformation_column: str,
         charge_label: str,
     ):
-        super().__init__(column, metric, denominator, weight)
-        self.conformation_label = conformation_label
+        super().__init__(metric, denominator, weight)
+        self.dipole_column = dipole_column
+        self.conformation_column = conformation_column
         self.charge_label = charge_label
 
     def evaluate_loss(
@@ -87,16 +93,19 @@ class DipoleTarget(_BaseTarget):
         """Evaluate the difference in the predicted and target dipole"""
 
         metric_func = get_metric(self.metric)
-        target_dipole = labels[self.column]
+        target_dipole = labels[self.dipole_column]
         predicted_charges = prediction[self.charge_label]
         # get the conformation in bohr
-        conformation = labels[self.conformation_label]
+        conformation = labels[self.conformation_column]
         predicted_dipole = torch.matmul(predicted_charges, conformation)
         return (
             metric_func(predicted_dipole, target_dipole)
             * self.weight
             / self.denominator
         )
+
+    def target_column(self) -> str:
+        return self.dipole_column
 
 
 LossCalculator = typing.Union[typing.Literal["ReadoutTarget", "DipoleTarget"], str]

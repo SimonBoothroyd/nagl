@@ -14,6 +14,7 @@ import pytorch_lightning as pl
 import rich.progress
 import torch
 import torch.nn
+import yaml
 from pytorch_lightning.loggers import MLFlowLogger
 from torch.utils.data import DataLoader
 
@@ -159,21 +160,17 @@ class DGLMoleculeLightningModel(pl.LightningModule):
 
         return readouts
 
-    def to_yaml_file(self, file_name: str):
+    def to_yaml(self, path: pathlib.Path):
         """Export the model config to a yaml file"""
-        import yaml
 
-        with open(file_name, "w") as f:
+        with open(path, "w") as f:
             yaml.dump(self.hparams["config"], f)
 
     @classmethod
-    def from_yaml_file(cls, file_name: str):
+    def from_yaml(cls, path: pathlib.Path):
         """Load the model from a yaml file containing the config"""
-        import yaml
 
-        with open(file_name, "r") as f:
-            dct = yaml.load(f, Loader=yaml.Loader)
-
+        dct = yaml.safe_load(path.read_text())
         return cls(config=dct)
 
     def _default_step(
@@ -197,18 +194,12 @@ class DGLMoleculeLightningModel(pl.LightningModule):
         metric = torch.zeros(1).type_as(next(iter(y_pred.values())))
 
         for target in targets:
-            if labels[target.column] is None:
+            if labels[target.target_column()] is None:
                 continue
 
-            # target_labels = labels[target.column]
-            # target_y_pred = y_pred[target.readout]
-            #
-            # metric_function = get_metric(target.metric)
-            #
-            # target_metric = metric_function(target_y_pred, target_labels)
             target_metric = target.evaluate_loss(labels=labels, prediction=y_pred)
             self.log(
-                f"{step_type}/{target.column}/{target.metric}/{target.weight}/{target.denominator}",
+                f"{step_type}/{target.target_column()}/{target.metric}/{target.weight}/{target.denominator}",
                 target_metric,
             )
 

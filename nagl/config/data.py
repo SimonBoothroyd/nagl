@@ -7,16 +7,9 @@ MetricType = typing.Literal["rmse", "mse", "mae"]
 
 
 @pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
-class ReadoutTarget:
-    """Defines a particular target to train / evaluate against."""
+class _BaseTarget:
+    """Define a general base target config class to hold training/ evaluation data and settings."""
 
-    column: str = pydantic.Field(
-        ..., description="The column in the source field that contains the target data."
-    )
-    readout: str = pydantic.Field(
-        ...,
-        description="The name of the model readout that predicts the target data.",
-    )
     metric: MetricType = pydantic.Field(
         ...,
         description="The metric to use when comparing the target data with the "
@@ -32,32 +25,33 @@ class ReadoutTarget:
 
 
 @pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
-class DipoleTarget:
-    """Defines a Dipole specific target to train / evaluate against"""
+class ReadoutTarget(_BaseTarget):
+    """Defines a particular target to train / evaluate against."""
 
     column: str = pydantic.Field(
+        ..., description="The column in the source field that contains the target data."
+    )
+    readout: str = pydantic.Field(
+        ...,
+        description="The name of the model readout that predicts the target data.",
+    )
+
+
+@pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
+class DipoleTarget(_BaseTarget):
+    """Defines a Dipole specific target to train / evaluate against"""
+
+    dipole_column: str = pydantic.Field(
         ...,
         description="The column in the source field that contains the dipole data in e*bohr",
     )
-    conformation_label: str = pydantic.Field(
+    conformation_column: str = pydantic.Field(
         ...,
         description="The column in the source field that contains the conformation the dipole should be evaluated at in **bohr**",
     )
     charge_label: str = pydantic.Field(
         ...,
         description="The name of the readout model that predicts the atomic charge to calculate the dipole.",
-    )
-    denominator: float = pydantic.Field(
-        1.0,
-        description="The denominator which should be used to re-scale the metric value.",
-    )
-    weight: float = pydantic.Field(
-        1.0, description="The weight that should be given to this metric."
-    )
-    metric: MetricType = pydantic.Field(
-        ...,
-        description="The metric to use when comparing the target data with the "
-        "model output.",
     )
 
 

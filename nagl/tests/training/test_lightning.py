@@ -1,3 +1,5 @@
+import pathlib
+
 import numpy
 import pyarrow
 import pyarrow.parquet
@@ -15,7 +17,7 @@ from nagl.config import Config, DataConfig, ModelConfig, OptimizerConfig
 from nagl.config.data import Dataset, DipoleTarget, ReadoutTarget
 from nagl.config.model import GCNConvolutionModule, ReadoutModule, Sequential
 from nagl.datasets import DGLMoleculeDataset
-from nagl.features import AtomConnectivity, AtomicElement, AtomIsInRing, BondOrder
+from nagl.features import AtomConnectivity, AtomicElement, BondOrder
 from nagl.molecules import DGLMolecule
 from nagl.training.lightning import (
     DGLMoleculeDataModule,
@@ -90,9 +92,9 @@ def mock_config_dipole() -> Config:
                 sources=[""],
                 targets=[
                     DipoleTarget(
-                        column="dipole",
+                        dipole_column="dipole",
                         charge_label="charges-am1",
-                        conformation_label="conformation",
+                        conformation_column="conformation",
                         metric="rmse",
                     )
                 ],
@@ -102,9 +104,9 @@ def mock_config_dipole() -> Config:
                 sources=[""],
                 targets=[
                     DipoleTarget(
-                        column="dipole",
+                        dipole_column="dipole",
                         charge_label="charges-am1",
-                        conformation_label="conformation",
+                        conformation_column="conformation",
                         metric="rmse",
                     )
                 ],
@@ -114,9 +116,9 @@ def mock_config_dipole() -> Config:
                 sources=[""],
                 targets=[
                     DipoleTarget(
-                        column="dipole",
+                        dipole_column="dipole",
                         charge_label="charges-am1",
-                        conformation_label="conformation",
+                        conformation_column="conformation",
                         metric="rmse",
                     )
                 ],
@@ -260,6 +262,14 @@ class TestDGLMoleculeLightningModel:
         optimizer = mock_lightning_model.configure_optimizers()
         assert isinstance(optimizer, torch.optim.Adam)
         assert torch.isclose(torch.tensor(optimizer.defaults["lr"]), torch.tensor(0.01))
+
+    def test_yaml_round_trip(self, tmp_cwd, mock_config):
+        """Test writing a model to yaml and reloading"""
+        model_a = DGLMoleculeLightningModel(mock_config)
+        file_name = pathlib.Path("model_a.yaml")
+        model_a.to_yaml(file_name)
+        model_b = DGLMoleculeLightningModel.from_yaml(file_name)
+        assert model_b.hparams["config"] == model_a.hparams["config"]
 
 
 class TestDGLMoleculeDataModule:
