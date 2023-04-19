@@ -25,11 +25,12 @@ import nagl.nn.postprocess
 import nagl.nn.readout
 from nagl.config import Config
 from nagl.config.data import Dataset as DatasetConfig
+from nagl.config.data import ReadoutTarget
 from nagl.config.model import ActivationFunction
 from nagl.datasets import DGLMoleculeDataset, collate_dgl_molecules
 from nagl.features import AtomFeature, BondFeature
 from nagl.molecules import DGLMolecule, DGLMoleculeBatch, MoleculeToDGLFunc
-from nagl.training.loss import get_loss_function
+from nagl.training.loss import DipoleTarget, get_loss_function
 
 _BatchType = typing.Tuple[
     typing.Union[DGLMolecule, DGLMoleculeBatch], typing.Dict[str, torch.Tensor]
@@ -236,42 +237,51 @@ class DGLMoleculeLightningModel(pl.LightningModule):
 
     def _log_report_artifact(self, batch_and_labels: _BatchType):
         # prevent circular import
-        from nagl.reporting import create_atom_label_report
+        # from nagl.reporting import create_atom_label_report
 
         batch, labels = batch_and_labels
-
-        if isinstance(batch, DGLMoleculeBatch):
-            molecules = batch.unbatch()
-        else:
-            molecules = [batch]
-
-        n_atoms_per_mol = [molecule.n_atoms for molecule in molecules]
+        #
+        # if isinstance(batch, DGLMoleculeBatch):
+        #     molecules = batch.unbatch()
+        # else:
+        #     molecules = [batch]
+        #
+        # n_atoms_per_mol = [molecule.n_atoms for molecule in molecules]
 
         prediction = self.forward(batch)
 
-        targets = self.config.data.test.targets
+        targets = [
+            get_loss_function(target.__class__.__name__)(**dataclasses.asdict(target))
+            for target in self.config.data.test.targets
+        ]
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_dir = pathlib.Path(tmp_dir)
 
             for target in targets:
-                if labels[target.column] is None:
+                if labels[target.target_column()] is None:
                     continue
 
-                target_pred = torch.split(prediction[target.readout], n_atoms_per_mol)
-                target_ref = torch.split(labels[target.column], n_atoms_per_mol)
-
-                report_entries = [
-                    (molecule, target_pred[i], target_ref[i])
-                    for i, molecule in enumerate(molecules)
-                ]
-                report_path = tmp_dir / f"{target.column}.html"
-
-                create_atom_label_report(
-                    report_entries,
-                    metrics=["rmse"],
-                    rank_by="rmse",
-                    output_path=report_path,
+                # target_pred = torch.split(prediction[target.readout], n_atoms_per_mol)
+                # target_ref = torch.split(labels[target.column], n_atoms_per_mol)
+                #
+                # report_entries = [
+                #     (molecule, target_pred[i], target_ref[i])
+                #     for i, molecule in enumerate(molecules)
+                # ]
+                # report_path = tmp_dir / f"{target.column}.html"
+                #
+                # create_atom_label_report(
+                #     report_entries,
+                #     metrics=[target.metric],
+                #     rank_by=target.metric,
+                #     output_path=report_path,
+                # )
+                report_path = target.report_artifact(
+                    molecules=batch,
+                    labels=labels,
+                    prediction=prediction,
+                    output_folder=tmp_dir,
                 )
 
                 self.logger.experiment.log_artifact(
