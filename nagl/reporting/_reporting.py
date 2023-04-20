@@ -169,7 +169,15 @@ def create_atom_label_report(
 def _draw_molecule(
     molecule: typing.Union[Chem.Mol, DGLMolecule],
 ) -> str:
-    """Renders a molecule as an SVG image."""
+    """
+    Renders a molecule as an SVG image.
+
+    Args:
+        molecule: The rdkit or DGLMolecule which should be rendered.
+
+    Returns:
+        The SVG text
+    """
 
     if isinstance(molecule, DGLMolecule):
         molecule = molecule.to_rdkit()
@@ -189,12 +197,24 @@ def _generate_molecule_jinja_dicts(
     ],
     metric_label: str,
 ) -> typing.List[typing.Dict]:
+    """
+    Create dictionaries for each of the molecules containing the SVG images and metrics to be displayed in
+    the artifact.
+
+    Args:
+        entries_and_metrics: A list of tuples of the form ``(molecule, metric value)`` containing the molecule
+            and its associated metric calculated using the metric set in `metric_label`
+        metric_label: The name of the metric used to calculate the value for example `rmse`.
+
+    Returns:
+        A list of dictionaries of data for the jinja template.
+    """
     all_dicts = []
     for molecule, metric in entries_and_metrics:
         image = _draw_molecule(molecule=molecule)
         image_encoded = base64.b64encode(image.encode()).decode()
         image_src = f"data:image/svg+xml;base64,{image_encoded}"
-        data = {"img": image_src, "metrics": {metric_label: f"{metric:.4f}"}}
+        data = {"img": image_src, "metrics": {metric_label.upper(): f"{metric:.4f}"}}
         all_dicts.append(data)
 
     return all_dicts
@@ -210,13 +230,13 @@ def create_molecule_label_report(
     bottom_n_entries: int = 100,
 ):
     """
-    Creates a simple HTML report that shows the values of predicted and reference
-    molecule labels for the top N and bottom M entries in the specified list.
+    Creates a simple HTML report that shows metrics for molecule level labels like Dipole
+    for the top N and bottom M entries in the specified list.
 
     Args:
         entries_and_metrics: The list of molecules and their corresponding metrics to consider for the report.
-        Each entry should be a tuple of the form ``(molecule, calculated_metric)``.
-        metric_label: The name of the metric used to calculate the value
+            Each entry should be a tuple of the form ``(molecule, calculated_metric)``.
+        metric_label: The name of the metric used to calculate the value for example `rmse`.
         output_path: The path to save the report to.
         top_n_entries: The number of the highest ranking entries to show according to
             ``rank_by``.
