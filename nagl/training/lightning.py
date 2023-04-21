@@ -14,6 +14,7 @@ import pytorch_lightning as pl
 import rich.progress
 import torch
 import torch.nn
+import yaml
 from pytorch_lightning.loggers import MLFlowLogger
 from torch.utils.data import DataLoader
 
@@ -28,7 +29,7 @@ from nagl.config.model import ActivationFunction
 from nagl.datasets import DGLMoleculeDataset, collate_dgl_molecules
 from nagl.features import AtomFeature, BondFeature
 from nagl.molecules import DGLMolecule, DGLMoleculeBatch, MoleculeToDGLFunc
-from nagl.training.metrics import get_metric
+from nagl.training.loss import get_loss_function
 
 _BatchType = typing.Tuple[
     typing.Union[DGLMolecule, DGLMoleculeBatch], typing.Dict[str, torch.Tensor]
@@ -88,7 +89,7 @@ def _hash_featurized_dataset(
 
             source_hashes.append(result.stdout)
 
-    columns = sorted({target.column for target in dataset_config.targets})
+    columns = _get_target_columns(targets=dataset_config.targets)
 
     dataset_hash = DatasetHash(
         atom_features=atom_features,
@@ -101,6 +102,16 @@ def _hash_featurized_dataset(
     return hashlib.sha256(dataset_hash_json.encode()).hexdigest()
 
 
+def _get_target_columns(targets) -> typing.List[str]:
+    """Get a list of unique column names to extract from the dataset based on if column is in the name"""
+    columns = set()
+    for target in targets:
+        for field, value in target.__dict__.items():
+            if "column" in field:
+                columns.add(value)
+    return sorted(columns)
+
+
 class DGLMoleculeLightningModel(pl.LightningModule):
     """A model which applies a graph convolutional step followed by multiple (labelled)
     pooling and readout steps.
@@ -108,10 +119,10 @@ class DGLMoleculeLightningModel(pl.LightningModule):
 
     def __init__(self, config: typing.Union[Config, typing.Dict[str, typing.Any]]):
         super().__init__()
-        self.save_hyperparameters({"config": dataclasses.asdict(config)})
-
         if not isinstance(config, Config):
             config = Config(**config)
+
+        self.save_hyperparameters({"config": dataclasses.asdict(config)})
 
         self.config = config
 
@@ -159,6 +170,19 @@ class DGLMoleculeLightningModel(pl.LightningModule):
 
         return readouts
 
+    def to_yaml(self, path: pathlib.Path):
+        """Export the model config to a yaml file"""
+
+        with open(path, "w") as f:
+            yaml.dump(self.hparams["config"], f)
+
+    @classmethod
+    def from_yaml(cls, path: pathlib.Path):
+        """Load the model from a yaml file containing the config"""
+
+        dct = yaml.safe_load(path.read_text())
+        return cls(config=dct)
+
     def _default_step(
         self,
         batch: _BatchType,
@@ -171,22 +195,25 @@ class DGLMoleculeLightningModel(pl.LightningModule):
             "val": self.config.data.validation,
             "test": self.config.data.test,
         }
-        targets = dataset_configs[step_type].targets
+        targets = [
+            get_loss_function(target.__class__.__name__)(**dataclasses.asdict(target))
+            for target in dataset_configs[step_type].targets
+        ]
 
         y_pred = self.forward(molecule)
         metric = torch.zeros(1).type_as(next(iter(y_pred.values())))
 
         for target in targets:
-            if labels[target.column] is None:
+            if labels[target.target_column()] is None:
                 continue
 
-            target_labels = labels[target.column]
-            target_y_pred = y_pred[target.readout]
-
-            metric_function = get_metric(target.metric)
-
-            target_metric = metric_function(target_y_pred, target_labels)
-            self.log(f"{step_type}/{target.column}/{target.metric}", target_metric)
+            target_metric = target.evaluate_loss(
+                labels=labels, prediction=y_pred, molecules=molecule
+            )
+            self.log(
+                f"{step_type}/{target.target_column()}/{target.metric}/{target.weight}/{target.denominator}",
+                target_metric,
+            )
 
             metric += target_metric
 
@@ -208,43 +235,27 @@ class DGLMoleculeLightningModel(pl.LightningModule):
         return metric
 
     def _log_report_artifact(self, batch_and_labels: _BatchType):
-        # prevent circular import
-        from nagl.reporting import create_atom_label_report
-
         batch, labels = batch_and_labels
-
-        if isinstance(batch, DGLMoleculeBatch):
-            molecules = batch.unbatch()
-        else:
-            molecules = [batch]
-
-        n_atoms_per_mol = [molecule.n_atoms for molecule in molecules]
 
         prediction = self.forward(batch)
 
-        targets = self.config.data.test.targets
+        targets = [
+            get_loss_function(target.__class__.__name__)(**dataclasses.asdict(target))
+            for target in self.config.data.test.targets
+        ]
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_dir = pathlib.Path(tmp_dir)
 
             for target in targets:
-                if labels[target.column] is None:
+                if labels[target.target_column()] is None:
                     continue
 
-                target_pred = torch.split(prediction[target.readout], n_atoms_per_mol)
-                target_ref = torch.split(labels[target.column], n_atoms_per_mol)
-
-                report_entries = [
-                    (molecule, target_pred[i], target_ref[i])
-                    for i, molecule in enumerate(molecules)
-                ]
-                report_path = tmp_dir / f"{target.column}.html"
-
-                create_atom_label_report(
-                    report_entries,
-                    metrics=["rmse"],
-                    rank_by="rmse",
-                    output_path=report_path,
+                report_path = target.report_artifact(
+                    molecules=batch,
+                    labels=labels,
+                    prediction=prediction,
+                    output_folder=tmp_dir,
                 )
 
                 self.logger.experiment.log_artifact(
@@ -344,7 +355,7 @@ class DGLMoleculeDataModule(pl.LightningDataModule):
             _logger.info(f"preparing {stage}")
 
             dataset_config = self._data_set_configs[stage]
-            columns = sorted({target.column for target in dataset_config.targets})
+            columns = _get_target_columns(targets=dataset_config.targets)
 
             hash_string = (
                 None

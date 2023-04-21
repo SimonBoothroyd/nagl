@@ -7,7 +7,7 @@ import torch
 from pytorch_lightning.loggers import MLFlowLogger
 
 from nagl.config import Config, DataConfig, ModelConfig, OptimizerConfig
-from nagl.config.data import Dataset, Target
+from nagl.config.data import Dataset, ReadoutTarget
 from nagl.config.model import GCNConvolutionModule, ReadoutModule, Sequential
 from nagl.features import AtomConnectivity, AtomFeature, AtomicElement, BondFeature
 from nagl.training import DGLMoleculeDataModule, DGLMoleculeLightningModel
@@ -50,15 +50,15 @@ def configure_data() -> DataConfig:
             # table that was create during stage 000.
             # The 'readout' column should correspond to one our or model readout
             # keys.
-            targets=[Target(column="charges-am1bcc", readout="charges", metric="rmse")],
+            targets=[ReadoutTarget(column="charges-am1bcc", readout="charges", metric="rmse")],
         ),
         validation=Dataset(
             sources=["000-label-data/val.parquet"],
-            targets=[Target(column="charges-am1bcc", readout="charges", metric="rmse")],
+            targets=[ReadoutTarget(column="charges-am1bcc", readout="charges", metric="rmse")],
         ),
         test=Dataset(
             sources=["000-label-data/test.parquet"],
-            targets=[Target(column="charges-am1bcc", readout="charges", metric="rmse")],
+            targets=[ReadoutTarget(column="charges-am1bcc", readout="charges", metric="rmse")],
         ),
     )
 

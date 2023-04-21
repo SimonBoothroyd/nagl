@@ -33,7 +33,11 @@ def rdkit_methane() -> Chem.Mol:
 
 @pytest.fixture()
 def dgl_methane(rdkit_methane) -> DGLMolecule:
-    return DGLMolecule.from_rdkit(rdkit_methane, [AtomConnectivity()], [BondIsInRing()])
+    return DGLMolecule.from_rdkit(
+        rdkit_methane,
+        [AtomConnectivity()],
+        [BondIsInRing()],
+    )
 
 
 @pytest.fixture

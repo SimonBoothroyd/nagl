@@ -7,7 +7,25 @@ MetricType = typing.Literal["rmse", "mse", "mae"]
 
 
 @pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
-class Target:
+class _BaseTarget:
+    """Define a general base target config class to hold training/ evaluation data and settings."""
+
+    metric: MetricType = pydantic.Field(
+        ...,
+        description="The metric to use when comparing the target data with the "
+        "model output.",
+    )
+    denominator: float = pydantic.Field(
+        1.0,
+        description="The denominator which should be used to re-scale the metric value.",
+    )
+    weight: float = pydantic.Field(
+        1.0, description="The weight that should be given to this metric."
+    )
+
+
+@pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
+class ReadoutTarget(_BaseTarget):
     """Defines a particular target to train / evaluate against."""
 
     column: str = pydantic.Field(
@@ -17,10 +35,23 @@ class Target:
         ...,
         description="The name of the model readout that predicts the target data.",
     )
-    metric: MetricType = pydantic.Field(
+
+
+@pydantic.dataclasses.dataclass(config={"extra": pydantic.Extra.forbid})
+class DipoleTarget(_BaseTarget):
+    """Defines a Dipole specific target to train / evaluate against"""
+
+    dipole_column: str = pydantic.Field(
         ...,
-        description="The metric to use when comparing the target data with the "
-        "model output.",
+        description="The column in the source field that contains the dipole data in e*bohr",
+    )
+    conformation_column: str = pydantic.Field(
+        ...,
+        description="The column in the source field that contains the conformation the dipole should be evaluated at in **bohr**",
+    )
+    charge_label: str = pydantic.Field(
+        ...,
+        description="The name of the readout model that predicts the atomic charge to calculate the dipole.",
     )
 
 
@@ -32,7 +63,7 @@ class Dataset:
     sources: typing.Optional[typing.List[str]] = pydantic.Field(
         None, description="The paths to the data."
     )
-    targets: typing.List[Target] = pydantic.Field(
+    targets: typing.List[typing.Union[ReadoutTarget, DipoleTarget]] = pydantic.Field(
         ..., description="The targets to train / evaluate against."
     )
     batch_size: typing.Optional[int] = pydantic.Field(

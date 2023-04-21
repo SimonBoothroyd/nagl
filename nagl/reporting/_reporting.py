@@ -116,7 +116,7 @@ def create_atom_label_report(
         entries: The list of molecules to consider for the report. Each entry should be
             a tuple of the form ``(molecule, per_atom_pred, per_atom_ref)``. Here
             ``per_atom_pred`` should be a tensor with ``shape=(n_atoms)`` and contain
-            predictions by a model, and ``per_atom_ref`` the same but containg the
+            predictions by a model, and ``per_atom_ref`` the same but containing the
             reference labels.
         metrics: The metrics to compute for each entry.
         rank_by: The metric to rank the entries by.
@@ -153,6 +153,105 @@ def create_atom_label_report(
         metrics,
         highlight_outliers,
         outlier_threshold,
+    )
+
+    template_loader = jinja2.FileSystemLoader(searchpath=_TEMPLATE_DIR)
+    template_env = jinja2.Environment(loader=template_loader)
+
+    template = template_env.get_template("template.html")
+    rendered = template.render(
+        top_n_structures=top_n_structures, bottom_n_structures=bottom_n_structures
+    )
+
+    output_path.write_text(rendered)
+
+
+def _draw_molecule(
+    molecule: typing.Union[Chem.Mol, DGLMolecule],
+) -> str:
+    """
+    Renders a molecule as an SVG image.
+
+    Args:
+        molecule: The rdkit or DGLMolecule which should be rendered.
+
+    Returns:
+        The SVG text
+    """
+
+    if isinstance(molecule, DGLMolecule):
+        molecule = molecule.to_rdkit()
+
+    draw_mol = Chem.Mol(molecule)
+
+    drawer = Draw.rdMolDraw2D.MolDraw2DSVG(400, 400)
+    Draw.PrepareAndDrawMolecule(drawer, draw_mol)
+
+    drawer.FinishDrawing()
+    return drawer.GetDrawingText()
+
+
+def _generate_molecule_jinja_dicts(
+    entries_and_metrics: typing.List[
+        typing.Tuple[typing.Union[Chem.Mol, DGLMolecule], torch.Tensor]
+    ],
+    metric_label: str,
+) -> typing.List[typing.Dict]:
+    """
+    Create dictionaries for each of the molecules containing the SVG images and metrics to be displayed in
+    the artifact.
+
+    Args:
+        entries_and_metrics: A list of tuples of the form ``(molecule, metric value)`` containing the molecule
+            and its associated metric calculated using the metric set in `metric_label`
+        metric_label: The name of the metric used to calculate the value for example `rmse`.
+
+    Returns:
+        A list of dictionaries of data for the jinja template.
+    """
+    all_dicts = []
+    for molecule, metric in entries_and_metrics:
+        image = _draw_molecule(molecule=molecule)
+        image_encoded = base64.b64encode(image.encode()).decode()
+        image_src = f"data:image/svg+xml;base64,{image_encoded}"
+        data = {"img": image_src, "metrics": {metric_label.upper(): f"{metric:.4f}"}}
+        all_dicts.append(data)
+
+    return all_dicts
+
+
+def create_molecule_label_report(
+    entries_and_metrics: typing.List[
+        typing.Tuple[typing.Union[Chem.Mol, DGLMolecule], torch.Tensor]
+    ],
+    metric_label: str,
+    output_path: pathlib.Path,
+    top_n_entries: int = 100,
+    bottom_n_entries: int = 100,
+):
+    """
+    Creates a simple HTML report that shows metrics for molecule level labels like Dipole
+    for the top N and bottom M entries in the specified list.
+
+    Args:
+        entries_and_metrics: The list of molecules and their corresponding metrics to consider for the report.
+            Each entry should be a tuple of the form ``(molecule, calculated_metric)``.
+        metric_label: The name of the metric used to calculate the value for example `rmse`.
+        output_path: The path to save the report to.
+        top_n_entries: The number of the highest ranking entries to show according to
+            ``rank_by``.
+        bottom_n_entries: The number of the lowest ranking entries to show according to
+            ``rank_by``.
+    """
+
+    entries_and_metrics = sorted(entries_and_metrics, key=lambda x: x[1], reverse=True)
+    top_n_structures = _generate_molecule_jinja_dicts(
+        entries_and_metrics=entries_and_metrics[:top_n_entries],
+        metric_label=metric_label,
+    )
+    bottom_n_structures = _generate_molecule_jinja_dicts(
+        entries_and_metrics=entries_and_metrics[-bottom_n_entries:],
+        metric_label=metric_label,
     )
 
     template_loader = jinja2.FileSystemLoader(searchpath=_TEMPLATE_DIR)
