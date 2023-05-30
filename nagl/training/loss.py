@@ -164,7 +164,8 @@ class DipoleTarget(_BaseTarget):
         prediction: typing.Dict[str, torch.Tensor],
     ) -> torch.Tensor:
         metric_func = get_metric(self.metric)
-        target_dipole = labels[self.dipole_column].squeeze()
+        # reshape as it can be flat
+        target_dipole = torch.reshape(labels[self.dipole_column], (-1, 3))
         n_atoms_per_molecule = (
             (molecules.n_atoms,)
             if isinstance(molecules, DGLMolecule)
