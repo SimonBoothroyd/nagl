@@ -212,7 +212,9 @@ class TestDGLMoleculeLightningModel:
         self, mock_lightning_model, method_name, dgl_methane, monkeypatch
     ):
         def mock_forward(_):
-            return {"atom": torch.tensor([[1.0, 2.0, 3.0, 4.0, 5.0]])}
+            return {
+                "atom": torch.tensor([[1.0, 2.0, 3.0, 4.0, 5.0]], requires_grad=True)
+            }
 
         monkeypatch.setattr(mock_lightning_model, "forward", mock_forward)
 
@@ -223,16 +225,21 @@ class TestDGLMoleculeLightningModel:
             ),
             0,
         )
+        assert loss.requires_grad is True
         assert torch.isclose(loss, torch.tensor([1.0]))
 
     def test_step_dipole(self, mock_config_dipole, rdkit_methane, monkeypatch):
-        """Make sure the dipole error is correctly calculated"""
+        """Make sure the dipole error is correctly calculated and has a gradient"""
         from openff.units import unit
 
         mock_model = DGLMoleculeLightningModel(mock_config_dipole)
 
         def mock_forward(_):
-            return {"charges-am1": torch.tensor([[1.0, 2.0, 3.0, 4.0, 5.0]])}
+            return {
+                "charges-am1": torch.tensor(
+                    [[1.0, 2.0, 3.0, 4.0, 5.0]], requires_grad=True
+                )
+            }
 
         monkeypatch.setattr(mock_model, "forward", mock_forward)
         dgl_methane = DGLMolecule.from_rdkit(
@@ -251,12 +258,14 @@ class TestDGLMoleculeLightningModel:
             ),
             0,
         )
+        # make sure the gradient is not lost during the calculation
+        assert loss.requires_grad is True
         # calculate the loss and compare with numpy
         numpy_dipole = numpy.dot(
             numpy.array([1.0, 2.0, 3.0, 4.0, 5.0]), conformer.m_as(unit.bohr)
         )
         ref_loss = numpy.sqrt(numpy.mean((numpy_dipole - numpy.array([0, 0, 0])) ** 2))
-        assert numpy.isclose(loss.numpy(), ref_loss)
+        assert numpy.isclose(loss.detach().numpy(), ref_loss)
 
     def test_configure_optimizers(self, mock_lightning_model):
         optimizer = mock_lightning_model.configure_optimizers()
