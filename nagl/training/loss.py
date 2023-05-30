@@ -173,16 +173,18 @@ class DipoleTarget(_BaseTarget):
         # reshape the array incase it is flat
         conformation = torch.reshape(labels[self.conformation_column], (-1, 3))
 
-        predicted_dipoles = []
         # split the total array by the number of atoms per molecule
         charges = torch.split(
             prediction[self.charge_label].squeeze(), n_atoms_per_molecule
         )
         conformations = torch.split(conformation, n_atoms_per_molecule)
-        for charge_slice, conformation_slice in zip(charges, conformations):
-            predicted_dipole = torch.matmul(charge_slice, conformation_slice)
-            predicted_dipoles.extend(predicted_dipole)
-        predicted_dipoles = torch.Tensor(predicted_dipoles).squeeze()
+
+        predicted_dipoles = torch.stack(
+            [
+                torch.matmul(charge_slice, conformation_slice)
+                for charge_slice, conformation_slice in zip(charges, conformations)
+            ]
+        )
 
         # get the error across all dipoles
         return (
